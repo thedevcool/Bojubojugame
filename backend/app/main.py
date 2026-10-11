@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,12 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
 from app import auth
 from app.content import get_config, get_maps
-from app.db import Database, Game, LedgerEntry, Player, Report, RoundStat
+from app.db import Database, Device, Game, LedgerEntry, Player, Report, RoundStat
 from app.realtime.protocol import BadMessage
 from app.realtime.rooms import writer
 from app.realtime.world import World
@@ -53,11 +55,17 @@ class RateLimit(BaseHTTPMiddleware):
         super().__init__(app)
         self.general = KeyedLimiter(rate=5, burst=30)
         self.auth = KeyedLimiter(rate=0.2, burst=5)
+        self.login = KeyedLimiter(rate=0.5, burst=10)  # per IP; each account also locks after 5 bad PINs
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         ip = client_ip(request)
         path = request.url.path
-        limiter = self.auth if path.startswith("/api/auth/guest") else self.general
+        if path.startswith("/api/auth/login"):
+            limiter = self.login
+        elif path.startswith("/api/auth/guest"):
+            limiter = self.auth
+        else:
+            limiter = self.general
         if path.startswith("/api") and not limiter.allow(ip):
             return JSONResponse({"detail": "Too many requests — slow down small"}, status_code=429)
         return await call_next(request)
@@ -72,6 +80,16 @@ class GuestIn(BaseModel):
 class RefreshIn(BaseModel):
     player_id: str = Field(max_length=32)
     device_secret: str = Field(min_length=20, max_length=80)
+
+
+class LoginIn(BaseModel):
+    boju_id: str = Field(min_length=6, max_length=30)
+    pin: str = Field(pattern=r"^\d{6}$")
+
+
+class PinIn(BaseModel):
+    pin: str = Field(pattern=r"^\d{6}$")
+    current_pin: str | None = Field(default=None, pattern=r"^\d{6}$")
 
 
 class ReportIn(BaseModel):
@@ -90,6 +108,16 @@ async def current_player(authorization: Annotated[str | None, Header()] = None) 
 
 
 Me = Annotated[str, Depends(current_player)]
+
+
+async def free_tag(s: AsyncSession, nickname: str) -> int:
+    """A random 4-digit tag not yet used with this nickname (case-insensitive)."""
+    used = set((await s.scalars(select(Player.tag).where(func.lower(Player.nickname) == nickname.lower()))).all())
+    for _ in range(50):
+        tag = secrets.randbelow(9000) + 1000
+        if tag not in used:
+            return tag
+    raise HTTPException(409, "That nickname is very popular — pick another one")
 
 
 def create_app(database_url: str | None = None, *, run_tick: bool = True) -> FastAPI:
@@ -154,7 +182,9 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             raise HTTPException(422, "Pick a Lagos area from the list")
         raw, hashed = auth.new_device_secret()
         async with db.sessions() as s, s.begin():
+            tag = await free_tag(s, nick)
             p = Player(
+                tag=tag,
                 avatar=[max(0, min(7, int(v))) for v in body.avatar],
                 nickname=nick,
                 home_area=body.home_area,
@@ -171,9 +201,75 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     async def refresh(body: RefreshIn) -> dict[str, Any]:
         async with db.sessions() as s:
             p = await s.get(Player, body.player_id)
-        if p is None or not auth.secret_matches(body.device_secret, p.device_secret_hash):
+            known = p is not None and (
+                auth.secret_matches(body.device_secret, p.device_secret_hash)
+                or await s.scalar(
+                    select(Device.id).where(
+                        Device.player_id == p.id, Device.secret_hash == auth.hash_secret(body.device_secret)
+                    )
+                )
+                is not None
+            )
+        if p is None or not known:
             raise HTTPException(401, "Unknown player")
         return {"token": auth.issue_token(p.id)}
+
+    @app.post("/api/auth/login")
+    async def login(body: LoginIn) -> dict[str, Any]:
+        """Log in on a new phone with Boju ID (nickname#1234) + 6-digit PIN."""
+        parsed = auth.parse_boju_id(body.boju_id)
+        bad = HTTPException(401, "Boju ID or PIN no correct")
+        if parsed is None:
+            raise bad
+        nick, tag = parsed
+        now = datetime.now(UTC)
+        async with db.sessions() as s, s.begin():
+            p = await s.scalar(
+                select(Player).where(func.lower(Player.nickname) == nick.lower(), Player.tag == tag).with_for_update()
+            )
+            if p is None or not p.pin_hash:
+                raise bad
+            locked = p.locked_until and (
+                p.locked_until if p.locked_until.tzinfo else p.locked_until.replace(tzinfo=UTC)
+            )
+            if locked and locked > now:
+                mins = max(1, int((locked - now).total_seconds() // 60) + 1)
+                raise HTTPException(429, f"Too many wrong PINs. Try again in {mins} min.")
+            if not auth.pin_matches(body.pin, p.pin_hash):
+                p.failed_logins = (p.failed_logins or 0) + 1
+                if p.failed_logins >= auth.PIN_MAX_FAILS:
+                    p.failed_logins = 0
+                    p.locked_until = now + timedelta(minutes=auth.PIN_LOCK_MINUTES)
+                failed = True
+            else:
+                failed = False
+                p.failed_logins = 0
+                p.locked_until = None
+                raw, hashed = auth.new_device_secret()
+                s.add(Device(player_id=p.id, secret_hash=hashed))
+                result = {
+                    "token": auth.issue_token(p.id),
+                    "player_id": p.id,
+                    "device_secret": raw,
+                    "nickname": p.nickname,
+                }
+        if failed:  # committed the counter above before refusing
+            raise bad
+        log.info("login player=%s", result["player_id"])
+        return result
+
+    @app.post("/api/auth/pin")
+    async def set_pin(body: PinIn, pid: Me) -> dict[str, Any]:
+        async with db.sessions() as s, s.begin():
+            p = await s.get(Player, pid, with_for_update=True)
+            if p is None:
+                raise HTTPException(404, "Unknown player")
+            if p.pin_hash and not (body.current_pin and auth.pin_matches(body.current_pin, p.pin_hash)):
+                raise HTTPException(403, "Current PIN no correct")
+            if p.tag is None:
+                p.tag = await free_tag(s, p.nickname)
+            p.pin_hash = auth.hash_pin(body.pin)
+            return {"ok": True, "boju_id": auth.boju_id(p.nickname, p.tag)}
 
     @app.get("/api/me")
     async def me(pid: Me) -> dict[str, Any]:
@@ -181,8 +277,16 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             p = await s.get(Player, pid)
         if p is None:
             raise HTTPException(404, "Unknown player")
+        if p.tag is None:  # players from before Boju IDs existed get one now
+            async with db.sessions() as s, s.begin():
+                row = await s.get(Player, pid, with_for_update=True)
+                if row is not None and row.tag is None:
+                    row.tag = await free_tag(s, row.nickname)
+                p = row or p
         bonus = await world.economy.claim_daily_bonus(pid)
         return {
+            "boju_id": auth.boju_id(p.nickname, p.tag),
+            "has_pin": bool(p.pin_hash),
             "id": p.id,
             "nickname": p.nickname,
             "home_area": p.home_area,

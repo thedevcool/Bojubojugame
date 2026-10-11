@@ -37,3 +37,36 @@ def hash_secret(raw: str) -> str:
 
 def secret_matches(raw: str, stored: str) -> bool:
     return hmac.compare_digest(hash_secret(raw), stored)
+
+
+# ---- PIN login (no email/phone by design) ------------------------------------------------
+PIN_MAX_FAILS = 5
+PIN_LOCK_MINUTES = 15
+
+
+def hash_pin(pin: str) -> str:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.scrypt(pin.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${dk.hex()}"
+
+
+def pin_matches(pin: str, stored: str | None) -> bool:
+    if not stored or not stored.startswith("scrypt$"):
+        return False
+    _, salt_hex, dk_hex = stored.split("$")
+    dk = hashlib.scrypt(pin.encode(), salt=bytes.fromhex(salt_hex), n=2**14, r=8, p=1, dklen=32)
+    return hmac.compare_digest(dk.hex(), dk_hex)
+
+
+def boju_id(nickname: str, tag: int | None) -> str | None:
+    return f"{nickname}#{tag:04d}" if tag is not None else None
+
+
+def parse_boju_id(raw: str) -> tuple[str, int] | None:
+    raw = raw.strip()
+    if "#" not in raw:
+        return None
+    nick, _, tag = raw.rpartition("#")
+    if not nick.strip() or not tag.isdigit() or len(tag) != 4:
+        return None
+    return nick.strip(), int(tag)

@@ -1,0 +1,75 @@
+{
+  "currency_symbol": "₦",
+  "money_disclaimer": "In-game naira — not real money",
+  "scoring": {
+    "seeker_find_one": 5000,
+    "seeker_per_hider_multi": 10000,
+    "seeker_none_penalty": 2500,
+    "hider_not_found": 7500,
+    "hider_safe": 3500,
+    "hider_found": 0
+  },
+  "game": {
+    "min_players": 2,
+    "max_players": 6,
+    "hide_time_options": [15, 30, 45, 60],
+    "search_time_options": [90, 120, 180, 240],
+    "default_hide_time": 30,
+    "default_search_time": 180,
+    "travel_window_s": 60,
+    "dice_pick_s": 15,
+    "reveal_s": 4,
+    "result_s": 10,
+    "tag_range_m": 3.0,
+    "visibility_range_m": 25.0,
+    "crouch_visibility_range_m": 12.0,
+    "safe_house_total_s": 20,
+    "safe_house_capacity": 2,
+    "disconnect_grace_s": 15,
+    "seeker_disconnect_skip_s": 15,
+    "max_rounds": 12,
+    "hunger_per_round": 10,
+    "min_hunger_to_play": 20,
+    "lobby_idle_expiry_s": 3600
+  },
+  "movement": {
+    "walk_speed": 3.2,
+    "run_speed": 6.0,
+    "crouch_speed": 1.6,
+    "stamina_max_s": 5.0,
+    "stamina_regen_per_s": 0.8,
+    "player_radius": 0.35,
+    "speed_tolerance": 1.35,
+    "stand_height": 1.7,
+    "crouch_height": 0.9
+  },
+  "economy": {
+    "starting_balance": 20000,
+    "daily_bonus": 2000,
+    "max_hunger": 100,
+    "starting_hunger": 80,
+    "hunger_decay_per_hour": 6
+  },
+  "fares": [
+    {"id": "danfo", "name": "Danfo", "price": 500, "ride_s": 4},
+    {"id": "keke", "name": "Keke", "price": 800, "ride_s": 3}
+  ],
+  "items": [
+    {"id": "corn", "name": "Roasted corn", "category": "food", "price": 500, "hunger": 12, "spot": "corn"},
+    {"id": "suya", "name": "Suya (small wrap)", "category": "food", "price": 1500, "hunger": 25, "spot": "suya"},
+    {"id": "small_chops", "name": "Small chops", "category": "food", "price": 2000, "hunger": 30, "spot": "suya"},
+    {"id": "jollof", "name": "Jollof rice + chicken", "category": "food", "price": 3500, "hunger": 55, "spot": "mama_put"},
+    {"id": "amala", "name": "Amala + ewedu", "category": "food", "price": 3000, "hunger": 50, "spot": "mama_put"}
+  ],
+  "home_areas": ["Yaba", "Surulere", "Ikeja", "Lekki", "Ajah", "Mushin", "Ikorodu", "Festac", "Oshodi", "Victoria Island", "Agege", "Gbagada"],
+  "emotes": [
+    {"id": "mo_wa_nibi", "text": "Mo wa nibi!"},
+    {"id": "no_find", "text": "You no go find me!"},
+    {"id": "omo", "text": "Omo!"},
+    {"id": "e_ku_ise", "text": "E ku ise o!"},
+    {"id": "wave", "text": "👋"},
+    {"id": "laugh", "text": "😂"}
+  ],
+  "chat": {"max_len": 300, "history": 50, "retention_days": 30, "rate_per_s": 1.0, "burst": 5, "nearby_radius_m": 20},
+  "network": {"hub_shard_max": 30, "hub_interest_radius_m": 40, "snapshot_hz": 10, "max_frame_bytes": 4096}
+}

@@ -1,0 +1,304 @@
+{
+ "id": "hub_plaza",
+ "name": "Lagos Hub Plaza",
+ "kind": "hub",
+ "bounds": [
+  -40,
+  -14,
+  40,
+  52
+ ],
+ "ground": "#b8a27a",
+ "spawn": [
+  0,
+  4
+ ],
+ "props": [
+  {
+   "kind": "road",
+   "x": 0,
+   "z": -8,
+   "w": 70,
+   "d": 7,
+   "h": 0.02,
+   "solid": false
+  },
+  {
+   "kind": "danfo",
+   "x": -20,
+   "z": -10,
+   "w": 6,
+   "d": 2.4,
+   "h": 2.6
+  },
+  {
+   "kind": "keke",
+   "x": 12,
+   "z": -10,
+   "w": 2.4,
+   "d": 1.4,
+   "h": 1.8
+  },
+  {
+   "kind": "bus_shelter",
+   "x": -6,
+   "z": -3.5,
+   "w": 6,
+   "d": 2,
+   "h": 2.8,
+   "text": "BUS STOP"
+  },
+  {
+   "kind": "sign",
+   "x": -12,
+   "z": -4,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 2.6,
+   "text": ""
+  },
+  {
+   "kind": "stall",
+   "x": 10,
+   "z": 4,
+   "w": 3,
+   "d": 2,
+   "h": 2.4,
+   "color": "#d94f3d",
+   "text": "SUYA"
+  },
+  {
+   "kind": "grill",
+   "x": 12.5,
+   "z": 4,
+   "w": 1,
+   "d": 1,
+   "h": 1.0
+  },
+  {
+   "kind": "stall",
+   "x": 18,
+   "z": 4,
+   "w": 3,
+   "d": 2,
+   "h": 2.4,
+   "color": "#e3a33b",
+   "text": "CORN"
+  },
+  {
+   "kind": "room",
+   "x": 16,
+   "z": 16,
+   "w": 8,
+   "d": 6,
+   "h": 3,
+   "door": "s",
+   "color": "#f0dcb0",
+   "id": "mama_put_room"
+  },
+  {
+   "kind": "sign",
+   "x": 16,
+   "z": 12.4,
+   "w": 5,
+   "d": 0.3,
+   "h": 3.8,
+   "text": "MAMA PUT"
+  },
+  {
+   "kind": "house",
+   "x": -22,
+   "z": 10,
+   "w": 10,
+   "d": 7,
+   "h": 3.2,
+   "color": "#e7d1a1",
+   "text": "Face-me-I-face-you"
+  },
+  {
+   "kind": "flat",
+   "x": -24,
+   "z": 26,
+   "w": 10,
+   "d": 8,
+   "h": 7,
+   "color": "#c8d3db"
+  },
+  {
+   "kind": "duplex",
+   "x": 4,
+   "z": 28,
+   "w": 10,
+   "d": 9,
+   "h": 6.5,
+   "color": "#f3efe6"
+  },
+  {
+   "kind": "house",
+   "x": 24,
+   "z": 30,
+   "w": 8,
+   "d": 7,
+   "h": 3.2,
+   "color": "#d9b48a"
+  },
+  {
+   "kind": "fence",
+   "x": -10,
+   "z": 20,
+   "w": 0.3,
+   "d": 14,
+   "h": 2
+  },
+  {
+   "kind": "gate",
+   "x": -10,
+   "z": 10,
+   "w": 0.3,
+   "d": 4,
+   "h": 2.2
+  },
+  {
+   "kind": "venue",
+   "x": -2,
+   "z": 44,
+   "w": 14,
+   "d": 8,
+   "h": 6,
+   "color": "#6b3fa0",
+   "text": "EVENTS — coming soon"
+  },
+  {
+   "kind": "generator",
+   "x": -16,
+   "z": 4,
+   "w": 1.6,
+   "d": 1,
+   "h": 1.2
+  },
+  {
+   "kind": "kiosk",
+   "x": 26,
+   "z": 8,
+   "w": 2.5,
+   "d": 2.5,
+   "h": 2.6,
+   "color": "#3d7fd9"
+  },
+  {
+   "kind": "palm",
+   "x": -30,
+   "z": -2,
+   "w": 2,
+   "d": 2,
+   "h": 7
+  },
+  {
+   "kind": "palm",
+   "x": 30,
+   "z": -2,
+   "w": 2,
+   "d": 2,
+   "h": 7
+  },
+  {
+   "kind": "tree",
+   "x": 32,
+   "z": 18,
+   "w": 3,
+   "d": 3,
+   "h": 6
+  },
+  {
+   "kind": "tree",
+   "x": -34,
+   "z": 40,
+   "w": 3,
+   "d": 3,
+   "h": 6
+  },
+  {
+   "kind": "lamp",
+   "x": 0,
+   "z": -3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 4,
+   "solid": false
+  },
+  {
+   "kind": "lamp",
+   "x": 20,
+   "z": -3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 4,
+   "solid": false
+  },
+  {
+   "kind": "bench",
+   "x": 4,
+   "z": 8,
+   "w": 2,
+   "d": 0.6,
+   "h": 0.5
+  },
+  {
+   "kind": "sign",
+   "x": 32,
+   "z": -3.5,
+   "w": 4,
+   "d": 0.3,
+   "h": 3.5,
+   "text": "NAIJA FRESH"
+  }
+ ],
+ "sections": [],
+ "safe_houses": [],
+ "zones": [
+  {
+   "id": "bus_stop",
+   "kind": "bus_stop",
+   "name": "Bus Stop",
+   "rect": [
+    -10,
+    -6,
+    -2,
+    -1
+   ]
+  },
+  {
+   "id": "suya",
+   "kind": "food",
+   "name": "Suya Spot",
+   "rect": [
+    7,
+    1,
+    15,
+    7
+   ]
+  },
+  {
+   "id": "corn",
+   "kind": "food",
+   "name": "Roasted Corn",
+   "rect": [
+    15,
+    1,
+    21,
+    7
+   ]
+  },
+  {
+   "id": "mama_put",
+   "kind": "food",
+   "name": "Mama Put",
+   "rect": [
+    12.4,
+    13.4,
+    19.6,
+    18.6
+   ]
+  }
+ ]
+}

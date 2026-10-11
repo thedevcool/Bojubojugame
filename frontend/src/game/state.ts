@@ -11,6 +11,10 @@ export const local = {
   seq: 0,
   frozen: false,
   insideHome: null as string | null,
+  sit: false,
+  seatY: 0,
+  /** tap-to-move: remaining waypoints */
+  path: [] as [number, number][],
 };
 
 export const input = {
@@ -19,6 +23,8 @@ export const input = {
   joyRun: false,
   runHeld: false,
   crouchToggle: false,
+  /** pending screen tap (tap-to-move), consumed by the scene */
+  tap: null as { x: number; y: number } | null,
 };
 
 export const cam = {
@@ -26,7 +32,7 @@ export const cam = {
   pitch: 0.35,
   dist: 6,
   /** Aerial "scan the map" mode: drag pans x/z, wheel/pinch changes height. */
-  aerial: { on: false, x: 0, z: 0, h: 55 },
+  aerial: { on: false, x: 0, z: 0, h: 55, tx: 0, tz: 0, th: 55, vx: 0, vz: 0, drag: false },
 };
 
 /** Short-lived screen effects (camera shake on a tag, etc.). */

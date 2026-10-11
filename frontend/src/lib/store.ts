@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { input, local } from "@/game/state";
 import type { ChatMsg, Content, GroupState, Home, RosterEntry, Standing } from "./types";
 
 export type Quality = "low" | "medium" | "high";
@@ -29,21 +30,48 @@ interface GameStore {
   unread: number;
   chatOpen: boolean;
   toasts: Toast[];
-  ride: { until: number; seconds: number; mode: string; arena: string } | null;
+  ride: { until: number; seconds: number; mode: string; arena: string; dir: "go" | "home" } | null;
   aerial: boolean;
+  controlMode: "joystick" | "tap";
+  bend: boolean;
+  phoneOpen: boolean;
+  phoneApp: string | null;
+  life: { phoneId: string | null; homeId: string | null; rentUntil: string | null; username: string };
+  dmUnread: number;
+  friendReqs: number;
+  /** last live direct message (Messages app listens to this) */
+  dmLive: { from: string; username: string; text: string; id: number; ts: number } | null;
+  friendsVersion: number;
+  /** onboarding step for brand-new players (null = done) */
+  onboard: null | "welcome" | "controls" | "phone" | "launch" | "rent" | "home";
+  /** player chose "Stay & explore" after the final whistle */
+  stayed: boolean;
+  sitting: boolean;
+  /** onboarding guide target in the world (arrow + "walk me there") */
+  guide: { x: number; z: number; label: string } | null;
   homeArea: string | null;
   dice: { rolls: number[]; seeker: string; at: number } | null;
   over: { gameId: string; results: Standing[] } | null;
   emotes: { n: number; text: string; until: number }[];
   quality: Quality;
   muted: string[];
-  panel: null | "wallet" | "settings" | "group" | "leaders" | "changelog";
   set: (p: Partial<GameStore>) => void;
+  openApp: (app: string | null) => void;
+  closePhone: () => void;
+  setBend: (on: boolean) => void;
   toast: (msg: string, kind?: Toast["kind"]) => void;
   addChat: (m: ChatMsg) => void;
 }
 
 let toastId = 0;
+
+/** The movement style the player picked on first launch (null = not chosen yet). */
+export function savedControls(): "joystick" | "tap" | null {
+  try {
+    const v = localStorage.getItem("boju.controls");
+    return v === "tap" || v === "joystick" ? v : null;
+  } catch { return null; }
+}
 
 export const useGame = create<GameStore>((set, get) => ({
   content: null,
@@ -61,14 +89,33 @@ export const useGame = create<GameStore>((set, get) => ({
   toasts: [],
   ride: null,
   aerial: false,
+  controlMode: savedControls() ?? "joystick",
+  bend: false,
+  phoneOpen: false,
+  phoneApp: null,
+  life: { phoneId: null, homeId: null, rentUntil: null, username: "" },
+  dmUnread: 0,
+  friendReqs: 0,
+  dmLive: null,
+  friendsVersion: 0,
+  onboard: null,
+  stayed: false,
+  sitting: false,
+  guide: null,
   homeArea: null,
   dice: null,
   over: null,
   emotes: [],
   quality: "medium",
   muted: [],
-  panel: null,
   set: (p) => set(p),
+  openApp: (app) => set({ phoneOpen: true, phoneApp: app }),
+  closePhone: () => set({ phoneOpen: false, phoneApp: null }),
+  setBend: (on) => {
+    input.crouchToggle = on;
+    if (on) local.sit = false;
+    set({ bend: on, ...(on ? { sitting: false } : {}) });
+  },
   toast: (msg, kind = "info") => {
     const id = ++toastId;
     set({ toasts: [...get().toasts.slice(-3), { id, msg, kind }] });

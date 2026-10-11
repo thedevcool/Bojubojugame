@@ -79,7 +79,11 @@ export interface GameConfig {
   chat: { max_len: number };
   cities: City[];
   home_coords: Record<string, [number, number]>;
+  phones: PhoneModel[];
+  rent: { days: number; prices: Record<string, number> };
 }
+
+export interface PhoneModel { id: string; name: string; price: number; color: string; tagline: string }
 
 export interface City { id: string; name: string; lat: number; lng: number; blurb: string; arenas: string[]; fares: Fare[] | null }
 

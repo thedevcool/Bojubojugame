@@ -7,6 +7,20 @@ bought, sold, withdrawn or cashed out.
 
 > Read **[ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md)** before you change anything.
 
+## New in 2.0 — Boju Boju v1: life in Lagos
+
+- **Onboarding story**: new players land beside the phone shop, buy any phone, launch it, rent a
+  house in the **Houses** app and walk home (guide pin + "walk me there").
+- **The phone is the menu**: an iPhone-style phone (styled by the model you bought) holds
+  Boju Boju, Messages, Houses, Wallet, Map, Rankings, Events (coming soon), Camera, What's new and Settings.
+- **Friends & DMs** (`/api/friends*`, `/api/dm/*`): add by username, private chat between friends
+  only, one-tap game invites.
+- **Houses** (`/api/homes`, `/api/home/rent`): 7-day rent paid from the ledger; you respawn at home.
+- **Controls**: joystick or tap-to-go (client A* in `frontend/src/game/nav.ts`), two-finger pinch
+  zoom, map-like aerial view with momentum; sit on beds, benches or the floor.
+- **After a match**: ride home (route map plays in reverse) or stay and explore; the arena bus stop
+  takes you home later.
+
 ## New in v1.3 — Travel Naija
 
 - **Real maps & rides** (MapLibre GL + OpenFreeMap tiles, © OpenStreetMap): boarding shows your

@@ -94,7 +94,7 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean }
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null }
 
 export function logout(): void {
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
@@ -132,6 +132,29 @@ export async function reportPlayer(acc: Account, targetId: string, reason: strin
     }),
   );
 }
+
+const authed = (acc: Account) => ({ Authorization: `Bearer ${acc.token}` });
+const get = async <T,>(acc: Account, path: string) => json<T>(await fetch(`${API_URL}${path}`, { headers: authed(acc) }));
+const send = async <T,>(acc: Account, path: string, body: unknown) => json<T>(await post(path, body, acc.token));
+
+// ---------------------------------------------------------------- life: phone, house, friends, DMs
+export const buyPhone = (acc: Account, phoneId: string) =>
+  send<{ ok: boolean; phone_id: string }>(acc, "/api/shop/phone", { phone_id: phoneId, key: crypto.randomUUID() });
+
+export interface HouseInfo { id: string; name: string; rent: number; tenants: number; duplex: boolean; door: [number, number] }
+export const getHomes = (acc: Account) => get<{ days: number; mine: string | null; rent_until: string | null; homes: HouseInfo[] }>(acc, "/api/homes");
+export const rentHome = (acc: Account, homeId: string) =>
+  send<{ ok: boolean; rent_until: string }>(acc, "/api/home/rent", { home_id: homeId, key: crypto.randomUUID() });
+
+export interface Friend { id: string; username: string; online: boolean; unread: number }
+export const getFriends = (acc: Account) => get<{ friends: Friend[]; incoming: Friend[]; outgoing: Friend[] }>(acc, "/api/friends");
+export const requestFriend = (acc: Account, username: string) => send<{ ok: boolean; status: string }>(acc, "/api/friends/request", { username });
+export const respondFriend = (acc: Account, playerId: string, accept: boolean) => send<{ ok: boolean }>(acc, "/api/friends/respond", { player_id: playerId, accept });
+export const removeFriend = (acc: Account, playerId: string) => send<{ ok: boolean }>(acc, "/api/friends/remove", { player_id: playerId });
+
+export interface Dm { id: number; mine: boolean; text: string; ts: number }
+export const getDms = (acc: Account, other: string) => get<{ messages: Dm[] }>(acc, `/api/dm/${encodeURIComponent(other)}`);
+export const sendDm = (acc: Account, other: string, text: string) => send<Dm>(acc, `/api/dm/${encodeURIComponent(other)}`, { text });
 
 export const naira = (n: number) => `₦${Math.round(n).toLocaleString("en-NG")}`;
 

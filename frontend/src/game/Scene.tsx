@@ -10,7 +10,9 @@ import { useGame } from "@/lib/store";
 import type { GameMap, RosterEntry } from "@/lib/types";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
+import { navState, stopWalking, walkTo } from "./nav";
 import { inRect, resolveCollision } from "./physics";
+import { findSeat, type Seat } from "./seats";
 import { MapProps } from "./props";
 import { sound } from "./sound";
 import { cam, fx, input, local, sample } from "./state";
@@ -53,14 +55,17 @@ function cameraClearance(map: GameMap, ax: number, ay: number, az: number, bx: n
 function LocalPlayer({ map }: { map: GameMap }) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
-  const motion = useRef<Motion>({ speed: 0, crouch: false });
-  const last = useRef({ sent: 0, x: NaN, z: NaN, c: false });
+  const motion = useRef<Motion>({ speed: 0, crouch: false, sit: false, seatY: 0 });
+  const last = useRef({ sent: 0, x: NaN, z: NaN, c: false, s: false });
+  const seat = useRef<Seat | null>(null);
+  const stuck = useRef({ t: 0, d: Infinity });
   const cfg = useGame((s) => s.content?.config.movement);
   const me = useGame((s) => s.me);
   const av = useGame((s) => (s.me ? Object.values(s.roster).find((r) => r.id === s.me?.id)?.av : undefined));
   const { camera } = useThree();
   const want = useMemo(() => new THREE.Vector3(), []);
   const camState = useRef({ dist: cam.dist, pitch: cam.pitch, clear: 1, home: null as string | null });
+  navState.map = map;
 
   useFrame((state, rawDt) => {
     if (!cfg || !group.current) return;
@@ -72,10 +77,33 @@ function LocalPlayer({ map }: { map: GameMap }) {
     if (k.has("KeyS") || k.has("ArrowDown")) iy -= 1;
     if (k.has("KeyA") || k.has("ArrowLeft")) ix -= 1;
     if (k.has("KeyD") || k.has("ArrowRight")) ix += 1;
-    const mag = Math.min(1, Math.hypot(ix, iy));
-    const moving = mag > 0.08 && !local.frozen;
-    local.crouch = input.crouchToggle || k.has("KeyC") || k.has("ControlLeft");
-    const wantRun = (input.runHeld || input.joyRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
+    let mag = Math.min(1, Math.hypot(ix, iy));
+    const manual = mag > 0.08;
+    if (manual && local.path.length) stopWalking(); // the stick/keys always win over tap-to-move
+    let ang = -Math.atan2(ix, iy) + cam.yaw + Math.PI;
+    let autoRun = false;
+    if (!manual && local.path.length && !local.frozen) {
+      // tap-to-move: follow the planned waypoints
+      let [tx, tz] = local.path[0];
+      while (local.path.length > 1 && Math.hypot(tx - local.x, tz - local.z) < 0.35) { local.path.shift(); [tx, tz] = local.path[0]; }
+      const d = Math.hypot(tx - local.x, tz - local.z);
+      if (local.path.length === 1 && d < 0.2) stopWalking();
+      else {
+        ang = Math.atan2(tx - local.x, tz - local.z);
+        mag = Math.min(1, d / 0.6 + 0.35);
+        let left = d;
+        for (let i = 1; i < local.path.length; i++) left += Math.hypot(local.path[i][0] - local.path[i - 1][0], local.path[i][1] - local.path[i - 1][1]);
+        autoRun = left > 14;
+        // give up if we stop making progress (someone standing in the way, etc.)
+        const s = stuck.current;
+        if (left < s.d - 0.3) { s.d = left; s.t = 0; } else if ((s.t += dt) > 1.6) { stopWalking(); s.d = Infinity; s.t = 0; }
+      }
+    }
+    if (!local.path.length) stuck.current.d = Infinity;
+    const moving = mag > 0.08 && !local.frozen && (manual || local.path.length > 0);
+    if (moving && local.sit) { local.sit = false; useGame.getState().set({ sitting: false }); }
+    local.crouch = !local.sit && (input.crouchToggle || k.has("KeyC") || k.has("ControlLeft"));
+    const wantRun = (input.runHeld || input.joyRun || autoRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
     local.run = wantRun && moving && local.stamina > 0;
     if (local.run) local.stamina = Math.max(0, local.stamina - dt);
     else local.stamina = Math.min(cfg.stamina_max_s, local.stamina + cfg.stamina_regen_per_s * dt);
@@ -83,15 +111,21 @@ function LocalPlayer({ map }: { map: GameMap }) {
     let speed = 0;
     if (moving) {
       speed = (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
-      const ang = -Math.atan2(ix, iy) + cam.yaw + Math.PI;
       const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
       local.x = nx;
       local.z = nz;
       local.ry = Math.atan2(vx, vz);
     }
+    // sitting: snap to the nearest bed/bench, or sit on the floor
+    if (local.sit && !seat.current) {
+      seat.current = findSeat(map, local.x, local.z);
+      if (seat.current.ry !== null) local.ry = seat.current.ry;
+    } else if (!local.sit) seat.current = null;
     motion.current.speed = speed;
     motion.current.crouch = local.crouch;
+    motion.current.sit = local.sit;
+    motion.current.seatY = seat.current?.y ?? 0;
     sound.footsteps(speed, local.crouch);
     local.insideHome = map.homes?.find((h) => inRect(h.rect, local.x, local.z))?.id ?? null;
     if (local.insideHome !== camState.current.home) {
@@ -99,7 +133,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       sound.play("door");
     }
     // ---- render
-    group.current.position.set(local.x, 0, local.z);
+    const st0 = seat.current;
+    if (st0) {
+      // ease onto the seat instead of teleporting
+      const gp = group.current.position;
+      gp.x += (st0.x - gp.x) * (1 - Math.exp(-dt * 8));
+      gp.z += (st0.z - gp.z) * (1 - Math.exp(-dt * 8));
+      gp.y = 0;
+    } else group.current.position.set(local.x, 0, local.z);
     let d = (local.ry - group.current.rotation.y) % (Math.PI * 2);
     if (d > Math.PI) d -= Math.PI * 2;
     if (d < -Math.PI) d += Math.PI * 2;
@@ -107,14 +148,35 @@ function LocalPlayer({ map }: { map: GameMap }) {
     if (ring.current) ring.current.visible = cam.aerial.on;
     // ---- camera
     const c = camState.current;
+    const onboarding = useGame.getState().onboard === "welcome";
     if (cam.aerial.on) {
-      want.set(cam.aerial.x, cam.aerial.h, cam.aerial.z + cam.aerial.h * 0.35);
-      camera.position.lerp(want, 1 - Math.exp(-dt * 6));
-      camera.lookAt(cam.aerial.x, 0, cam.aerial.z);
+      // map-app feel: targets move with your fingers, the camera glides after them, flicks keep coasting
+      const a = cam.aerial;
+      if (!a.drag) {
+        a.tx += a.vx * dt;
+        a.tz += a.vz * dt;
+        const f = Math.exp(-dt * 3.2);
+        a.vx *= f;
+        a.vz *= f;
+      }
+      const [bx0, bz0, bx1, bz1] = map.bounds;
+      a.tx = Math.min(bx1, Math.max(bx0, a.tx));
+      a.tz = Math.min(bz1, Math.max(bz0, a.tz));
+      a.th = Math.min(120, Math.max(16, a.th));
+      a.x = THREE.MathUtils.damp(a.x, a.tx, a.drag ? 22 : 12, dt);
+      a.z = THREE.MathUtils.damp(a.z, a.tz, a.drag ? 22 : 12, dt);
+      a.h = THREE.MathUtils.damp(a.h, a.th, 10, dt);
+      want.set(a.x, a.h, a.z + a.h * 0.35);
+      camera.position.lerp(want, 1 - Math.exp(-dt * 9));
+      camera.lookAt(a.x, 0, a.z);
     } else {
       const inside = !!local.insideHome;
-      c.dist = THREE.MathUtils.lerp(c.dist, inside && cam.dist < 12 ? 3.4 : cam.dist, 1 - Math.exp(-dt * 5));
-      c.pitch = THREE.MathUtils.lerp(c.pitch, inside ? 1.05 : cam.pitch, 1 - Math.exp(-dt * 5));
+      if (onboarding) cam.yaw += dt * 0.22; // slow welcome orbit
+      // indoors you can still look all around the room, just from a closer, higher camera
+      const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : cam.dist;
+      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : cam.pitch;
+      c.dist = THREE.MathUtils.lerp(c.dist, wantDist, 1 - Math.exp(-dt * 5));
+      c.pitch = THREE.MathUtils.lerp(c.pitch, wantPitch, 1 - Math.exp(-dt * 5));
       const ox = Math.sin(cam.yaw) * c.dist * Math.cos(c.pitch), oy = Math.sin(c.pitch) * c.dist, oz = Math.cos(cam.yaw) * c.dist * Math.cos(c.pitch);
       const clear = inside ? 1 : cameraClearance(map, local.x, HEAD_Y, local.z, local.x + ox, HEAD_Y - 0.1 + oy, local.z + oz);
       // pull in fast when blocked, ease back out slowly (no popping)
@@ -139,12 +201,13 @@ function LocalPlayer({ map }: { map: GameMap }) {
     // ---- network (12 Hz, only when something changed)
     const now = state.clock.elapsedTime;
     const l = last.current;
-    if (now - l.sent >= 1 / SEND_HZ && (l.x !== local.x || l.z !== local.z || l.c !== local.crouch || now - l.sent > 1)) {
+    if (now - l.sent >= 1 / SEND_HZ && (l.x !== local.x || l.z !== local.z || l.c !== local.crouch || l.s !== local.sit || now - l.sent > 1)) {
       l.sent = now;
       l.x = local.x;
       l.z = local.z;
       l.c = local.crouch;
-      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, s: ++local.seq });
+      l.s = local.sit;
+      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, st: local.sit, s: ++local.seq });
     }
   });
 
@@ -159,9 +222,10 @@ function LocalPlayer({ map }: { map: GameMap }) {
   );
 }
 
-function RemotePlayer({ r }: { r: RosterEntry }) {
+function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   const group = useRef<THREE.Group>(null);
-  const motion = useRef<Motion>({ speed: 0, crouch: false });
+  const motion = useRef<Motion>({ speed: 0, crouch: false, sit: false, seatY: 0 });
+  const seat = useRef<Seat | null>(null);
   const prev = useRef({ x: 0, z: 0 });
   const emote = useGame((s) => s.emotes.find((e) => e.n === r.n && e.until > Date.now()));
   useFrame((_, dt) => {
@@ -174,8 +238,14 @@ function RemotePlayer({ r }: { r: RosterEntry }) {
     prev.current = { x: snap.x, z: snap.z };
     motion.current.speed = THREE.MathUtils.lerp(motion.current.speed, Math.min(sp, 7), 0.25);
     motion.current.crouch = (snap.f & 1) === 1;
-    g.position.set(snap.x, 0, snap.z);
-    g.rotation.y = snap.ry;
+    const sitting = (snap.f & 16) === 16;
+    if (sitting && !seat.current) seat.current = findSeat(map, snap.x, snap.z);
+    if (!sitting) seat.current = null;
+    motion.current.sit = sitting;
+    motion.current.seatY = seat.current?.y ?? 0;
+    const s = seat.current;
+    g.position.set(s ? s.x : snap.x, 0, s ? s.z : snap.z);
+    g.rotation.y = s?.ry ?? snap.ry;
   });
   return (
     <group ref={group} visible={false}>
@@ -184,10 +254,94 @@ function RemotePlayer({ r }: { r: RosterEntry }) {
   );
 }
 
-function Remotes() {
+function Remotes({ map }: { map: GameMap }) {
   const roster = useGame((s) => s.roster);
   const meId = useGame((s) => s.me?.id);
-  return <>{Object.values(roster).filter((r) => r.id !== meId).map((r) => <RemotePlayer key={r.n} r={r} />)}</>;
+  return <>{Object.values(roster).filter((r) => r.id !== meId).map((r) => <RemotePlayer key={r.n} r={r} map={map} />)}</>;
+}
+
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+/** Tap-to-move: turns a screen tap into a ground point and plans a walk there. */
+function TapMover() {
+  const { camera, gl } = useThree();
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const hit = useMemo(() => new THREE.Vector3(), []);
+  const ndc = useMemo(() => new THREE.Vector2(), []);
+  useFrame(() => {
+    const t = input.tap;
+    if (!t) return;
+    input.tap = null;
+    if (cam.aerial.on || local.frozen) return;
+    const r = gl.domElement.getBoundingClientRect();
+    ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    if (!ray.ray.intersectPlane(groundPlane, hit)) return;
+    if (walkTo(hit.x, hit.z)) sound.play("pop");
+  });
+  return null;
+}
+
+/** Where you're walking to (tap-to-move) — a pulsing ring on the ground. */
+function DestMarker() {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    const m = ref.current;
+    if (!m) return;
+    const t = navState.target;
+    m.visible = !!t && local.path.length > 0;
+    if (t) {
+      m.position.set(t[0], 0.06, t[1]);
+      const s = 1 + Math.sin(clock.elapsedTime * 6) * 0.12;
+      m.scale.set(s, s, s);
+    }
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+      <ringGeometry args={[0.35, 0.55, 28]} />
+      <meshBasicMaterial color="#2f7cf6" transparent opacity={0.9} depthWrite={false} />
+    </mesh>
+  );
+}
+
+/** Onboarding guide: a bobbing pin over the goal + an arrow at your feet pointing to it. */
+function GuideMarker() {
+  const guide = useGame((s) => s.guide);
+  const pin = useRef<THREE.Group>(null);
+  const arrow = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (!guide) return;
+    if (pin.current) {
+      pin.current.position.set(guide.x, 3.2 + Math.sin(clock.elapsedTime * 3) * 0.25, guide.z);
+      pin.current.rotation.y = clock.elapsedTime * 1.5;
+    }
+    if (arrow.current) {
+      const d = Math.hypot(guide.x - local.x, guide.z - local.z);
+      arrow.current.visible = d > 2.5;
+      arrow.current.position.set(local.x, 0.08, local.z);
+      arrow.current.rotation.y = Math.atan2(guide.x - local.x, guide.z - local.z);
+    }
+  });
+  if (!guide) return null;
+  return (
+    <>
+      <group ref={pin}>
+        <mesh position={[0, 0, 0]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.45, 1, 16]} />
+          <meshBasicMaterial color="#2f7cf6" />
+        </mesh>
+        <Html position={[0, 1, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+          <div className="whitespace-nowrap rounded-full bg-[#2f7cf6] px-2.5 py-1 text-xs font-bold text-white shadow-lg">{guide.label}</div>
+        </Html>
+      </group>
+      <group ref={arrow}>
+        <mesh position={[0, 0, 1.5]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.35, 0.8, 3]} />
+          <meshBasicMaterial color="#2f7cf6" transparent opacity={0.85} />
+        </mesh>
+      </group>
+    </>
+  );
 }
 
 function Markers({ map }: { map: GameMap }) {
@@ -291,7 +445,10 @@ function World({ map }: { map: GameMap }) {
       <AerialLabels map={map} />
       {map.kind === "hub" && <Ambient map={map} />}
       <LocalPlayer map={map} />
-      <Remotes />
+      <Remotes map={map} />
+      <TapMover />
+      <DestMarker />
+      <GuideMarker />
       {quality === "high" && (
         <EffectComposer multisampling={0}>
           <N8AO aoRadius={1.6} intensity={2.2} distanceFalloff={1} quality="performance" />
@@ -304,7 +461,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

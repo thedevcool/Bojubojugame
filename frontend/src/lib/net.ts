@@ -79,7 +79,10 @@ class Net {
       case "zone":
         remotes.clear();
         cam.aerial.on = false;
-        g.set({ aerial: false });
+        local.path = [];
+        g.setBend(false); // never arrive somewhere still bent down
+        local.sit = false;
+        g.set({ aerial: false, sitting: false, stayed: false });
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
@@ -87,6 +90,27 @@ class Net {
       case "tp":
         local.x = m.x as number;
         local.z = m.z as number;
+        local.path = [];
+        local.sit = false;
+        g.set({ sitting: false });
+        break;
+      case "home": {
+        const home = (m.home as Home | null) ?? null;
+        g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
+        break;
+      }
+      case "dm":
+        g.set({ dmLive: { from: m.from as string, username: m.username as string, text: m.text as string, id: m.id as number, ts: m.ts as number } });
+        if (!(g.phoneOpen && g.phoneApp === `dm:${m.from as string}`)) {
+          g.set({ dmUnread: g.dmUnread + 1 });
+          g.toast(`💬 ${m.username as string}: ${m.text as string}`);
+          sound.play("pop");
+        }
+        break;
+      case "friend":
+        g.set({ friendsVersion: g.friendsVersion + 1, ...(m.event === "pending" ? { friendReqs: g.friendReqs + 1 } : {}) });
+        if (m.event === "pending") g.toast(`👋 ${(m.username as string) ?? "Someone"} wants to be your friend — open 📱 Messages`, "good");
+        else if (m.event === "accepted") g.toast(`🤝 ${(m.username as string) ?? "Your friend"} is now your friend!`, "good");
         break;
       case "corr":
         local.x = m.x as number;
@@ -116,7 +140,7 @@ class Net {
         break;
       }
       case "g_left":
-        g.set({ group: null, over: null, dice: null });
+        g.set({ group: null, over: null, dice: null, stayed: false });
         local.frozen = false;
         break;
       case "g_dice":
@@ -141,7 +165,13 @@ class Net {
       case "g_event":
         break;
       case "ride":
-        g.set({ ride: { until: Date.now() + (m.seconds as number) * 1000, seconds: m.seconds as number, mode: (m.mode as string) ?? "danfo", arena: (m.arena as string) ?? "" } });
+        g.setBend(false);
+        local.sit = false;
+        g.set({
+          sitting: false,
+          over: m.dir === "home" ? null : g.over,
+          ride: { until: Date.now() + (m.seconds as number) * 1000, seconds: m.seconds as number, mode: (m.mode as string) ?? "danfo", arena: (m.arena as string) ?? "", dir: m.dir === "home" ? "home" : "go" },
+        });
         sound.play("horn");
         break;
       case "chat":

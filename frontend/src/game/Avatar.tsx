@@ -8,7 +8,7 @@ import { BOTTOMS, SKIN } from "./palette";
 import { mat } from "./props";
 import { ankara } from "./textures";
 
-export interface Motion { speed: number; crouch: boolean }
+export interface Motion { speed: number; crouch: boolean; sit?: boolean; seatY?: number }
 
 const box = new THREE.BoxGeometry(1, 1, 1);
 const cap = new THREE.CapsuleGeometry(0.5, 1, 3, 8);
@@ -54,7 +54,7 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
   const neck = useRef<THREE.Group>(null);
   const legs: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
   const arms: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
-  const st = useRef({ phase: 0, bend: 0, speed: 0 });
+  const st = useRef({ phase: 0, bend: 0, speed: 0, sit: 0 });
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -62,6 +62,10 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
     const k = st.current;
     k.bend = THREE.MathUtils.damp(k.bend, m.crouch ? 1 : 0, 10, dt); // smooth into/out of the squat
     k.speed = THREE.MathUtils.damp(k.speed, m.speed, 8, dt);
+    k.sit = THREE.MathUtils.damp(k.sit, m.sit ? 1 : 0, 7, dt);
+    const seatY = m.seatY ?? 0;
+    const chair = seatY > 0.2; // on a bed/bench: legs hang down; on the floor: legs out in front
+    const L = THREE.MathUtils.lerp;
     const moving = k.speed > 0.2;
     const running = k.speed > 4;
     k.phase += dt * (moving ? 3.2 + k.speed * 1.5 : 0);
@@ -77,21 +81,23 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
       const gaitKnee = Math.max(0, -Math.sin(k.phase + (i ? Math.PI : 0) - 0.6)) * (running ? 1.3 : 0.8) * Math.min(1, k.speed / 2);
       const hip = THREE.MathUtils.lerp(gaitHip, squatHip + gaitHip * 0.25, k.bend);
       const knee = THREE.MathUtils.lerp(gaitKnee, squatKnee, k.bend);
-      legs[i].upper.current?.rotation.set(hip, 0, 0);
-      legs[i].lower.current?.rotation.set(knee, 0, 0);
+      legs[i].upper.current?.rotation.set(L(hip, chair ? -1.5 : -2.1, k.sit), 0, L(0, chair ? side * -0.04 : side * -0.1, k.sit));
+      legs[i].lower.current?.rotation.set(L(knee, chair ? 1.45 : 1.5, k.sit), 0, 0);
       // arms swing opposite to legs; bent forward when squatting
       const armSwing = swing * amp * 0.9;
       const shoulder = THREE.MathUtils.lerp(armSwing, -0.75, k.bend);
       const elbow = THREE.MathUtils.lerp(-0.25 - (running ? 0.9 : 0.2), -0.9, k.bend);
-      arms[i].upper.current?.rotation.set(shoulder, 0, side * 0.06);
-      arms[i].lower.current?.rotation.set(elbow, 0, 0);
+      arms[i].upper.current?.rotation.set(L(shoulder, chair ? -0.45 : -1.0, k.sit), 0, side * L(0.06, chair ? 0.04 : -0.12, k.sit));
+      arms[i].lower.current?.rotation.set(L(elbow, chair ? -0.75 : -0.7, k.sit), 0, 0);
     }
     const lean = THREE.MathUtils.lerp(moving ? (running ? 0.18 : 0.06) : 0, 0.55, k.bend);
     const hipY = THREE.MathUtils.lerp(STAND_HIP, hipHeight(-squatHip, squatKnee), k.bend);
     const bob = moving ? Math.abs(Math.cos(k.phase)) * (running ? 0.07 : 0.035) : Math.sin(k.phase * 0.3 + performance.now() / 900) * 0.006;
-    if (pelvis.current) pelvis.current.position.set(0, hipY + bob * (1 - k.bend), THREE.MathUtils.lerp(0, -0.12, k.bend));
-    if (spine.current) spine.current.rotation.x = lean;
-    if (neck.current) neck.current.rotation.x = -lean * 0.7; // keep looking ahead
+    const sitY = chair ? seatY + 0.07 : 0.13;
+    if (pelvis.current) pelvis.current.position.set(0, L(hipY + bob * (1 - k.bend), sitY, k.sit), L(L(0, -0.12, k.bend), 0, k.sit));
+    const bodyLean = L(lean, chair ? 0.04 : 0.18, k.sit); // on the floor: knees up, arms round them
+    if (spine.current) spine.current.rotation.x = bodyLean;
+    if (neck.current) neck.current.rotation.x = -bodyLean * 0.7; // keep looking ahead
   });
 
   return (

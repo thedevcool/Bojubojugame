@@ -106,6 +106,7 @@ def validate_move(
     radius: float,
     bounds: Rect | list[float],
     boxes: list[Box],
+    max_step: float | None = None,
 ) -> MoveCheck:
     """Server-side anti-cheat check for one movement step."""
     if not (math.isfinite(to_x) and math.isfinite(to_z)):
@@ -113,7 +114,7 @@ def validate_move(
     if not in_bounds(bounds, to_x, to_z, radius):
         return MoveCheck(False, "bounds")
     # Allow a little latency jitter but never teleporting.
-    allowed = max_speed * max(dt, 0.05) * tolerance + 0.15
+    allowed = max_step if max_step is not None else max_speed * max(dt, 0.05) * tolerance + 0.15
     if distance(from_x, from_z, to_x, to_z) > allowed:
         return MoveCheck(False, "speed")
     if collides(to_x, to_z, radius * 0.9, boxes):

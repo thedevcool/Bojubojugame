@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadAccount, naira, reportPlayer, getLeaderboard, getWallet, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { getFriends, loadAccount, naira, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
 import { sound } from "@/game/sound";
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
@@ -69,10 +69,18 @@ export function GroupPanel() {
   const active = g.members.filter((m) => !m.left);
   return (
     <Modal>
-      <div className="mb-3 flex gap-2">
-        <button className="btn btn-primary flex-1" onClick={share}>📨 Invite friends</button>
-        <button className="btn btn-ghost" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+      <div className="anim-pop mb-3 rounded-2xl bg-gradient-to-br from-[#2f7cf6] to-[#1d4fb0] p-3 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">Your game code</div>
+        <button className="my-1 font-mono text-4xl font-black tracking-[0.3em]" title="Tap to copy" onClick={async () => {
+          try { await navigator.clipboard.writeText(g.code); useGame.getState().toast(`Code ${g.code} copied`, "good"); } catch { /* clipboard blocked */ }
+        }}>{g.code}</button>
+        <div className="text-[11px] opacity-80">Friends type this in Boju Boju → Join with a code. Tap it to copy.</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button className="btn bg-white/20 py-1.5 text-sm" onClick={share}>📨 Share link</button>
+          <button className="btn bg-white/10 py-1.5 text-sm" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+        </div>
       </div>
+      {g.phase === "lobby" && <InviteFriends code={g.code} memberIds={active.map((m) => m.id)} />}
       <div className="mb-3 space-y-1">
         {active.map((m) => (
           <div key={m.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
@@ -107,6 +115,49 @@ export function GroupPanel() {
         <p className="text-sm opacity-80">Game in progress — phase: {g.phase}</p>
       )}
     </Modal>
+  );
+}
+
+/** One tap per friend: sends them a DM invite with a Join button (and a toast if they're online). */
+function InviteFriends({ code, memberIds }: { code: string; memberIds: string[] }) {
+  const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const acc = loadAccount();
+    if (acc) getFriends(acc).then((d) => setFriends(d.friends)).catch(() => setFriends([]));
+  }, []);
+  const invite = async (f: Friend) => {
+    const acc = loadAccount();
+    if (!acc) return;
+    try {
+      await sendDm(acc, f.id, `Join my Boju Boju game: ${code}`);
+      setSent((s) => ({ ...s, [f.id]: true }));
+      useGame.getState().toast(`Invite sent to @${f.username} 📨`, "good");
+    } catch (e) { useGame.getState().toast((e as Error).message, "error"); }
+  };
+  if (friends === null) return null;
+  const list = friends.filter((f) => !memberIds.includes(f.id));
+  return (
+    <div className="mb-3">
+      <div className="mb-1 text-sm font-bold">Invite friends</div>
+      {list.length === 0 ? (
+        <div className="rounded-xl bg-white/5 p-2.5 text-xs opacity-75">
+          {friends.length ? "All your friends are already here 🙌🏾" : "No friends yet — add them by username in 📱 Messages, or share the code above."}
+        </div>
+      ) : (
+        <div className="divide-y divide-white/10 overflow-hidden rounded-xl bg-white/5">
+          {list.map((f) => (
+            <div key={f.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <span className={`h-2.5 w-2.5 rounded-full ${f.online ? "bg-green-400" : "bg-gray-500"}`} />
+              <span className="flex-1 truncate">@{f.username}</span>
+              <button className={`btn px-3 py-1 text-xs ${sent[f.id] ? "btn-ghost" : "btn-primary"}`} disabled={sent[f.id]} onClick={() => invite(f)}>
+                {sent[f.id] ? "Sent ✓" : "Invite"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

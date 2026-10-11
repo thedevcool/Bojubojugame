@@ -103,7 +103,8 @@ class Net {
         g.set({ dmLive: { from: m.from as string, username: m.username as string, text: m.text as string, id: m.id as number, ts: m.ts as number } });
         if (!(g.phoneOpen && g.phoneApp === `dm:${m.from as string}`)) {
           g.set({ dmUnread: g.dmUnread + 1 });
-          g.toast(`💬 ${m.username as string}: ${m.text as string}`);
+          const code = (m.text as string).match(/Join my Boju Boju game: ([A-Z0-9]{4,6})/)?.[1];
+          g.toast(code ? `🙈 @${m.username as string} invited you to game ${code} — 📱 Messages to join` : `💬 ${m.username as string}: ${m.text as string}`, code ? "good" : "info");
           sound.play("pop");
         }
         break;

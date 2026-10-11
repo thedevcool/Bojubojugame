@@ -226,12 +226,16 @@ class World:
             return
         mv = self.cfg.movement
         dt = now - s.last_move_at
-        if m.c:
+        if m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
             cap = mv.crouch_speed
-        elif m.r and s.stamina > -1.0:
+        elif m.r and s.stamina > -2.0:
             cap = mv.run_speed
         else:
             cap = mv.walk_speed
+        # Speed check against a budget that refills over real time, not per packet: mobile
+        # networks deliver moves in bursts, and a per-packet dt made honest players snap back.
+        burst = cap * mv.speed_tolerance * 0.6 + 0.3
+        budget = min(s.move_budget + cap * mv.speed_tolerance * max(0.0, min(dt, 1.0)), burst)
         check = validate_move(
             from_x=s.x,
             from_z=s.z,
@@ -243,14 +247,18 @@ class World:
             radius=mv.player_radius,
             bounds=room.map.bounds,
             boxes=room.map.near(s.x, s.z, m.x, m.z),
+            max_step=budget + 0.05,
         )
         if not check.ok:
+            s.move_budget = budget
+            s.last_move_at = now
             self._correct(s, m.s, now)
             return
         step = distance(s.x, s.z, m.x, m.z)
+        s.move_budget = max(0.0, budget - step)
         span = max(dt, 0.05)
-        if step / span > mv.walk_speed * 1.1:
-            s.stamina -= span
+        if m.r and step > 0:
+            s.stamina -= step / mv.run_speed  # time spent running, independent of packet timing
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
         s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st

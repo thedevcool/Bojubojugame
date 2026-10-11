@@ -98,6 +98,7 @@ export default function PlayPage() {
           <div className="ride-bus text-6xl">🚌</div>
           <div className="text-lg font-bold">Entering Lagos…</div>
           <div className="text-xs opacity-70">Small download (about 1 MB) · works on mobile data</div>
+          <div className="text-xs opacity-70">First visit of the day? The server may take up to a minute to wake up.</div>
         </div>
       )}
     </main>

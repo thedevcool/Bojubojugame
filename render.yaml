@@ -1,0 +1,22 @@
+# Render Blueprint — free backend for market testing (see DEPLOY.md "Free route").
+services:
+  - type: web
+    name: boju-boju-api
+    runtime: python
+    plan: free
+    region: frankfurt          # closest Render region to Lagos
+    rootDir: backend
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: ENV
+        value: prod
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false            # paste the Neon connection string when prompted
+      - key: FRONTEND_ORIGIN
+        sync: false            # e.g. https://boju-boju.vercel.app

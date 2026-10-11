@@ -51,6 +51,9 @@ function Landing() {
       <p className="mt-1 text-lg">Hide &amp; seek, Lagos style. 🚌🌴</p>
       <p className="mt-1 text-sm opacity-75">Hide well, find your guys, earn naira, chop suya. &ldquo;Mo ti ri e!&rdquo;</p>
 
+      {!acc && areas.length === 0 && !err && (
+        <p className="mt-4 text-sm opacity-80">Waking up the game server… this can take up to a minute the first time.</p>
+      )}
       {acc ? (
         <div className="panel mt-6 p-4">
           <div className="text-sm opacity-80">Welcome back,</div>

@@ -1,5 +1,55 @@
 # Deploying Boju Boju
 
+## Free route (market test, ₦0/month)
+
+| Part | Service | Free plan notes |
+|---|---|---|
+| Database | **Neon** | Free Postgres; choose region **Frankfurt (aws-eu-central-1)** |
+| Backend | **Render** (free web service) | Sleeps after 15 min with no players; the first visitor after that waits about 1 minute |
+| Frontend | **Vercel** Hobby | Free CDN; fine for a non‑commercial test |
+
+None of these should ask for a card on the free plan.
+
+### 1. Neon
+1. Sign up at neon.tech with GitHub. Create a project, region **AWS Frankfurt**.
+2. Copy the **connection string** (`postgresql://…?sslmode=require`).
+
+### 2. Render (backend)
+1. Sign up at render.com with GitHub and allow access to the `Bojubojugame` repo.
+2. Click **New → Blueprint**, pick the repo and the branch, and Render reads `render.yaml`.
+3. When it asks, paste:
+   - `DATABASE_URL` = the Neon string
+   - `FRONTEND_ORIGIN` = `https://placeholder.vercel.app` for now (you fix it in step 4)
+4. Wait for the deploy, then open `https://<your-service>.onrender.com/health`. It should show `"ok": true`.
+
+### 3. Vercel (frontend)
+1. Sign up at vercel.com with GitHub. **Add New → Project**, import `Bojubojugame`.
+2. Set **Root Directory = `frontend`**.
+3. Add the environment variables:
+   - `NEXT_PUBLIC_API_URL` = `https://<your-service>.onrender.com`
+   - `NEXT_PUBLIC_SITE_URL` = your Vercel URL (you can fill it in after the first deploy and redeploy)
+4. Deploy.
+
+### 4. Connect them
+On Render: **Environment → FRONTEND_ORIGIN** = your exact Vercel URL, e.g. `https://boju-boju.vercel.app`
+(no slash at the end). Save, and Render restarts. Without this, the browser will block the game's connection to the server.
+
+### Optional: keep it awake
+To skip the 1‑minute wake‑up, create a free job at cron-job.org that opens
+`https://<your-service>.onrender.com/health` every 10 minutes. One service running
+all month (~744 h) fits inside Render's 750 free hours. Don't run a second free service
+the same way, or both get suspended for the rest of the month.
+
+### Free‑plan limits to know
+- Restarts and deploys end any game in progress. Wallets, results and chat are kept in Neon.
+- Render's free bandwidth is limited, which is plenty for a test with a few hundred players.
+  Watch the usage page.
+- Once players are hooked, move to the paid route below with no code changes.
+
+---
+
+## Paid route (always on, closer to Lagos)
+
 Order: **database → backend → frontend → set the backend's allowed origin.**
 
 ## 1. Postgres (Neon, free tier)

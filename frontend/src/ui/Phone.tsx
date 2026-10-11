@@ -13,6 +13,7 @@ import { useGame } from "@/lib/store";
 import { ChatContent, GroupPanel, LeadersPanel, SettingsPanel, WalletPanel, screenshot } from "./Panels";
 import { ChangelogContent } from "./WhatsNew";
 import { startDecorating } from "./Decorate";
+import { LiveGamesList } from "./Live";
 import { useMap, useTicker } from "./hooks";
 
 interface App { id: string; name: string; icon: string; bg: string; needsPhone?: boolean }
@@ -23,6 +24,7 @@ const APPS: App[] = [
   { id: "houses", name: "Houses", icon: "🏠", bg: "from-[#ffb057] to-[#e8731a]", needsPhone: true },
   { id: "wallet", name: "Wallet", icon: "₦", bg: "from-[#1d2b44] to-[#0a1324]" },
   { id: "map", name: "Map", icon: "🛰️", bg: "from-[#7fd8ff] to-[#2a8fd6]", needsPhone: true },
+  { id: "live", name: "Live games", icon: "📺", bg: "from-[#ff6b81] to-[#d6224a]", needsPhone: true },
   { id: "leaders", name: "Rankings", icon: "🏆", bg: "from-[#ffd84f] to-[#e0a800]", needsPhone: true },
   { id: "events", name: "Events", icon: "🎉", bg: "from-[#ff7ab6] to-[#d62f7a]", needsPhone: true },
   { id: "camera", name: "Camera", icon: "📸", bg: "from-[#9aa3b2] to-[#4b5566]", needsPhone: true },
@@ -276,6 +278,7 @@ function AppBody({ app }: { app: string | null }) {
     case "houses": return <HousesApp />;
     case "wallet": return <WalletPanel />;
     case "leaders": return <LeadersPanel />;
+    case "live": return <LiveGamesList />;
     case "events": return <EventsApp />;
     case "settings": return <SettingsPanel />;
     case "news": return <ChangelogContent />;

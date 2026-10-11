@@ -108,24 +108,3 @@ def check_layout(lay: Layout, placed: list[Placement], catalog: dict[str, Any]) 
                 return f"{spec.name} is on top of the {name.lower()}"
         solids.append((spec.name, r))
     return None
-
-
-def starter_set(lay: Layout) -> list[tuple[str, float, float, int]]:
-    """Furniture you find in a newly rented house: (item, lx, lz, rot)."""
-    hw, hd = lay.w / 2, lay.d / 2
-    split = -lay.d * 0.1
-    bedroom_right = 0.0 if lay.style == "duplex" else hw
-    out = [
-        ("bed", -hw + 1.35, -hd + 1.45, 0),
-        ("wardrobe", (-hw + bedroom_right) / 2 + 0.6, -hd + 0.66, 0),
-        ("sofa", -hw + 0.8, (split + hd) / 2, 1),
-        ("tv", hw - 0.6, (split + hd) / 2, 3),
-        ("center_table", -0.6, (split + hd) / 2, 1),
-        ("rug", -0.6, (split + hd) / 2, 0),
-        ("ceiling_fan", 0.0, (split + hd) / 2, 0),
-    ]
-    if lay.style == "duplex":
-        out += [("fridge", hw - 0.65, -hd + 0.65, 0), ("cooker", hw - 1.6, -hd + 0.6, 0)]
-    else:
-        out += [("standing_fan", hw - 0.6, -hd + 0.6, 0)]
-    return out

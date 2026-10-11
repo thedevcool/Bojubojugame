@@ -9,6 +9,18 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.2.0",
+    date: "2026-10-11",
+    title: "Play with real people 👥",
+    items: [
+      { emoji: "📺", title: "Live games", text: "See every game waiting for players and join in one tap — or watch games in progress on the map without leaving your spot.", tryIt: "📱 → Live games" },
+      { emoji: "🙈", title: "New game menu", text: "Create a game for real players, a private one for friends, or play with NPCs. Tapping a player and choosing to play now opens the same menu." },
+      { emoji: "🚌", title: "Straight to the Motor Park", text: "Starting a game takes everybody to the bus stop, ready to board." },
+      { emoji: "👆🏾", title: "Smarter tap-to-go", text: "Taps stop at walls, stay inside your house (use the door to go out) and lead to the door of other people's houses." },
+      { emoji: "🛋️", title: "Your house, your money", text: "New houses come empty — buy every piece of furniture yourself at Ọ̀ṣọ́ Home & Furniture." },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-10-11",
     title: "Real homes, cars & travel Naija 🚗🏡",

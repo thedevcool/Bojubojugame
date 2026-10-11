@@ -19,7 +19,9 @@ const ZONE_COLOR: Record<string, string> = { bus_stop: "#f7c500", food: "#ff7a1a
 const ZONE_ICON: Record<string, string> = { bus_stop: "🚏", food: "🍽️", phone_shop: "📱", furniture_shop: "🛋️", car_shop: "🚗" };
 
 /** Draws a district like a printed street map (roads, plots, houses, shops, people, your pin). */
-function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null) {
+export interface Dot { x: number; z: number; color: string; label?: string }
+
+export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null, people?: Dot[]) {
   const X = (x: number) => (x - v.cx) * v.s + w / 2, Z = (z: number) => (z - v.cz) * v.s + h / 2;
   const R = (x0: number, z0: number, x1: number, z1: number) => ctx.fillRect(X(x0), Z(z0), (x1 - x0) * v.s, (z1 - z0) * v.s);
   ctx.fillStyle = map.kind === "hub" ? "#e9dcc4" : "#cfe3b8";
@@ -66,6 +68,22 @@ function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h
     ctx.globalAlpha = 0.85;
     R(z.rect[0], z.rect[1], z.rect[2], z.rect[3]);
     ctx.globalAlpha = 1;
+  }
+  if (people) {
+    // spectator map: only the players we were given, no "you"
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    for (const d of people) {
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(X(d.x), Z(d.z), 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = d.color; ctx.beginPath(); ctx.arc(X(d.x), Z(d.z), 5.2, 0, Math.PI * 2); ctx.fill();
+      if (d.label) {
+        ctx.fillStyle = "rgba(10,19,36,.75)";
+        const tw = ctx.measureText(d.label).width + 8;
+        ctx.fillRect(X(d.x) - tw / 2, Z(d.z) - 22, tw, 14);
+        ctx.fillStyle = "#ffffff"; ctx.fillText(d.label, X(d.x), Z(d.z) - 11);
+      }
+    }
+    return;
   }
   ctx.fillStyle = "#2f7cf6";
   for (const n of remotes.keys()) {

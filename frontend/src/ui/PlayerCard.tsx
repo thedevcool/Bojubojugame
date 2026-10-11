@@ -12,7 +12,6 @@ export function PlayerCard() {
   const set = useGame((s) => s.set);
   const group = useGame((s) => s.group);
   const meId = useGame((s) => s.me?.id);
-  const cfg = useGame((s) => s.content?.config);
   const [card, setCard] = useState<Card | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -38,12 +37,10 @@ export function PlayerCard() {
   const invite = () => {
     if (!card) return;
     if (lobby) net.send({ t: "g_invite", to: card.id });
-    else if (!group && cfg) {
-      // no game yet: open a lobby with the default settings, then invite (see net.ts g_state)
-      const arena = cfg.cities[0]?.arenas[0] ?? "arena_park";
-      const safe = useGame.getState().content?.maps[arena]?.safe_houses[0]?.id ?? "";
-      set({ pendingInvite: card.id });
-      net.send({ t: "g_create", arena, hide: cfg.game.default_hide_time, search: cfg.game.default_search_time, safe, bots: 0 });
+    else if (!group) {
+      // choose how to play first (city, timers, NPCs...) — they get the invite as soon as your game exists
+      set({ pendingInvite: card.id, card: null, phoneOpen: true, phoneApp: "boju" });
+      useGame.getState().toast(`Set up your game — @${card.username} gets the invite once it's ready`, "good");
     }
   };
   const level = card ? Math.floor(card.points / 100) + 1 : 1;

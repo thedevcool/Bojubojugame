@@ -86,6 +86,7 @@ class GroupRoom:
         self.arrive_at: dict[str, float] = {}
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
+        self.public = True
         self.arena = ArenaRoom(f"arena:{game_id}", self.map, self)
 
     # ------------------------------------------------------------ helpers
@@ -100,6 +101,52 @@ class GroupRoom:
     @property
     def humans(self) -> list[str]:
         return [p for p in self.active if p not in self.bots]
+
+    def summary(self) -> dict[str, Any]:
+        """One row of the Live games list."""
+        active = self.active
+        return {
+            "code": self.code,
+            "creator": self.nicks.get(self.creator, "?"),
+            "arena": self.settings["arena"],
+            "arena_name": self.map.raw.get("name", self.settings["arena"]),
+            "phase": self.phase,
+            "humans": len(self.humans),
+            "bots": len([p for p in active if p in self.bots]),
+            "max": self.cfg.game.max_players,
+            "public": self.public,
+            "joinable": self.public and self.phase == "lobby" and len(active) < self.cfg.game.max_players,
+            "round": self.round.no if self.round else 0,
+        }
+
+    def watch_msg(self) -> dict[str, Any]:
+        """What a spectator's map shows. Hiders only appear when Boju could see them (no cheating by proxy)."""
+        r = self.round
+        seeker = self.session(r.seeker) if r else None
+        players = []
+        for p in self.active:
+            s = self.session(p)
+            if s is None or s.room is not self.arena:
+                continue
+            role = ""
+            if r is not None and self.phase in LIVE_PHASES:
+                if p == r.seeker:
+                    role = "seeker"
+                else:
+                    role = "safe" if p in r.in_safe else r.state.get(p, "")
+                    if role == "hiding" and (seeker is None or not self.can_see(seeker, s)):
+                        continue
+            players.append([p, self.nicks[p], round(s.x, 1), round(s.z, 1), role, p in self.bots])
+        return {
+            "t": "wsnap",
+            "code": self.code,
+            "arena": self.settings["arena"],
+            "phase": self.phase,
+            "phase_end": int(self.phase_end * 1000),
+            "found": len(r.found_order) if r else 0,
+            "hiding": sum(1 for v in r.state.values() if v == "hiding") if r else 0,
+            "players": players,
+        }
 
     def is_bot(self, pid: str) -> bool:
         return pid in self.bots
@@ -237,6 +284,14 @@ class GroupRoom:
             return
         self.broadcast({"t": "g_event", "e": "group_started"})
         self.set_phase("travel", self.cfg.game.travel_window_s, "travel_started")
+        # everybody in Lagos is taken straight to the motor park to board
+        for p in self.humans:
+            if (h := self.session(p)) is not None and h.room is not None and h.room.map.kind == "hub":
+                stop = h.room.map.zones.get("bus_stop")
+                if stop is not None:
+                    x0, z0, x1, z1 = stop["rect"]
+                    h.crouch = h.sit = h.lie = h.driving = False
+                    h.place(*self.world.free_spot(((x0 + x1) / 2, (z0 + z1) / 2), exclude=p), self.world.now())
         for p in list(self.bots):  # NPCs take the first bus
             if (b := self.session(p)) is not None:
                 self.boarded.add(p)

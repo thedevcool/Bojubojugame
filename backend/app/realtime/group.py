@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("boju.group")
 
-GAME_PHASES = {"dice", "reveal", "hide", "seek", "result"}
+GAME_PHASES = {"gather", "dice", "reveal", "hide", "seek", "result"}
+GATHER_RADIUS = 4.5  # the circle everyone stands in before the dice
+SEEN_GRACE_S = 1.2  # Boju keeps seeing a hider this long after losing sight (no popping out of view)
 LIVE_PHASES = {"hide", "seek"}  # chat locked, positions culled
 
 
@@ -81,6 +83,9 @@ class GroupRoom:
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
         self.bots: dict[str, BotBrain] = {}
+        self.arrive_at: dict[str, float] = {}
+        self.gathered: list[str] = []
+        self.seen_until: dict[tuple[str, str], float] = {}
         self.arena = ArenaRoom(f"arena:{game_id}", self.map, self)
 
     # ------------------------------------------------------------ helpers
@@ -169,6 +174,9 @@ class GroupRoom:
                 "safe": sorted(r.in_safe),
                 "safe_used": {k: round(v, 1) for k, v in r.safe_used.items()},
             },
+            "gather": {"center": list(self.map.spawn), "r": GATHER_RADIUS, "in": self.gathered}
+            if self.phase == "gather"
+            else None,
             "pending_seeker": self.pending_seeker,
             "last_result": self.last_result,
             "final": self.final_results,
@@ -256,10 +264,43 @@ class GroupRoom:
         self.broadcast_state("boarded")
 
     def enter_arena(self, s: Session, ride_s: float, mode: str = "danfo") -> None:
+        """You get off the bus at the arena's bus stop, then walk to the circle."""
         idx = self.members.index(s.pid)
-        x, z = self.arena.spawn_point(idx)
+        stop = self.map.zones.get("bus_stop")
+        if stop is not None:
+            x0, z0, x1, z1 = stop["rect"]
+            x, z = (x0 + x1) / 2 + (idx % 3 - 1) * 1.2, (z0 + z1) / 2 + (idx // 3) * 1.2
+        else:
+            x, z = self.arena.spawn_point(idx)
         self.arena.add(s, x, z, self.world.now())
+        self.arrive_at[s.pid] = self.world.now() + ride_s
         s.send({"t": "ride", "seconds": ride_s, "mode": mode, "arena": self.settings["arena"]})
+
+    # ------------------------------------------------------------ gather in the circle
+    def start_gather(self, now: float) -> None:
+        last = max((self.arrive_at.get(p, now) for p in self.active), default=now)
+        self.gathered = []
+        self.set_phase("gather", max(0.0, last - now) + self.cfg.game.gather_timeout_s, "gather")
+
+    def in_circle(self, pid: str, now: float) -> bool:
+        s = self.session(pid)
+        if s is None or s.room is not self.arena or now < self.arrive_at.get(pid, 0.0):
+            return False
+        cx, cz = self.map.spawn
+        return distance(s.x, s.z, cx, cz) <= GATHER_RADIUS
+
+    def update_gather(self, now: float) -> None:
+        inside = [p for p in self.active if self.in_circle(p, now)]
+        if inside != self.gathered:
+            self.gathered = inside
+            self.broadcast_state("gather")
+        if len(inside) == len(self.active) or now >= self.phase_end:
+            # stragglers get walked in by the conductor
+            for i, p in enumerate(self.active):
+                if p not in inside and (s := self.session(p)) is not None and s.room is self.arena:
+                    s.place(*self.arena.spawn_point(i), now)
+            self.gathered = []
+            self.start_dice(self.active)
 
     # ------------------------------------------------------------ dice
     def start_dice(self, pool: list[str]) -> None:
@@ -343,15 +384,19 @@ class GroupRoom:
             return True
         if self.phase == "hide":
             return False  # Boju is counting with eyes closed
+        now = self.world.now()
+        key = (viewer.pid, other.pid)
         rng = self.cfg.game.crouch_visibility_range_m if other.crouch else self.cfg.game.visibility_range_m
-        if distance(viewer.x, viewer.z, other.x, other.z) > rng:
-            return False
         h = self.cfg.movement.crouch_height if other.crouch else self.cfg.movement.stand_height
-        return has_line_of_sight(
+        if distance(viewer.x, viewer.z, other.x, other.z) <= rng and has_line_of_sight(
             viewer.x, viewer.z, other.x, other.z, h, self.map.near(viewer.x, viewer.z, other.x, other.z)
-        )
+        ):
+            self.seen_until[key] = now + SEEN_GRACE_S
+            return True
+        # just ducked out of sight: keep them for a moment so they run off-screen instead of popping out
+        return now < self.seen_until.get(key, 0.0)
 
-    def tag(self, s: Session) -> dict[str, Any]:
+    def tag(self, s: Session, auto: bool = False) -> dict[str, Any]:
         r = self.round
         if r is None or self.phase != "seek":
             return {"t": "g_tag", "ok": False, "msg": "Not seeking time"}
@@ -388,7 +433,9 @@ class GroupRoom:
         r.found_order.append(target)
         if (ts := self.session(target)) is not None:
             self.to_found_area(ts)
-        self.broadcast({"t": "g_tag", "ok": True, "target": target, "nick": self.nicks[target], "by": s.pid})
+        self.broadcast(
+            {"t": "g_tag", "ok": True, "target": target, "nick": self.nicks[target], "by": s.pid, "auto": auto}
+        )
         self.broadcast_state("tag_result")
         if not any(v == "hiding" for v in r.state.values()):
             self.phase_end = self.world.now()  # everybody found: end now
@@ -406,7 +453,9 @@ class GroupRoom:
         if self.phase == "travel":
             if now >= self.phase_end or all(p in self.boarded for p in self.active):
                 await self.auto_board()
-                self.start_dice(self.active)
+                self.start_gather(now)
+        elif self.phase == "gather":
+            self.update_gather(now)
         elif self.phase == "dice":
             if now >= self.phase_end or all(p in self.picks for p in self.dice_pool):
                 self.roll()
@@ -415,6 +464,9 @@ class GroupRoom:
                 self.start_round()
         elif self.phase in LIVE_PHASES and self.round is not None:
             self.track_live(now, dt)
+            # a human Boju catches you just by reaching you (NPC Boju keeps a human-like reaction delay)
+            if self.phase == "seek" and self.round.seeker not in self.bots and (sk := self.session(self.round.seeker)):
+                self.tag(sk, auto=True)
             if self.round.skipped or now >= self.phase_end:
                 if self.phase == "hide" and not self.round.skipped:
                     if (sk := self.session(self.round.seeker)) is not None:

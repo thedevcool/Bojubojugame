@@ -153,7 +153,10 @@ export function RideMap() {
 
   useEffect(() => {
     if (!ride) return;
-    const id = setTimeout(() => set({ ride: null }), Math.max(0, ride.until - Date.now()) + 900);
+    const id = setTimeout(() => {
+      set({ ride: null });
+      if (useGame.getState().group?.phase === "gather") useGame.getState().toast("You don reach! Waka join the others inside the circle ⭕", "good");
+    }, Math.max(0, ride.until - Date.now()) + 900);
     return () => clearTimeout(id);
   }, [ride, set]);
 

@@ -55,6 +55,7 @@ export function PhaseBar() {
   const me = useGame((s) => s.me?.id);
   const left = useSecondsLeft(g?.phase_end);
   const { section } = useWhere();
+  const { isSeeker } = useRole();
   // last-10-seconds countdown ticks while hiding/seeking
   const lastTick = useRef(-1);
   useEffect(() => {
@@ -79,7 +80,7 @@ export function PhaseBar() {
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const labels: Record<string, string> = {
-    travel: "Travel to the arena", dice: "Pick a number", reveal: "Dice don talk!", hide: "Hide!", seek: "Seek!", result: "Round result", over: "Game over",
+    travel: "Travel to the arena", gather: "Gather inside the circle", dice: "Pick a number", reveal: "Dice don talk!", hide: "Hide!", seek: "Seek!", result: "Round result", over: "Game over",
   };
   const hiding = r ? Object.values(r.state).filter((s) => s === "hiding").length : 0;
   const safeTotal = useGame.getState().content?.config.game.safe_house_total_s ?? 20;
@@ -90,6 +91,10 @@ export function PhaseBar() {
       <div className="text-sm font-bold">
         {labels[g.phase]} {g.phase !== "over" && <span className="tabular-nums text-[var(--accent)]">{fmtTime(left)}</span>}
       </div>
+      {g.phase === "gather" && g.gather && (
+        <div className="text-[11px] opacity-90">⭕ {g.gather.in.length}/{g.members.filter((m) => !m.left && !m.retired).length} in the circle — the dice roll when everybody is in</div>
+      )}
+      {isSeeker && g.phase === "seek" && <div className="text-[11px] font-semibold text-[var(--accent)]">Reach a hider to catch them — no button needed</div>}
       {r && ["hide", "seek"].includes(g.phase) && (
         <div className="text-[11px] opacity-90">
           Round {r.no}{r.final ? " (final)" : ""} · Boju: {nick(r.seeker)} · Found {r.found.length} · Hiding {hiding}
@@ -110,7 +115,6 @@ export function ActionButtons() {
   const setBend = useGame((s) => s.setBend);
   const sitting = useGame((s) => s.sitting);
   const [wheel, setWheel] = useState(false);
-  const canTag = isSeeker && g?.phase === "seek";
   const canTaunt = !isSeeker && (!inGame || (g?.phase === "seek" && myState === "hiding"));
   const hold = (v: boolean) => () => { input.runHeld = v; };
   const aerial = useGame((s) => s.aerial);
@@ -164,11 +168,6 @@ export function ActionButtons() {
           </>
         )}
       </div>
-      {canTag && (
-        <button className="btn h-20 w-20 rounded-full bg-[var(--clay)] text-lg font-black text-white shadow-lg" onClick={() => net.send({ t: "g_tag" })}>
-          BOJU!
-        </button>
-      )}
     </div>
   );
 }
@@ -364,7 +363,7 @@ export function PhoneShop() {
   return (
     <div className="pointer-events-auto absolute bottom-24 left-1/2 z-20 w-[min(22rem,94vw)] -translate-x-1/2"><div className="panel anim-sheet p-3">
       <div className="mb-2 flex items-baseline justify-between">
-        <div className="font-black">📱 Mama Chidi Phones</div>
+        <div className="font-black">📱 Tini Tech</div>
         <div className="text-[10px] opacity-60">in-game naira only</div>
       </div>
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">

@@ -141,7 +141,7 @@ P("keke", 66, 28, 1.4, 2.4, 1.8)
 P("bus_shelter", 50, 14.5, 8, 2, 2.8, text="MOTOR PARK")
 P("sign", 62, 12.5, 4, 0.3, 3.4, text="OSHODI • CMS • OBALENDE")
 for z, txt, c in (
-    (26, "OGA PHONE", "#3d7fd9"),
+    (26, "TINI TECH", "#3d7fd9"),
     (32, "BISI PROVISIONS", "#2f9e57"),
     (38, "SHARP CUT BARBER", "#8e44ad"),
     (44, "GOOD HEALTH CHEMIST", "#d94f3d"),
@@ -203,7 +203,7 @@ hub = {
     "safe_houses": [],
     "zones": [
         {"id": "bus_stop", "kind": "bus_stop", "name": "Motor Park", "rect": [44, 9, 56, 18]},
-        {"id": "phone_shop", "kind": "phone_shop", "name": "Oga Phone", "rect": [6.8, 23.6, 9.9, 28.4]},
+        {"id": "phone_shop", "kind": "phone_shop", "name": "Tini Tech", "rect": [6.8, 23.6, 9.9, 28.4]},
         {"id": "suya", "kind": "food", "name": "Suya Spot", "rect": [11, 8.5, 19, 15]},
         {"id": "corn", "kind": "food", "name": "Roasted Corn", "rect": [19, 8.5, 24, 15]},
         {"id": "mama_put", "kind": "food", "name": "Mama Put", "rect": [26.8, 12.4, 33.2, 17.6]},

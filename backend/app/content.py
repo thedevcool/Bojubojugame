@@ -38,6 +38,7 @@ class GameRules(BaseModel):
     hunger_per_round: int
     min_hunger_to_play: int
     lobby_idle_expiry_s: float
+    gather_timeout_s: float = 75.0
 
 
 class Movement(BaseModel):

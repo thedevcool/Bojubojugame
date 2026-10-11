@@ -171,7 +171,7 @@ class Net {
       case "g_tag":
         if (m.ok) {
           const mine = m.target === g.me?.id;
-          g.toast(mine ? "Omo, you don cast! 😩" : `Mo ti ri e! ${m.nick as string} don cast!`, mine ? "error" : "good");
+          g.toast(mine ? "Boju don catch you! 😩" : `Mo ti ri e! ${m.nick as string} don cast!`, mine ? "error" : "good");
           sound.play(mine ? "caught" : "gotcha");
           fx.shake = mine ? 1 : 0.5;
         } else {
@@ -229,9 +229,13 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
     case "travel": g.toast("Game don start! Waka go the Motor Park and board a danfo.", "good"); break;
-    case "dice": g.set({ dice: null }); g.toast("Pick your number 1–6!"); break;
+    case "gather":
+      if (gs.gather) g.set({ guide: { x: gs.gather.center[0], z: gs.gather.center[1], label: "⭕ The circle" } });
+      if (!g.ride) g.toast("Oya, everybody gather inside the circle ⭕", "good");
+      break;
+    case "dice": g.set({ dice: null, guide: null }); g.toast("Everybody don gather! Pick your number 1–6 🎲"); break;
     case "hide":
-      g.toast(seeker === me ? "You be Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
+      g.toast(seeker === me ? "Na you dey Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
       if (seeker === me) { cam.aerial.on = false; g.set({ aerial: false }); }
       break;
     case "seek":

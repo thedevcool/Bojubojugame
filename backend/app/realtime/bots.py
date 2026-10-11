@@ -119,7 +119,11 @@ def drive_bots(g: GroupRoom, now: float, dt: float) -> None:
         if s.frozen:
             b.path = []
             continue
-        if g.phase == "dice":
+        if g.phase == "gather":
+            # get off the bus and walk to the circle like everyone else
+            if b.goal is None and now >= g.arrive_at.get(pid, 0.0) and now >= b.next_think:
+                _go(g, s, b, g.arena.spawn_point(g.members.index(pid)), WALK_SPEED)
+        elif g.phase == "dice":
             if pid in g.dice_pool and pid not in g.picks and now >= b.next_think:
                 free = [n for n in range(1, 7) if n not in g.picks.values()]
                 if free:

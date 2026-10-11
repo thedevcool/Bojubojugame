@@ -1127,7 +1127,7 @@
    "d": 5,
    "h": 3.2,
    "color": "#3d7fd9",
-   "text": "OGA PHONE",
+   "text": "TINI TECH",
    "face": "w"
   },
   {
@@ -1480,7 +1480,7 @@
   {
    "id": "phone_shop",
    "kind": "phone_shop",
-   "name": "Oga Phone",
+   "name": "Tini Tech",
    "rect": [
     6.8,
     23.6,

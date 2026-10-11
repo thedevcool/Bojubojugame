@@ -199,7 +199,7 @@ export function DicePanel() {
     const taken = new Set(g.members.map((m) => m.pick).filter(Boolean));
     return (
       <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4 text-center">
-        <div className="text-lg font-black">Who go be Boju? 🎲</div>
+        <div className="text-lg font-black">Who go dey Boju? 🎲</div>
         <div className="mb-3 text-xs opacity-80">{inPool ? "Pick your number — if the dice lands on it, you seek!" : "Others are picking…"} ({left}s)</div>
         <div className="grid grid-cols-3 gap-2">
           {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -218,7 +218,7 @@ export function DicePanel() {
       {face && <div className={`text-7xl ${rolling ? "dice-rolling" : ""}`}>{DICE[face]}</div>}
       {!rolling && (
         <div className="mt-2 text-xl font-black text-[var(--accent)]">
-          {g.pending_seeker === me ? "Na you be Boju! 🙈" : `${nick(g.pending_seeker)} na Boju!`}
+          {g.pending_seeker === me ? "Na you dey Boju! 🙈" : `${nick(g.pending_seeker)} dey Boju!`}
         </div>
       )}
     </div></div>

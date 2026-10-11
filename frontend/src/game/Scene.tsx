@@ -388,6 +388,30 @@ function GuideMarker() {
   );
 }
 
+/** The meeting circle everyone stands in before the dice (pulses, turns green when you're in). */
+function GatherCircle() {
+  const gather = useGame((s) => (s.group?.phase === "gather" ? s.group.gather : null));
+  const inside = useGame((s) => !!s.me && !!s.group?.gather?.in.includes(s.me.id));
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 3) * 0.03);
+  });
+  if (!gather) return null;
+  const [x, z] = gather.center;
+  return (
+    <group position={[x, 0.07, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={ring}>
+        <ringGeometry args={[gather.r - 0.35, gather.r, 64]} />
+        <meshBasicMaterial color={inside ? "#39d353" : "#ffffff"} transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+      <mesh>
+        <circleGeometry args={[gather.r - 0.35, 64]} />
+        <meshBasicMaterial color={inside ? "#39d353" : "#2f7cf6"} transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
 function Markers({ map }: { map: GameMap }) {
   const safeId = useGame((s) => s.group?.settings.safe);
   const items: { rect: number[]; color: string }[] = [
@@ -486,6 +510,7 @@ function World({ map }: { map: GameMap }) {
       </mesh>
       <MapProps props={map.props} lowDetail={quality === "low"} />
       <Markers map={map} />
+      <GatherCircle />
       <AerialLabels map={map} />
       {map.kind === "hub" && <Ambient map={map} />}
       <LocalPlayer map={map} />

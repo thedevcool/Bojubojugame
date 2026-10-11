@@ -125,7 +125,7 @@ export interface RoundResult {
 
 export interface Standing { id: string; nick: string; earned: number; finds: number; survived: number }
 
-export type Phase = "lobby" | "travel" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
+export type Phase = "lobby" | "travel" | "gather" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
 
 export interface GroupState {
   id: string;
@@ -140,6 +140,7 @@ export interface GroupState {
   pending_seeker: string | null;
   last_result: RoundResult | null;
   final: Standing[] | null;
+  gather: { center: [number, number]; r: number; in: string[] } | null;
   event: string;
 }
 

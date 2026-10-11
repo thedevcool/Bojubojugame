@@ -9,13 +9,15 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
-    version: "1.3.1",
+    version: "1.4.0",
     date: "2026-10-11",
-    title: "Log in on any phone 🔐",
+    title: "Proper accounts + install the app 📲",
     items: [
-      { emoji: "🪪", title: "Your Boju ID", text: "Everyone now has a Boju ID like Tolu#4821 — find it in ⚙️ Settings → Your account.", tryIt: "Open ⚙️ Settings" },
-      { emoji: "🔐", title: "Set a PIN", text: "Add a 6-digit PIN and log in on a new phone with your Boju ID. Your naira, home and scores come with you." },
-      { emoji: "📱", title: "Smoother on phones", text: "Menus scroll properly, Next is always on screen, and the top bar is tidy." },
+      { emoji: "🔑", title: "Username & password", text: "Log in on any phone with your username (or email) and password.", tryIt: "⚙️ Settings → Your account" },
+      { emoji: "✉️", title: "Forgot password? No wahala", text: "Add an email (optional) and reset your password any time. We never show it to other players." },
+      { emoji: "📲", title: "Install Boju Boju", text: "Add the game to your home screen — it opens full-screen like a real app.", tryIt: "⚙️ Settings → Install app" },
+      { emoji: "🕹️", title: "Joystick fixed on iPhone", text: "The stick no longer gets stuck when you lift your thumb." },
+      { emoji: "💰", title: "₦100M to start", text: "Everybody gets ₦100,000,000 in-game naira while we test — go and fly to Abuja!" },
     ],
   },
   {

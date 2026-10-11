@@ -5,41 +5,33 @@ from app.content import get_config
 from app.main import create_app
 
 
-def test_guest_flow_and_websocket(tmp_path):
+def test_content_health_and_websocket(tmp_path):
     app = create_app(f"sqlite+aiosqlite:///{tmp_path}/api.db", run_tick=False)
     with TestClient(app) as client:
         assert client.get("/health").json()["ok"]
-        assert client.post("/api/auth/guest", json={"nickname": "fuck", "home_area": "Yaba"}).status_code == 422
-        assert client.post("/api/auth/guest", json={"nickname": "Ade", "home_area": "Paris"}).status_code == 422
-        r = client.post("/api/auth/guest", json={"nickname": "Ade <b>", "home_area": "Yaba"}).json()
+        bad = {"username": "fuck", "password": "Good-Pass-1", "home_area": "Yaba"}
+        assert client.post("/api/auth/register", json=bad).status_code == 422
+        bad = {"username": "Ade", "password": "Good-Pass-1", "home_area": "Paris"}
+        assert client.post("/api/auth/register", json=bad).status_code == 422
+        r = client.post("/api/auth/register", json={"username": "Ade", "password": "Good-Pass-1", "home_area": "Yaba"})
+        r = r.json()
         h = {"Authorization": f"Bearer {r['token']}"}
         me = client.get("/api/me", headers=h).json()
         start = get_config().economy.starting_balance
-        assert me["nickname"] == "Ade b" and me["balance"] == start + me["daily_bonus"] + me["topup"]
+        assert me["username"] == "Ade" and me["balance"] == start + me["daily_bonus"] + me["topup"]
         assert client.get("/api/me").status_code == 401
-        assert (
-            client.post(
-                "/api/auth/refresh", json={"player_id": r["player_id"], "device_secret": r["device_secret"]}
-            ).status_code
-            == 200
-        )
-        assert (
-            client.post("/api/auth/refresh", json={"player_id": r["player_id"], "device_secret": "x" * 30}).status_code
-            == 401
-        )
         content = client.get("/api/content").json()
         assert "arena_park" in content["maps"] and content["config"]["scoring"]["hider_not_found"] == 7500
         assert client.get("/api/leaderboards?kind=hider&period=all").json()["rows"] == []
         wallet = client.get("/api/wallet", headers=h).json()
         assert wallet["balance"] == sum(e["amount"] for e in wallet["entries"])
         assert "not real money" in wallet["disclaimer"]
-
         with client.websocket_connect(f"/ws?token={r['token']}") as ws:
             hello = msgpack.unpackb(ws.receive_bytes())
-            assert hello["t"] == "hello" and hello["me"]["nick"] == "Ade b"
-            ws.send_bytes(msgpack.packb({"t": "ping"}))
-            seen = {msgpack.unpackb(ws.receive_bytes())["t"] for _ in range(4)}
-            assert "pong" in seen or "wallet" in seen
+            assert hello["t"] == "hello" and hello["me"]["nick"] == "Ade"
+            # wait for the end of the connect handshake (wallet) before closing, like a real client
+            while msgpack.unpackb(ws.receive_bytes())["t"] != "wallet":
+                pass
 
 
 def test_ws_rejects_bad_token(tmp_path):

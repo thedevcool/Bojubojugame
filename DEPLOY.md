@@ -34,6 +34,15 @@ None of these should ask for a card on the free plan.
 On Render: **Environment → FRONTEND_ORIGIN** = your exact Vercel URL, e.g. `https://boju-boju.vercel.app`
 (no slash at the end). Save, and Render restarts. Without this, the browser will block the game's connection to the server.
 
+### Accounts & password-reset email
+- Players sign up with **username + password**; email is optional and only used for resets.
+- On Render set `PUBLIC_FRONTEND_URL` = your Vercel URL (used inside reset links).
+- To actually send reset emails, add an SMTP account (free options: **Brevo** — 300 emails/day,
+  or a **Gmail app password**): set `SMTP_HOST` (e.g. `smtp-relay.brevo.com`), `SMTP_USER`,
+  `SMTP_PASSWORD`, `MAIL_FROM`. Without SMTP the server still works and just logs the reset link.
+- Accounts created before passwords existed get a username from their nickname and the temporary
+  password `123456`; they must choose a new password before they can play.
+
 ### Optional: keep it awake
 To skip the 1‑minute wake‑up, create a free job at cron-job.org that opens
 `https://<your-service>.onrender.com/health` every 10 minutes. One service running

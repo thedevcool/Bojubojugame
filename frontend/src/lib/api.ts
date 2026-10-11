@@ -36,17 +36,49 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function createGuest(nickname: string, homeArea: string, avatar: number[]): Promise<Account> {
-  const r = await json<{ token: string; player_id: string; device_secret: string }>(
-    await fetch(`${API_URL}/api/auth/guest`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nickname, home_area: homeArea, avatar }),
-    }),
-  );
-  const acc = { playerId: r.player_id, deviceSecret: r.device_secret, token: r.token, nickname };
+export interface Session { token: string; player_id: string; device_secret: string; username: string; must_change_password: boolean }
+
+function keep(r: Session): Account {
+  const acc = { playerId: r.player_id, deviceSecret: r.device_secret, token: r.token, nickname: r.username };
   saveAccount(acc);
   return acc;
+}
+
+const post = (path: string, body: unknown, token?: string) =>
+  fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+
+/** New account: username + password (+ optional email for password resets). */
+export async function register(username: string, password: string, email: string, homeArea: string, avatar: number[]): Promise<Account> {
+  return keep(await json<Session>(await post("/api/auth/register", { username, password, email: email.trim() || null, home_area: homeArea, avatar })));
+}
+
+/** Log in with username or email. */
+export async function login(loginName: string, password: string): Promise<{ acc: Account; mustChange: boolean }> {
+  const r = await json<Session>(await post("/api/auth/login", { login: loginName.trim(), password }));
+  return { acc: keep(r), mustChange: r.must_change_password };
+}
+
+export async function changePassword(acc: Account, current: string, next: string): Promise<Account> {
+  const r = await json<{ ok: boolean; token: string }>(await post("/api/auth/password", { current_password: current, new_password: next }, acc.token));
+  const updated = { ...acc, token: r.token };
+  saveAccount(updated);
+  return updated;
+}
+
+export async function setEmail(acc: Account, email: string | null, password: string) {
+  return json<{ ok: boolean; email: string | null }>(await post("/api/auth/email", { email, password }, acc.token));
+}
+
+export async function forgotPassword(loginName: string) {
+  return json<{ ok: boolean; message: string }>(await post("/api/auth/forgot", { login: loginName.trim() }));
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  return json<{ ok: boolean }>(await post("/api/auth/reset", { token, new_password: newPassword }));
 }
 
 export async function refreshToken(acc: Account): Promise<Account> {
@@ -62,31 +94,7 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; boju_id: string | null; has_pin: boolean }
-
-/** Log in on a new phone with Boju ID (e.g. Tolu#4821) + 6-digit PIN. */
-export async function login(bojuId: string, pin: string): Promise<Account> {
-  const r = await json<{ token: string; player_id: string; device_secret: string; nickname: string }>(
-    await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ boju_id: bojuId.trim(), pin }),
-    }),
-  );
-  const acc = { playerId: r.player_id, deviceSecret: r.device_secret, token: r.token, nickname: r.nickname };
-  saveAccount(acc);
-  return acc;
-}
-
-export async function setPin(acc: Account, pin: string, currentPin?: string) {
-  return json<{ ok: boolean; boju_id: string }>(
-    await fetch(`${API_URL}/api/auth/pin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${acc.token}` },
-      body: JSON.stringify({ pin, ...(currentPin ? { current_pin: currentPin } : {}) }),
-    }),
-  );
-}
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean }
 
 export function logout(): void {
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }

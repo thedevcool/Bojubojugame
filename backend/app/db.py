@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -29,9 +30,11 @@ class Player(Base):
     nickname: Mapped[str] = mapped_column(String(24))
     home_area: Mapped[str] = mapped_column(String(40))
     device_secret_hash: Mapped[str] = mapped_column(String(128))
-    # Login without email/phone: Boju ID = nickname#tag, plus an optional hashed PIN.
-    tag: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    pin_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Accounts: unique username + scrypt password; email is optional and only used for resets.
+    username: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
@@ -47,6 +50,18 @@ class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
     secret_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PasswordReset(Base):
+    """One-time reset links (only the hash of the token is stored)."""
+
+    __tablename__ = "password_resets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -140,6 +155,36 @@ def _add_missing_columns(conn: Connection) -> None:
             conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {ddl}{default}'))
 
 
+def username_from(nickname: str) -> str:
+    base = re.sub(r"[^a-z0-9_.]", "", nickname.lower().replace(" ", "_"))[:14]
+    return base if len(base) >= 3 else (base + "player")[:14]
+
+
+def _backfill_accounts(conn: Connection) -> None:
+    """Players from before passwords existed get a username (from their nickname) and the
+    temporary password 123456, flagged so they must choose a new one before playing."""
+    from app.auth import LEGACY_TEMP_PASSWORD, hash_password  # local: avoid import cycle
+
+    rows = conn.execute(text("SELECT id, nickname FROM players WHERE username IS NULL OR password_hash IS NULL")).all()
+    if not rows:
+        return
+    taken = {r[0] for r in conn.execute(text("SELECT lower(username) FROM players WHERE username IS NOT NULL"))}
+    for pid, nickname in rows:
+        base = username_from(nickname or "player")
+        name, n = base, 1
+        while name in taken:
+            n += 1
+            name = f"{base[: 14 - len(str(n))]}{n}"
+        taken.add(name)
+        conn.execute(
+            text(
+                "UPDATE players SET username = COALESCE(username, :u), password_hash = :p, "
+                "must_change_password = :t WHERE id = :id"
+            ),
+            {"u": name, "p": hash_password(LEGACY_TEMP_PASSWORD), "t": True, "id": pid},
+        )
+
+
 class Database:
     def __init__(self, url: str) -> None:
         kw: dict[str, Any] = {"pool_pre_ping": True}
@@ -152,9 +197,12 @@ class Database:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(_add_missing_columns)
-            await conn.execute(
-                text("CREATE UNIQUE INDEX IF NOT EXISTS ux_players_nick_tag ON players (lower(nickname), tag)")
-            )
+            await conn.run_sync(_backfill_accounts)
+            for ddl in (
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_username ON players (lower(username))",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_email ON players (lower(email)) WHERE email IS NOT NULL",
+            ):
+                await conn.execute(text(ddl))
 
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.sessions() as s:

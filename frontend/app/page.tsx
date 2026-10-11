@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { BOTTOMS, SKIN, TOPS } from "@/game/palette";
-import { createGuest, getContent, loadAccount, type Account } from "@/lib/api";
-import LoginForm from "@/ui/LoginForm";
+import { getContent, loadAccount, register, type Account } from "@/lib/api";
+import { LoginForm, PasswordInput, passwordProblem } from "@/ui/AuthForms";
+import InstallApp from "@/ui/InstallApp";
 
 const AvatarPreview = dynamic(() => import("@/game/Previews").then((m) => m.AvatarPreview), {
   ssr: false,
@@ -18,6 +19,9 @@ function Landing() {
   const [acc, setAcc] = useState<Account | null>(null);
   const [areas, setAreas] = useState<string[]>([]);
   const [nick, setNick] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [email, setEmail] = useState("");
   const [area, setArea] = useState("");
   const [av, setAv] = useState([2, 0, 0]);
   const [err, setErr] = useState("");
@@ -36,7 +40,7 @@ function Landing() {
     setBusy(true);
     setErr("");
     try {
-      await createGuest(nick, area, av);
+      await register(nick.trim(), pw, email, area, av);
       router.push(playUrl);
     } catch (e2) {
       setErr((e2 as Error).message);
@@ -82,8 +86,9 @@ function Landing() {
             <LoginForm onDone={() => router.push(playUrl)} />
           ) : (
         <form onSubmit={submit} className="anim-step space-y-4">
-          <label className="block text-sm font-bold">Nickname
-            <input value={nick} onChange={(e) => setNick(e.target.value)} maxLength={16} minLength={2} required placeholder="e.g. Tunde_Fast"
+          <label className="block text-sm font-bold">Username
+            <input value={nick} onChange={(e) => setNick(e.target.value.replace(/[^A-Za-z0-9_.]/g, ""))} maxLength={16} minLength={3} required placeholder="e.g. tunde_fast"
+              autoCapitalize="off" autoCorrect="off" autoComplete="username"
               className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 font-normal outline-none" />
           </label>
           <label className="block text-sm font-bold">Your Lagos area
@@ -99,12 +104,25 @@ function Landing() {
             <div>Trousers {swatch(BOTTOMS, 2)}</div>
           </div>
           {err && <div className="rounded bg-red-600/80 px-3 py-2 text-sm">{err}</div>}
-          <button disabled={busy || nick.trim().length < 2 || !area} className="btn btn-primary w-full text-lg">{busy ? "Loading…" : "Start playing ▶"}</button>
-          <p className="text-xs opacity-70">No email or phone needed. We never ask for bank or card details.</p>
+          <label className="block text-sm font-bold">Password
+            <PasswordInput value={pw} onChange={setPw} autoComplete="new-password" placeholder="At least 8 characters" />
+            {pw && passwordProblem(pw, nick) && <span className="mt-1 block text-xs font-normal text-[var(--clay)]">{passwordProblem(pw, nick)}</span>}
+          </label>
+          <label className="block text-sm font-bold">Type password again
+            <PasswordInput value={pw2} onChange={setPw2} autoComplete="new-password" />
+            {pw2 && pw2 !== pw && <span className="mt-1 block text-xs font-normal text-[var(--clay)]">Passwords don&apos;t match</span>}
+          </label>
+          <label className="block text-sm font-bold">Email <span className="font-normal opacity-60">(optional — only for password reset)</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
+              className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 font-normal outline-none" />
+          </label>
+          <button disabled={busy || nick.trim().length < 3 || !area || !!passwordProblem(pw, nick) || pw !== pw2} className="btn btn-primary w-full text-lg">{busy ? "Loading…" : "Start playing ▶"}</button>
+          <p className="text-xs opacity-70">We never show your email to other players. We never ask for bank or card details.</p>
         </form>
           )}
         </div>
       )}
+      <InstallApp className="mt-4" />
       <Link href="/leaderboards" className="mt-4 text-center text-sm underline opacity-80">🏆 Leaderboards</Link>
       <footer className="mt-8 text-center text-xs opacity-60">In-game naira only — not real money. No payments, no cash-out.</footer>
     </main>

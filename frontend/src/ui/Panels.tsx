@@ -7,6 +7,7 @@ import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
 import AccountCard from "./AccountCard";
+import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { useRole, useSecondsLeft } from "./hooks";
 
@@ -356,6 +357,7 @@ export function SettingsPanel() {
   return (
     <Modal title="Settings" onClose={() => set({ panel: null })}>
       <AccountCard />
+      <InstallApp className="mb-4" />
       <SoundToggles />
       <div className="mb-1 text-sm font-bold">Graphics quality</div>
       <div className="mb-4 grid grid-cols-3 gap-2">

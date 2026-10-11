@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: "🙈 Boju Boju — Lagos hide & seek",
   description: "Live 3D multiplayer Boju Boju with your friends in Lagos. In-game naira only — not real money.",
   manifest: "/manifest.webmanifest",
+  applicationName: "Boju Boju",
+  appleWebApp: { capable: true, title: "Boju Boju", statusBarStyle: "black-translucent" },
+  icons: { icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },
+  formatDetection: { telephone: false },
   openGraph: { title: "Boju Boju", description: "Hide and seek, Lagos style. Play with your friends!", type: "website" },
   twitter: { card: "summary_large_image" },
 };
@@ -17,6 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
   themeColor: "#0a1324",
 };
 

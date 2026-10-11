@@ -65,6 +65,7 @@ class RateLimit(BaseHTTPMiddleware):
 class GuestIn(BaseModel):
     nickname: str = Field(min_length=2, max_length=24)
     home_area: str = Field(max_length=40)
+    avatar: list[int] = Field(default_factory=lambda: [0, 0, 0], min_length=3, max_length=3)
 
 
 class RefreshIn(BaseModel):
@@ -153,6 +154,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         raw, hashed = auth.new_device_secret()
         async with db.sessions() as s, s.begin():
             p = Player(
+                avatar=[max(0, min(7, int(v))) for v in body.avatar],
                 nickname=nick,
                 home_area=body.home_area,
                 device_secret_hash=hashed,
@@ -183,6 +185,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             "id": p.id,
             "nickname": p.nickname,
             "home_area": p.home_area,
+            "avatar": p.avatar,
             "balance": await world.economy.balance(pid),
             "hunger": round(world.economy.hunger_now(p), 1),
             "daily_bonus": bonus,
@@ -294,7 +297,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             queue.put_nowait(data)
 
         out_task = asyncio.create_task(writer(queue, ws.send_bytes))
-        session = await world.connect(pid, p.nickname, sender)
+        session = await world.connect(pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]))
         strikes = 0
         try:
             while True:

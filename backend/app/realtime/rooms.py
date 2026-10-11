@@ -28,6 +28,7 @@ class Session:
     nick: str
     net_id: int
     sender: Sender | None = None
+    avatar: list[int] = field(default_factory=lambda: [0, 0, 0])
     room: Room | None = None
     group: GroupRoom | None = None
     x: float = 0.0
@@ -93,7 +94,7 @@ class Room:
             s.send(msg)
 
     def broadcast_roster(self) -> None:
-        roster = [{"n": s.net_id, "id": s.pid, "nick": s.nick} for s in self.sessions.values()]
+        roster = [{"n": s.net_id, "id": s.pid, "nick": s.nick, "av": s.avatar} for s in self.sessions.values()]
         self.broadcast({"t": "roster", "players": roster})
 
     def can_see(self, viewer: Session, other: Session) -> bool:

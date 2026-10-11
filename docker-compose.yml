@@ -1,0 +1,29 @@
+# Local stack: Postgres + backend. Run the frontend with `npm run dev` in ./frontend.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: boju
+      POSTGRES_PASSWORD: boju
+      POSTGRES_DB: boju
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boju"]
+      interval: 3s
+      retries: 20
+  redis:
+    # Reserved for Phase 3 scale-out (cross-instance room state). v1 keeps rooms in-process.
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://boju:boju@db:5432/boju
+      JWT_SECRET: local-docker-secret-local-docker-secret-123
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+volumes:
+  pgdata:

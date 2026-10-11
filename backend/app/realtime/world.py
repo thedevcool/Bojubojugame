@@ -62,7 +62,7 @@ class World:
         self._shard_ids = itertools.count(1)
 
     # ------------------------------------------------------------ connection lifecycle
-    async def connect(self, pid: str, nick: str, sender: Sender) -> Session:
+    async def connect(self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
         if s is not None:
@@ -71,7 +71,14 @@ class World:
             s.sender = sender
             s.disconnected_at = None
         else:
-            s = Session(pid=pid, nick=nick, net_id=next(self._net_ids), sender=sender, last_move_at=now)
+            s = Session(
+                pid=pid,
+                nick=nick,
+                net_id=next(self._net_ids),
+                sender=sender,
+                last_move_at=now,
+                avatar=avatar or [0, 0, 0],
+            )
             s.stamina = self.cfg.movement.stamina_max_s
             self.sessions[pid] = s
         s.send(

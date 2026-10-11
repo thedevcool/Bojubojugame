@@ -28,6 +28,7 @@ class Player(Base):
     nickname: Mapped[str] = mapped_column(String(24))
     home_area: Mapped[str] = mapped_column(String(40))
     device_secret_hash: Mapped[str] = mapped_column(String(128))
+    avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
     hunger: Mapped[float] = mapped_column(default=80.0)
     hunger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

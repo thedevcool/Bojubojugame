@@ -1,0 +1,10 @@
+{
+  "name": "Boju Boju",
+  "short_name": "Boju Boju",
+  "start_url": "/play",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1d1a16",
+  "theme_color": "#1d1a16",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

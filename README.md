@@ -1,0 +1,103 @@
+# Boju Boju 🚌🌴
+
+A live, multiplayer, mobile‑first **3D hide‑and‑seek** game set in Lagos, based on the Yoruba
+game *Boju Boju*. Walk around a Lagos hub, chop suya, catch a danfo to the arena and play
+with your friends. The naira (₦) in the game is **virtual: it is not real money**. It cannot be
+bought, sold, withdrawn or cashed out.
+
+> Read **[ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md)** before you change anything.
+
+## What's in v1 (Phase 1: playable 3D core)
+
+- Guest sign‑in (nickname, Lagos home area and avatar colours). No email, no phone.
+- **Hub plaza** (up to 30 players per shard) with a bus stop, suya, roasted corn, a Mama Put,
+  face‑me‑I‑face‑you houses, a flat, a duplex and an events venue (venue is Phase 2).
+- **Freedom Park‑style arena** with 5 sections (The Big Tree, Behind the Danfo, Generator
+  House, Mama Put Stall, The Gate) and 3 safe‑house choices.
+- Groups of 2–6 people with an invite code or link. The creator picks the arena, hide time,
+  search time and safe house.
+- Full game loop: **travel** (walk to the bus stop and board a danfo or keke, or get
+  auto‑boarded and pay the cheapest fare) → **dice** (unique picks 1–6, rolled on the server) →
+  **hide** (the seeker is frozen and the screen goes black) → **seek** (Boju! tags are checked with
+  a server raycast) → **results** → next seeker → **final round** → **game over**, with a share
+  card for X and a screenshot button.
+- Safe house: 20 s per round per hider, at most 2 people inside, and a hider inside can't be
+  tagged.
+- Economy: an append‑only ledger, a starting balance, a daily bonus, round rewards, fares,
+  and food that refills hunger. Hunger is checked before a game can start.
+- Group chat (saved, last 50 messages loaded on join, locked during hide/seek, taunt emotes
+  instead), nearby chat in the hub, a profanity filter, a link block, mute and report.
+- Leaderboards: Top Seeker and Top Hider, weekly and all‑time, global and per group.
+- Anti‑cheat: the server checks every move for speed, map bounds, walls and tunnelling, and
+  **culls hider positions from the seeker** unless the seeker is in range and has line of
+  sight. Crouching behind hedges hides you.
+- Quality setting (Low/Medium/High, detected automatically), and a service worker that caches
+  the build assets. The whole world is built in code from low‑poly primitives, so the first
+  load is about 0.5 MB of gzipped JS with **no 3D asset downloads**.
+
+Every number (scoring, prices, fares, timers, speeds, hunger) is in
+[`backend/app/content/game_config.json`](backend/app/content/game_config.json). The maps are
+data in [`backend/app/content/maps/`](backend/app/content/maps/). The frontend loads both from
+`GET /api/content`, so they only exist in one place.
+
+## Architecture
+
+```
+frontend/  Next.js 15 (App Router) + TypeScript + Tailwind 4 + react-three-fiber + Zustand
+backend/   FastAPI + WebSockets (msgpack) + SQLAlchemy async (Postgres in prod / SQLite locally)
+  app/engine/     pure rules + geometry (unit tested)
+  app/realtime/   rooms, group state machine, 10 Hz server tick
+```
+
+The server has the final say on all game state. Clients send movement at 12 Hz and the server
+sends snapshots at 10 Hz. The client predicts its own player's movement, and the server
+corrects it when a move is invalid. Other players are drawn about 120 ms in the past and
+interpolated between snapshots.
+
+## Run locally
+
+**Backend** (Python 3.12+):
+
+```bash
+cd backend
+python -m venv .venv && . .venv/bin/activate
+pip install -e '.[dev]'
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+pytest -q          # 33 tests: rules, geometry, economy, full game flow, API
+```
+
+**Frontend** (Node 22):
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev        # http://localhost:3000
+```
+
+To test multiplayer, open two browsers (or a normal window and a private one), create a
+group in one, and join with the code in the other.
+
+You can use Postgres instead with `docker compose up` (Postgres + API on :8000).
+
+## Deploy
+
+See **[DEPLOY.md](DEPLOY.md)**: Vercel (frontend), Fly.io in Johannesburg (backend, always on),
+and Neon (Postgres).
+
+## Roadmap
+
+- **Phase 2**: the full hub district with house plots, interiors and rent/buy; cars and pickups
+  with tips; clothes; the events venue and scheduled shows; DMs, friends and blocking; more
+  arenas; balance tuning.
+- **Phase 3**: Redis for scaling out, low‑end phone performance work, a load test, a security
+  review, and a smoke test on 3 real phones.
+
+Known v1 limits: live games run inside the server process, so a deploy or restart ends any
+game in progress (wallets, results and chat are kept in Postgres). Food perks (+hide time) and
+the hub events venue are placeholders.
+
+## License and credits
+
+See [CREDITS.md](CREDITS.md).

@@ -50,7 +50,7 @@ for x in range(-76, -8, 17):
     P("pole", x, 46.8, 0.3, 0.3, 7.5, line="adeniji")
 
 # ---------------------------------------------------------------- NW: Adeniji Street homes
-colors = ["#e7d1a1", "#d9b48a", "#cfe0c3", "#f0c9a8", "#c8d3db", "#efe3c2", "#e3b7a0", "#d4c5e2"]
+colors = ["#f2d7a0", "#f4b183", "#cfe8b8", "#f7e08a", "#a9d3f5", "#f3c6c6", "#e9c9a3", "#d7c6f0"]
 roofs = ["#7a3b2a", "#5b6670", "#8a4b2f", "#6d6d6d"]
 names = [
     "No. 3 Adeniji St",

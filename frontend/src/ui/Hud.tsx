@@ -50,8 +50,12 @@ export function PhaseBar() {
   const left = useSecondsLeft(g?.phase_end);
   const { section } = useWhere();
   const map = useMap();
+  const myHome = useGame((s) => s.home);
   if (!g || g.phase === "lobby") {
-    return section ? <div className="panel absolute left-1/2 top-16 z-10 -translate-x-1/2 px-3 py-1 text-xs">📍 {section.name}</div> : null;
+    const inside = local.insideHome;
+    const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
+    const label = homeLabel ?? (section ? `📍 ${section.name}` : null);
+    return label ? <div className="panel absolute left-1/2 top-16 z-10 max-w-[92vw] -translate-x-1/2 px-3 py-1 text-center text-xs">{label}</div> : null;
   }
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";

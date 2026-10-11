@@ -46,6 +46,10 @@ export function GroupPanel() {
             <Settings arenas={arenas.map((a) => ({ id: a.id, name: a.name }))} arena={arena} setArena={setArena} hide={hide} setHide={setHide}
               search={search} setSearch={setSearch} safe={safe} setSafe={setSafe} safes={arenaMap?.safe_houses ?? []} hideOpts={cfg.game.hide_time_options} searchOpts={cfg.game.search_time_options} />
             <button className="btn btn-danfo mt-3 w-full" onClick={() => net.send({ t: "g_create", arena, hide, search, safe })}>Create group</button>
+            <button className="btn btn-leaf mt-2 w-full" onClick={() => net.send({ t: "g_create", arena, hide, search, safe, bots: 3 })}>
+              🤖 Quick game vs 3 NPCs
+            </button>
+            <p className="mt-1 text-[11px] opacity-70">No friends online yet? NPC players hide, seek and tag like real people.</p>
           </div>
           <div className="panel p-3">
             <div className="mb-2 font-bold">Join with a code</div>
@@ -79,8 +83,13 @@ export function GroupPanel() {
       <div className="mb-3 space-y-1">
         {active.map((m) => (
           <div key={m.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
-            <span>{m.online ? "🟢" : "⚪"} {m.nick} {m.id === g.creator && "👑"} {m.id === me && "(you)"}</span>
-            <span className="text-xs opacity-70">{m.retired ? "retired" : m.boarded ? "on board" : ""}</span>
+            <span>{m.bot ? "🤖" : m.online ? "🟢" : "⚪"} {m.nick} {m.bot && <span className="rounded bg-[var(--danfo)] px-1 text-[10px] text-black">NPC</span>} {m.id === g.creator && "👑"} {m.id === me && "(you)"}</span>
+            <span className="flex items-center gap-2 text-xs opacity-70">
+              {m.retired ? "retired" : m.boarded ? "on board" : ""}
+              {m.bot && isCreator && g.phase === "lobby" && (
+                <button className="rounded bg-white/10 px-1.5" onClick={() => net.send({ t: "g_remove_bot", id: m.id })}>✕</button>
+              )}
+            </span>
           </div>
         ))}
         <div className="text-xs opacity-60">{active.length}/{cfg.game.max_players} players · min {cfg.game.min_players}</div>
@@ -92,7 +101,10 @@ export function GroupPanel() {
               hide={g.settings.hide} setHide={(v) => net.send({ t: "g_settings", hide: v })} search={g.settings.search} setSearch={(v) => net.send({ t: "g_settings", search: v })}
               safe={g.settings.safe} setSafe={(v) => net.send({ t: "g_settings", safe: v })} safes={arenaMap?.safe_houses ?? []}
               hideOpts={cfg.game.hide_time_options} searchOpts={cfg.game.search_time_options} />
-            <button className="btn btn-leaf mt-3 w-full text-lg" disabled={active.length < cfg.game.min_players} onClick={() => net.send({ t: "g_start" })}>Start game</button>
+            <button className="btn btn-ghost mt-3 w-full" disabled={active.length >= cfg.game.max_players} onClick={() => net.send({ t: "g_add_bot" })}>
+              + Add NPC player
+            </button>
+            <button className="btn btn-leaf mt-2 w-full text-lg" disabled={active.length < cfg.game.min_players} onClick={() => net.send({ t: "g_start" })}>Start game</button>
             <p className="mt-2 text-xs opacity-70">Everyone needs belle at least {cfg.game.min_hunger_to_play}% — chop before you start!</p>
           </>
         ) : (

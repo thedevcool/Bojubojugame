@@ -501,7 +501,7 @@
    "door": "n",
    "id": "adeniji_3",
    "name": "No. 3 Adeniji St",
-   "color": "#e7d1a1",
+   "color": "#f2d7a0",
    "roof": "#7a3b2a"
   },
   {
@@ -514,7 +514,7 @@
    "door": "s",
    "id": "adeniji_4",
    "name": "No. 4 Adeniji St",
-   "color": "#c8d3db",
+   "color": "#a9d3f5",
    "roof": "#5b6670"
   },
   {
@@ -551,7 +551,7 @@
    "door": "n",
    "id": "adeniji_5",
    "name": "No. 5 Adeniji St",
-   "color": "#d9b48a",
+   "color": "#f4b183",
    "roof": "#5b6670"
   },
   {
@@ -564,7 +564,7 @@
    "door": "s",
    "id": "adeniji_6",
    "name": "No. 6 Adeniji St",
-   "color": "#efe3c2",
+   "color": "#f3c6c6",
    "roof": "#8a4b2f"
   },
   {
@@ -601,7 +601,7 @@
    "door": "n",
    "id": "adeniji_7",
    "name": "No. 7 Adeniji St",
-   "color": "#cfe0c3",
+   "color": "#cfe8b8",
    "roof": "#8a4b2f"
   },
   {
@@ -614,7 +614,7 @@
    "door": "s",
    "id": "adeniji_8",
    "name": "No. 8 Adeniji St",
-   "color": "#e3b7a0",
+   "color": "#e9c9a3",
    "roof": "#6d6d6d"
   },
   {
@@ -651,7 +651,7 @@
    "door": "n",
    "id": "adeniji_9",
    "name": "No. 9 Adeniji St",
-   "color": "#f0c9a8",
+   "color": "#f7e08a",
    "roof": "#6d6d6d"
   },
   {
@@ -664,7 +664,7 @@
    "door": "s",
    "id": "adeniji_10",
    "name": "No. 10 Adeniji St",
-   "color": "#d4c5e2",
+   "color": "#d7c6f0",
    "roof": "#7a3b2a"
   },
   {

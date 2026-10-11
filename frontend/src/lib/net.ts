@@ -1,7 +1,7 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
 import { useGame } from "./store";
-import type { ChatMsg, GroupState, RosterEntry, Standing } from "./types";
+import type { ChatMsg, GroupState, Home, RosterEntry, Standing } from "./types";
 import { clock, local, pushSnapshot, remotes } from "@/game/state";
 
 type Msg = { t: string } & Record<string, unknown>;
@@ -69,7 +69,7 @@ class Net {
     switch (m.t) {
       case "hello": {
         clock.offset = (m.server_time as number) - Date.now();
-        g.set({ me: m.me as { id: string; nick: string; n: number } });
+        g.set({ me: m.me as { id: string; nick: string; n: number }, home: (m.home as Home | null) ?? null });
         break;
       }
       case "pong":

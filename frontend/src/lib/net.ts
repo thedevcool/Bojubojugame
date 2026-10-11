@@ -162,7 +162,7 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   const seeker = gs.round?.seeker;
   const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
-    case "travel": g.toast("Game don start! Waka go the Bus Stop and board.", "good"); break;
+    case "travel": g.toast("Game don start! Waka go the Motor Park and board a danfo.", "good"); break;
     case "dice": g.set({ dice: null }); g.toast("Pick your number 1–6!"); break;
     case "hide": g.toast(seeker === me ? "You be Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good"); break;
     case "seek": g.toast(seeker === me ? "Open your eyes — go find them!" : "Boju is coming… hide well!", "good"); break;

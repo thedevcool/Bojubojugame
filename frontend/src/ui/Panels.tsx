@@ -5,12 +5,14 @@ import { loadAccount, naira, reportPlayer, getLeaderboard, getWallet, type Leade
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
+import CreateGame from "./CreateGame";
 import { useRole, useSecondsLeft } from "./hooks";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="panel max-h-[85vh] w-full max-w-md overflow-y-auto p-4">
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="panel anim-sheet max-h-[88vh] w-full max-w-md overflow-y-auto rounded-b-none p-4 sm:rounded-b-[20px]">
+        <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-white/25 sm:hidden" />
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black">{title}</h2>
           <button className="btn btn-ghost px-3 py-1" onClick={onClose}>✕</button>
@@ -29,11 +31,12 @@ export function GroupPanel() {
   const maps = useGame((s) => s.content?.maps);
   const [code, setCode] = useState("");
   const arenas = Object.values(maps ?? {}).filter((m) => m.kind === "arena");
-  const [arena, setArena] = useState(arenas[0]?.id ?? "arena_park");
-  const [hide, setHide] = useState(cfg?.game.default_hide_time ?? 30);
-  const [search, setSearch] = useState(cfg?.game.default_search_time ?? 180);
+  // Defaults for the one-tap quick game; the step-by-step creator has its own state.
+  const arena = arenas[0]?.id ?? "arena_park";
+  const hide = cfg?.game.default_hide_time ?? 30;
+  const search = cfg?.game.default_search_time ?? 180;
   const arenaMap = maps?.[g?.settings.arena ?? arena];
-  const [safe, setSafe] = useState(arenaMap?.safe_houses[0]?.id ?? "");
+  const safe = maps?.[arena]?.safe_houses[0]?.id ?? "";
   const close = () => set({ panel: null });
   if (!cfg) return null;
 
@@ -41,15 +44,13 @@ export function GroupPanel() {
     return (
       <Modal title="Play Boju Boju" onClose={close}>
         <div className="space-y-3">
-          <div className="panel p-3">
-            <div className="mb-2 font-bold">Create a group</div>
-            <Settings arenas={arenas.map((a) => ({ id: a.id, name: a.name }))} arena={arena} setArena={setArena} hide={hide} setHide={setHide}
-              search={search} setSearch={setSearch} safe={safe} setSafe={setSafe} safes={arenaMap?.safe_houses ?? []} hideOpts={cfg.game.hide_time_options} searchOpts={cfg.game.search_time_options} />
-            <button className="btn btn-danfo mt-3 w-full" onClick={() => net.send({ t: "g_create", arena, hide, search, safe })}>Create group</button>
-            <button className="btn btn-leaf mt-2 w-full" onClick={() => net.send({ t: "g_create", arena, hide, search, safe, bots: 3 })}>
-              🤖 Quick game vs 3 NPCs
-            </button>
-            <p className="mt-1 text-[11px] opacity-70">No friends online yet? NPC players hide, seek and tag like real people.</p>
+          <button className="choice anim-rise flex w-full items-center gap-3 p-3 text-left" data-on="false"
+            onClick={() => net.send({ t: "g_create", arena, hide, search, safe, bots: 3 })}>
+            <span className="text-3xl">⚡</span>
+            <span><span className="block font-bold">Quick game vs 3 NPCs</span><span className="text-xs opacity-70">Jump straight in — default settings</span></span>
+          </button>
+          <div className="panel anim-rise p-3" style={{ animationDelay: "60ms" }}>
+            <CreateGame />
           </div>
           <div className="panel p-3">
             <div className="mb-2 font-bold">Join with a code</div>
@@ -77,13 +78,13 @@ export function GroupPanel() {
   return (
     <Modal title={`Group ${g.code}`} onClose={close}>
       <div className="mb-3 flex gap-2">
-        <button className="btn btn-danfo flex-1" onClick={share}>📨 Invite friends</button>
+        <button className="btn btn-primary flex-1" onClick={share}>📨 Invite friends</button>
         <button className="btn btn-ghost" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
       </div>
       <div className="mb-3 space-y-1">
         {active.map((m) => (
           <div key={m.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
-            <span>{m.bot ? "🤖" : m.online ? "🟢" : "⚪"} {m.nick} {m.bot && <span className="rounded bg-[var(--danfo)] px-1 text-[10px] text-black">NPC</span>} {m.id === g.creator && "👑"} {m.id === me && "(you)"}</span>
+            <span>{m.bot ? "🤖" : m.online ? "🟢" : "⚪"} {m.nick} {m.bot && <span className="rounded bg-[var(--accent)] px-1 text-[10px] text-black">NPC</span>} {m.id === g.creator && "👑"} {m.id === me && "(you)"}</span>
             <span className="flex items-center gap-2 text-xs opacity-70">
               {m.retired ? "retired" : m.boarded ? "on board" : ""}
               {m.bot && isCreator && g.phase === "lobby" && (
@@ -154,30 +155,30 @@ export function DicePanel() {
     const inPool = me ? g.dice_pool.includes(me) : false;
     const taken = new Set(g.members.map((m) => m.pick).filter(Boolean));
     return (
-      <div className="panel pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2 p-4 text-center">
+      <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4 text-center">
         <div className="text-lg font-black">Who go be Boju? 🎲</div>
         <div className="mb-3 text-xs opacity-80">{inPool ? "Pick your number — if the dice lands on it, you seek!" : "Others are picking…"} ({left}s)</div>
         <div className="grid grid-cols-3 gap-2">
           {[1, 2, 3, 4, 5, 6].map((n) => (
             <button key={n} disabled={!inPool || (taken.has(n) && mine !== n)} onClick={() => net.send({ t: "g_pick", n })}
-              className={`btn text-3xl ${mine === n ? "btn-danfo" : "btn-ghost"}`}>{DICE[n]}</button>
+              className={`btn text-3xl ${mine === n ? "btn-primary" : "btn-ghost"}`}>{DICE[n]}</button>
           ))}
         </div>
         <div className="mt-2 text-xs opacity-80">{g.members.filter((m) => m.pick).map((m) => `${m.nick}: ${m.pick}`).join(" · ")}</div>
-      </div>
+      </div></div>
     );
   }
   const rolling = dice && shown < dice.rolls.length;
   const face = dice && dice.rolls.length ? dice.rolls[Math.max(0, Math.min(shown, dice.rolls.length) - 1)] : null;
   return (
-    <div className="panel pointer-events-none absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2 p-5 text-center">
+    <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-5 text-center">
       {face && <div className={`text-7xl ${rolling ? "dice-rolling" : ""}`}>{DICE[face]}</div>}
       {!rolling && (
-        <div className="mt-2 text-xl font-black text-[var(--danfo)]">
+        <div className="mt-2 text-xl font-black text-[var(--accent)]">
           {g.pending_seeker === me ? "Na you be Boju! 🙈" : `${nick(g.pending_seeker)} na Boju!`}
         </div>
       )}
-    </div>
+    </div></div>
   );
 }
 
@@ -190,7 +191,7 @@ export function RoundResultPanel() {
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const mine = me ? r.deltas[me] : undefined;
   return (
-    <div className="panel pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2 p-4">
+    <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4">
       <div className="text-center text-lg font-black">Round {r.round} {r.skipped && "skipped"}</div>
       {mine !== undefined && <div className={`text-center text-2xl font-black ${mine >= 0 ? "text-green-400" : "text-red-400"}`}>{mine >= 0 ? "+" : ""}{naira(mine)}</div>}
       <div className="mt-2 space-y-1 text-sm">
@@ -204,7 +205,7 @@ export function RoundResultPanel() {
       <div className="mt-3 text-center text-xs opacity-80">
         {r.game_over ? "Final results coming…" : r.next_seeker ? `Next Boju: ${nick(r.next_seeker)}` : "Next Boju will be rolled by dice"} · {left}s
       </div>
-    </div>
+    </div></div>
   );
 }
 
@@ -217,8 +218,8 @@ export function GameOverPanel() {
   const winner = over.results[0];
   const tweet = `I just played Boju Boju in Lagos! ${winner ? `${winner.nick} won ${naira(winner.earned)} 🏆` : ""} Come play:`;
   return (
-    <div className="panel pointer-events-auto absolute left-1/2 top-1/2 z-30 w-[22rem] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 p-4">
-      <div className="text-center text-2xl font-black text-[var(--danfo)]">Game over! 🎉</div>
+    <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-[22rem] max-w-[94vw] -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4">
+      <div className="text-center text-2xl font-black text-[var(--accent)]">Game over! 🎉</div>
       <div className="my-3 space-y-1">
         {over.results.map((s, i) => (
           <div key={s.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
@@ -229,12 +230,12 @@ export function GameOverPanel() {
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <a className="btn btn-danfo text-center" target="_blank" rel="noopener noreferrer"
+        <a className="btn btn-primary text-center" target="_blank" rel="noopener noreferrer"
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(url)}`}>Share on X</a>
         <button className="btn btn-ghost" onClick={() => screenshot()}>📸 Screenshot</button>
         <button className="btn btn-leaf col-span-2" onClick={() => { net.send({ t: "g_leave" }); set({ over: null }); }}>Back to the hub</button>
       </div>
-    </div>
+    </div></div>
   );
 }
 
@@ -277,7 +278,7 @@ export function ChatDrawer() {
     setMenu(null);
   };
   return (
-    <div className="panel pointer-events-auto absolute bottom-2 left-2 right-2 z-40 flex h-[45vh] flex-col p-2 sm:left-auto sm:w-96">
+    <div className="panel anim-sheet pointer-events-auto absolute bottom-2 left-2 right-2 z-40 flex h-[45vh] flex-col p-2 sm:left-auto sm:w-96">
       <div className="mb-1 flex items-center justify-between px-1">
         <span className="text-sm font-bold">{g ? `Group chat · ${g.code}` : "Nearby chat"}</span>
         <button className="btn btn-ghost px-2 py-0.5" onClick={() => set({ chatOpen: false, unread: 0 })}>✕</button>
@@ -285,7 +286,7 @@ export function ChatDrawer() {
       <div className="flex-1 space-y-1 overflow-y-auto px-1 text-sm">
         {chat.map((m, i) => (
           <div key={i}>
-            <button className="font-bold text-[var(--danfo)]" onClick={() => m.from !== me && setMenu(menu === `${i}` ? null : `${i}`)}>{m.nick}</button>
+            <button className="font-bold text-[var(--accent)]" onClick={() => m.from !== me && setMenu(menu === `${i}` ? null : `${i}`)}>{m.nick}</button>
             <span className="opacity-60">{m.ch === "near" ? " (nearby)" : ""}: </span>
             <span className="break-words">{m.text}</span>
             {menu === `${i}` && (
@@ -306,7 +307,7 @@ export function ChatDrawer() {
         <div className="flex gap-1 pt-1">
           <input value={text} maxLength={max} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") send(); }}
             placeholder="Talk your own…" className="w-full rounded-lg bg-white/10 px-3 py-2 text-sm outline-none" />
-          <button className="btn btn-danfo" onClick={send}>Send</button>
+          <button className="btn btn-primary" onClick={send}>Send</button>
         </div>
       )}
     </div>
@@ -324,7 +325,7 @@ export function WalletPanel() {
   const reasons: Record<string, string> = { starting_balance: "Welcome money", daily_bonus: "Daily bonus", round: "Round reward", fare: "Transport fare", food: "Food" };
   return (
     <Modal title="Wallet" onClose={() => set({ panel: null })}>
-      <div className="rounded-xl bg-[var(--danfo)] p-4 text-[var(--ink)]">
+      <div className="rounded-xl bg-[var(--accent)] p-4 text-[var(--ink)]">
         <div className="text-xs font-bold uppercase">Balance</div>
         <div className="text-3xl font-black">{naira(data?.balance ?? useGame.getState().balance)}</div>
         <div className="text-xs font-semibold">{data?.disclaimer ?? "In-game naira — not real money"}. It cannot be bought, sold or cashed out.</div>
@@ -354,7 +355,7 @@ export function SettingsPanel() {
       <div className="mb-1 text-sm font-bold">Graphics quality</div>
       <div className="mb-4 grid grid-cols-3 gap-2">
         {(["low", "medium", "high"] as Quality[]).map((q) => (
-          <button key={q} className={`btn capitalize ${quality === q ? "btn-danfo" : "btn-ghost"}`} onClick={() => choose(q)}>{q}</button>
+          <button key={q} className={`btn capitalize ${quality === q ? "btn-primary" : "btn-ghost"}`} onClick={() => choose(q)}>{q}</button>
         ))}
       </div>
       <div className="text-sm font-bold">Controls</div>
@@ -365,6 +366,7 @@ export function SettingsPanel() {
         <li>Boju! tags the nearest hider within 3 m that you can see.</li>
       </ul>
       <button className="btn btn-ghost mt-4 w-full" onClick={screenshot}>📸 Take screenshot</button>
+      <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "changelog" })}>✨ What&apos;s new</button>
     </Modal>
   );
 }
@@ -380,7 +382,7 @@ export function LeadersPanel() {
     setRows(null);
     getLeaderboard(kind, period, scope === "group" ? g?.id : undefined).then((r) => setRows(r.rows)).catch(() => setRows([]));
   }, [kind, period, scope, g?.id]);
-  const tab = (on: boolean) => `btn flex-1 py-1 text-xs ${on ? "btn-danfo" : "btn-ghost"}`;
+  const tab = (on: boolean) => `btn flex-1 py-1 text-xs ${on ? "btn-primary" : "btn-ghost"}`;
   return (
     <Modal title="Leaderboards" onClose={() => set({ panel: null })}>
       <div className="mb-2 flex gap-1"><button className={tab(kind === "seeker")} onClick={() => setKind("seeker")}>Top Seeker</button><button className={tab(kind === "hider")} onClick={() => setKind("hider")}>Top Hider</button></div>

@@ -47,6 +47,9 @@ interface GameStore {
   /** player chose "Stay & explore" after the final whistle */
   stayed: boolean;
   sitting: boolean;
+  sleeping: boolean;
+  /** arrived at a bed you tapped: ask "sleep or sit?" */
+  seatAsk: boolean;
   /** player card open for this player id (tap a person in the world) */
   card: string | null;
   /** live invite to someone's lobby */
@@ -57,6 +60,8 @@ interface GameStore {
   doorOwners: Record<string, string>;
   openDoors: string[];
   knock: { from: string; nick: string; home: string; at: number } | null;
+  /** decorate mode: a draft of your house's furniture (local coords) */
+  decor: { home: string; items: { id: number; item: string; lx: number; lz: number; rot: number; placed: boolean }[]; sel: number | null } | null;
   /** onboarding guide target in the world (arrow + "walk me there") */
   guide: { x: number; z: number; label: string } | null;
   homeArea: string | null;
@@ -111,12 +116,15 @@ export const useGame = create<GameStore>((set, get) => ({
   onboard: null,
   stayed: false,
   sitting: false,
+  sleeping: false,
+  seatAsk: false,
   card: null,
   invite: null,
   pendingInvite: null,
   doorOwners: {},
   openDoors: [],
   knock: null,
+  decor: null,
   guide: null,
   homeArea: null,
   dice: null,

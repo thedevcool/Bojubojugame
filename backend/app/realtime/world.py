@@ -16,11 +16,12 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import houses
 from app.content import HUB_MAP_ID, GameConfig, MapData
-from app.db import ChatMessage, Game, Player, RoundStat
+from app.db import ChatMessage, FurnitureItem, Game, Player, RoundStat
 from app.economy import Economy, InsufficientFunds
 from app.engine import rules
-from app.engine.geometry import MoveCheck, collides, distance, in_bounds, in_rect, validate_move
+from app.engine.geometry import Box, MoveCheck, collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
 from app.realtime.rooms import HubShard, Room, Sender, Session
@@ -41,6 +42,10 @@ LIMITS: dict[str, tuple[float, float]] = {
     "knock_answer": (2, 6),
     "default": (4, 10),
 }
+
+
+def furniture_row(it: FurnitureItem) -> dict[str, Any]:
+    return {"id": it.id, "item": it.item, "lx": round(it.lx, 2), "lz": round(it.lz, 2), "rot": it.rot % 4}
 
 
 class World:
@@ -65,6 +70,9 @@ class World:
         # house id -> tenant id (one per house); house id -> visitors the tenant let in
         self.home_owners: dict[str, str] = {}
         self.guests: dict[str, set[str]] = {}
+        # house id -> placed furniture (local coords) and the solid boxes it adds to the hub
+        self.furniture: dict[str, list[dict[str, Any]]] = {}
+        self.furniture_boxes: dict[str, list[Box]] = {}
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
@@ -100,6 +108,7 @@ class World:
             }
         )
         s.send(self.doors_msg())
+        s.send({"t": "furn_all", "homes": self.furniture})
         if s.room is None:
             self.join_hub(s, at=self.home_spawn(s))
         else:  # reconnect: resend where you are
@@ -150,7 +159,8 @@ class World:
         for i in range(48):
             ang, rad = i * 2.399963, 0.0 if i == 0 else 0.7 + 0.45 * math.sqrt(i)
             x, z = base[0] + math.cos(ang) * rad, base[1] + math.sin(ang) * rad
-            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, hub.near(x, z, x, z)):
+            near = hub.near(x, z, x, z) + self.furniture_near(x, z, x, z)
+            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, near):
                 continue
             if all(math.hypot(x - ox, z - oz) > 0.9 for ox, oz in others):
                 return round(x, 2), round(z, 2)
@@ -176,7 +186,51 @@ class World:
     async def load_home_owners(self) -> None:
         async with self.db() as ses:
             rows = (await ses.execute(select(Player.id, Player.home_id).where(Player.home_id.is_not(None)))).all()
-        self.home_owners = {home: pid for pid, home in rows}
+            self.home_owners = {home: pid for pid, home in rows}
+            items = (
+                await ses.scalars(
+                    select(FurnitureItem).where(
+                        FurnitureItem.placed.is_(True), FurnitureItem.player_id.in_(list(self.home_owners.values()))
+                    )
+                )
+            ).all()
+        owner_home = {pid: home for home, pid in self.home_owners.items()}
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for it in items:
+            if (h := owner_home.get(it.player_id)) is not None:
+                grouped.setdefault(h, []).append(furniture_row(it))
+        for h, rows_ in grouped.items():
+            self.set_furniture(h, rows_, broadcast=False)
+
+    # ------------------------------------------------------------ furniture inside houses
+    def set_furniture(self, home_id: str, items: list[dict[str, Any]], broadcast: bool = True) -> None:
+        home = self.maps[HUB_MAP_ID].home_by_id(home_id)
+        if home is None:
+            return
+        catalog = self.cfg.furniture_by_id()
+        boxes: list[Box] = []
+        for it in items:
+            spec = catalog.get(it["item"])
+            if spec is None or not spec.solid:
+                continue
+            fw, fd = houses.footprint(spec.w, spec.d, it["rot"])
+            if home["dir"] in ("e", "w"):
+                fw, fd = fd, fw
+            x, z = houses.to_world(home["dir"], home["center"][0], home["center"][1], it["lx"], it["lz"])
+            boxes.append(Box(x - fw / 2, z - fd / 2, x + fw / 2, z + fd / 2, spec.h))
+        self.furniture[home_id] = items
+        self.furniture_boxes[home_id] = boxes
+        if broadcast:
+            msg = {"t": "furn", "home": home_id, "items": items}
+            for sh in self.shards:
+                sh.broadcast(msg)
+
+    def furniture_near(self, x0: float, z0: float, x1: float, z1: float) -> list[Box]:
+        lo_x, hi_x, lo_z, hi_z = min(x0, x1) - 1, max(x0, x1) + 1, min(z0, z1) - 1, max(z0, z1) + 1
+        out: list[Box] = []
+        for boxes in self.furniture_boxes.values():
+            out += [b for b in boxes if b.min_x <= hi_x and b.max_x >= lo_x and b.min_z <= hi_z and b.max_z >= lo_z]
+        return out
 
     def doors_msg(self) -> dict[str, Any]:
         return {"t": "doors", "owners": dict(self.home_owners)}
@@ -244,7 +298,7 @@ class World:
         hub = self.maps[HUB_MAP_ID]
         at = self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point()
         self.join_hub(s, at=at)
-        s.crouch = s.sit = False
+        s.crouch = s.sit = s.lie = False
         if arena:
             fare = min(self.cfg.fares_for(arena), key=lambda f: f.price)
             s.send({"t": "ride", "seconds": fare.ride_s, "mode": fare.id, "arena": arena, "dir": "home"})
@@ -361,7 +415,8 @@ class World:
             tolerance=mv.speed_tolerance,
             radius=mv.player_radius,
             bounds=room.map.bounds,
-            boxes=room.map.near(s.x, s.z, m.x, m.z),
+            boxes=room.map.near(s.x, s.z, m.x, m.z)
+            + (self.furniture_near(s.x, s.z, m.x, m.z) if room.map.id == HUB_MAP_ID else []),
             max_step=budget + 0.05,
         )
         if check.ok and room.map.id == HUB_MAP_ID:
@@ -380,7 +435,7 @@ class World:
             s.stamina -= step / mv.run_speed  # time spent running, independent of packet timing
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
-        s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st
+        s.x, s.z, s.ry, s.crouch, s.run, s.sit, s.lie = m.x, m.z, m.ry, m.c, m.r, m.st, m.ly
         s.last_move_at = now
 
     def on_invite(self, s: Session, m: P.Invite) -> None:

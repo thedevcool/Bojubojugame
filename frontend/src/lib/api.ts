@@ -146,6 +146,13 @@ export const getHomes = (acc: Account) => get<{ days: number; mine: string | nul
 export const rentHome = (acc: Account, homeId: string) =>
   send<{ ok: boolean; rent_until: string }>(acc, "/api/home/rent", { home_id: homeId, key: crypto.randomUUID() });
 
+export interface OwnedItem { id: number; item: string; lx: number; lz: number; rot: number; placed: boolean }
+export const getFurniture = (acc: Account) => get<{ items: OwnedItem[] }>(acc, "/api/furniture");
+export const buyFurniture = (acc: Account, item: string) =>
+  send<{ ok: boolean; item: OwnedItem }>(acc, "/api/shop/furniture", { item, key: crypto.randomUUID() });
+export const saveLayout = (acc: Account, items: OwnedItem[]) =>
+  send<{ ok: boolean }>(acc, "/api/home/layout", { items: items.map(({ id, placed, lx, lz, rot }) => ({ id, placed, lx, lz, rot })) });
+
 export interface Friend { id: string; username: string; online: boolean; unread: number }
 export const getFriends = (acc: Account) => get<{ friends: Friend[]; incoming: Friend[]; outgoing: Friend[] }>(acc, "/api/friends");
 export const requestFriend = (acc: Account, username: string) => send<{ ok: boolean; status: string }>(acc, "/api/friends/request", { username });

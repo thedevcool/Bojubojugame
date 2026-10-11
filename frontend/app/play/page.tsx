@@ -10,7 +10,8 @@ import { detectQuality, useGame, type Quality } from "@/lib/store";
 import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
 import { sound } from "@/game/sound";
-import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { DecorateOverlay } from "@/ui/Decorate";
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
@@ -26,6 +27,7 @@ export default function PlayPage() {
   const set = useGame((s) => s.set);
   const me = useGame((s) => s.me);
   const map = useMap();
+  const decor = useGame((s) => !!s.decor);
   const [error, setError] = useState("");
   const [forceChange, setForceChange] = useState<{ acc: Account; username: string } | null>(null);
   const joined = useRef(false);
@@ -135,14 +137,14 @@ export default function PlayPage() {
       {map ? (
         <>
           <div className="absolute inset-0"><Scene map={map} /></div>
-          <Controls />
+          <Controls disabled={decor} />
           <div className="pointer-events-none absolute inset-0">
             <TopBar />
             <PhaseBar />
             <ZonePanel />
             <SafeCompass />
             <Minimap />
-            <ActionButtons />
+            {!decor && <ActionButtons />}
             <DicePanel />
             <RoundResultPanel />
             <GameOverPanel />
@@ -152,9 +154,11 @@ export default function PlayPage() {
             <PlayerCard />
             <InviteBanner />
             <DoorPanel />
+            <SeatAsk />
             <KnockPrompt />
             <WhatsNew />
           </div>
+          <DecorateOverlay />
           <BlindOverlay />
           <RideMap />
           <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>

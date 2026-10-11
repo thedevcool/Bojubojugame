@@ -41,13 +41,22 @@ def test_arena_nav_and_hide_spots(arena):
 
 
 def test_hub_homes_and_zones_are_reachable():
+    """Every house, every room in it and every shop can be walked to (at the client's 0.5 m nav resolution)."""
+    from app.engine.nav import NavGrid
+    from app.houses import to_world
+
     m = get_maps()["hub_plaza"]
-    assert len(m.homes) >= 10
+    nav = NavGrid(m.bounds, m.boxes, 0.35, cell=0.5)
+    assert len(m.homes) >= 17
     for h in m.homes:
         assert not collides(*h["spawn"], 0.35, m.boxes), h["id"]
-        assert m.nav.find_path(*h["spawn"], *m.arrival, max_nodes=40000), h["id"]
+        assert nav.find_path(*h["spawn"], *m.arrival, max_nodes=200000), h["id"]
+        for room in h["rooms"]:
+            x0, z0, x1, z1 = room["rect"]
+            rx, rz = to_world(h["dir"], *h["center"], (x0 + x1) / 2, (z0 + z1) / 2)
+            assert nav.find_path(*h["spawn"], rx, rz, max_nodes=20000), (h["id"], room["name"])
     for z in m.zones.values():
         x0, z0, x1, z1 = z["rect"]
-        assert m.nav.find_path(*m.arrival, (x0 + x1) / 2, (z0 + z1) / 2, max_nodes=40000), z["id"]
+        assert nav.find_path(*m.arrival, (x0 + x1) / 2, (z0 + z1) / 2, max_nodes=200000), z["id"]
     assert m.home_by_id(m.homes[0]["id"]) == m.homes[0] and m.home_by_id(None) is None
     assert not collides(*m.newcomer, 0.35, m.boxes)

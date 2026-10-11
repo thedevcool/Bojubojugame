@@ -12,7 +12,10 @@ export const local = {
   frozen: false,
   insideHome: null as string | null,
   sit: false,
+  lie: false,
   seatY: 0,
+  /** furniture you tapped: when you arrive, sit (or ask sleep/sit for a bed) */
+  seatTarget: null as { x: number; z: number; bed: boolean } | null,
   /** tap-to-move: remaining waypoints */
   path: [] as [number, number][],
 };
@@ -34,6 +37,9 @@ export const cam = {
   /** Aerial "scan the map" mode: drag pans x/z, wheel/pinch changes height. */
   aerial: { on: false, x: 0, z: 0, h: 55, tx: 0, tz: 0, th: 55, vx: 0, vz: 0, drag: false },
 };
+
+/** The live camera + canvas, for DOM overlays that turn a screen point into a ground point (decorate mode). */
+export const sceneRefs = { camera: null as unknown as import("three").Camera | null, canvas: null as HTMLCanvasElement | null };
 
 /** Short-lived screen effects (camera shake on a tag, etc.). */
 export const fx = { shake: 0 };

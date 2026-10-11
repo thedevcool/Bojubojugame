@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
-import { buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
+import { buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
+import { ITEM_ICON } from "@/game/furniture";
+import { bedNear } from "@/game/seats";
+import { startDecorating } from "./Decorate";
+import { FurniturePreview } from "@/game/Previews";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { fmtTime, useMap, useRole, useSecondsLeft, useTicker, useWhere } from "./hooks";
@@ -114,7 +118,12 @@ export function ActionButtons() {
   const crouch = useGame((s) => s.bend);
   const setBend = useGame((s) => s.setBend);
   const sitting = useGame((s) => s.sitting);
+  const sleeping = useGame((s) => s.sleeping);
+  const myHome = useGame((s) => s.home?.id);
   const [wheel, setWheel] = useState(false);
+  useTicker(400);
+  const nearBed = bedNear(local.x, local.z);
+  const insideMine = !!myHome && local.insideHome === myHome;
   const canTaunt = !isSeeker && (!inGame || (g?.phase === "seek" && myState === "hiding"));
   const hold = (v: boolean) => () => { input.runHeld = v; };
   const aerial = useGame((s) => s.aerial);
@@ -146,7 +155,18 @@ export function ActionButtons() {
         )}
         {!aerial && (
           <>
-            {!inGame && (
+            {!inGame && (sleeping || nearBed) && (
+              <button aria-label="Sleep"
+                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sleeping ? "btn-leaf" : "btn-ghost"}`}
+                onClick={() => (sleeping ? wake() : sleep())}
+              >{sleeping ? "🌅" : "😴"}<br />{sleeping ? "Wake" : "Sleep"}</button>
+            )}
+            {!inGame && insideMine && !sleeping && (
+              <button aria-label="Decorate" className="btn btn-ghost h-12 w-12 rounded-full text-[11px] leading-tight sm:h-14 sm:w-14" onClick={() => void startDecorating()}>
+                🛋️<br />Decor
+              </button>
+            )}
+            {!inGame && !sleeping && (
               <button aria-label="Sit"
                 className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sitting ? "btn-leaf" : "btn-ghost"}`}
                 onClick={() => {
@@ -197,6 +217,7 @@ export function ZonePanel() {
     );
   }
   if (zone.kind === "phone_shop") return <PhoneShop />;
+  if (zone.kind === "furniture_shop") return <FurnitureShop />;
   if (zone.kind === "bus_stop" && map?.kind === "arena") {
     return (
       <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
@@ -388,5 +409,91 @@ export function PhoneShop() {
         </button>
       )}
     </div></div>
+  );
+}
+
+/** Ọ̀ṣọ́ Home & Furniture: browse by room, see it turn in 3D, buy into your store room. */
+export function FurnitureShop() {
+  const catalog = useGame((s) => s.content?.config.furniture ?? []);
+  const balance = useGame((s) => s.balance);
+  const hasHome = useGame((s) => !!s.home);
+  const cats = [...new Set(catalog.map((f) => f.category))];
+  const [cat, setCat] = useState(cats[0] ?? "Bedroom");
+  const [pick, setPick] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const items = catalog.filter((f) => f.category === cat);
+  const chosen = catalog.find((f) => f.id === pick) ?? items[0];
+  const buy = async () => {
+    const acc = loadAccount();
+    if (!acc || !chosen) return;
+    setBusy(true);
+    try {
+      await buyFurniture(acc, chosen.id);
+      sound.play("coin");
+      useGame.getState().toast(hasHome ? `📦 ${chosen.name} is in your store room — go home and tap 🛋️ Decorate` : `📦 ${chosen.name} bought! Rent a house to put it in`, "good");
+    } catch (e) {
+      useGame.getState().toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!chosen) return null;
+  return (
+    <div className="pointer-events-auto absolute bottom-20 left-1/2 z-20 w-[min(23rem,95vw)] -translate-x-1/2"><div className="panel anim-sheet p-3">
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="font-black">🛋️ Ọ̀ṣọ́ Home & Furniture</div>
+        <div className="text-[10px] opacity-60">in-game naira only</div>
+      </div>
+      <div className="segmented mb-2">
+        {cats.map((c) => <button key={c} data-on={c === cat} onClick={() => { setCat(c); setPick(null); }}>{c}</button>)}
+      </div>
+      <div className="flex gap-3">
+        <FurniturePreview key={chosen.id} spec={chosen} className="anim-pop h-32 w-32 shrink-0 overflow-hidden rounded-2xl bg-[#f3ead9]" />
+        <div className="touch-scroll grid max-h-32 flex-1 grid-cols-1 gap-1 overflow-y-auto">
+          {items.map((f) => (
+            <button key={f.id} onClick={() => setPick(f.id)} data-on={f.id === chosen.id}
+              className="choice flex items-center justify-between px-2 py-1.5 text-left text-xs">
+              <span className="truncate font-semibold">{ITEM_ICON[f.id] ?? "📦"} {f.name}</span>
+              <span className="shrink-0 pl-1 text-[var(--accent)]">{nairaShort(f.price)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-2 text-[11px] opacity-70">{chosen.bed ? "😴 You can sleep on it" : chosen.seat ? "🪑 You can sit on it" : chosen.solid ? `${chosen.w} × ${chosen.d} m` : "Goes under or over other things"}</div>
+      <button className="btn btn-primary mt-2 w-full" disabled={busy || balance < chosen.price} onClick={buy}>
+        {balance < chosen.price ? "Your money no reach" : `Buy ${chosen.name} · ${naira(chosen.price)}`}
+      </button>
+    </div></div>
+  );
+}
+
+export function sleep(): void {
+  const st = useGame.getState();
+  st.setBend(false);
+  local.path = [];
+  local.sit = false;
+  local.lie = true;
+  st.set({ sleeping: true, sitting: false, seatAsk: false });
+  st.toast("😴 Sleeping… your stamina is refilling", "good");
+}
+
+export function wake(): void {
+  local.lie = false;
+  useGame.getState().set({ sleeping: false });
+}
+
+/** You walked to a bed you tapped: sleep on it or just sit on the edge? */
+export function SeatAsk() {
+  const ask = useGame((s) => s.seatAsk);
+  const set = useGame((s) => s.set);
+  if (!ask) return null;
+  return (
+    <div className="pointer-events-auto absolute bottom-28 left-1/2 z-30 -translate-x-1/2">
+      <div className="panel anim-pop flex items-center gap-2 p-2">
+        <button className="btn btn-primary px-4" onClick={sleep}>😴 Sleep</button>
+        <button className="btn btn-ghost px-4" onClick={() => { local.sit = true; set({ sitting: true, seatAsk: false }); }}>🪑 Sit</button>
+        <button className="btn btn-ghost px-3" onClick={() => set({ seatAsk: false })}>✕</button>
+      </div>
+    </div>
   );
 }

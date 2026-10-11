@@ -12,6 +12,7 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { ChatContent, GroupPanel, LeadersPanel, SettingsPanel, WalletPanel, screenshot } from "./Panels";
 import { ChangelogContent } from "./WhatsNew";
+import { startDecorating } from "./Decorate";
 import { useMap, useRole, useTicker } from "./hooks";
 
 interface App { id: string; name: string; icon: string; bg: string; needsPhone?: boolean }
@@ -442,6 +443,10 @@ function HousesApp() {
                   useGame.getState().closePhone();
                 }}>🧭 Walk me home</button>
                 <button className="btn btn-ghost py-2 text-sm" disabled={busy || balance < h.rent} onClick={rent}>Renew +{data.days}d</button>
+                <button className="btn btn-ghost col-span-2 py-2 text-sm" onClick={() => {
+                  if (local.insideHome === h.id) void startDecorating();
+                  else { useGame.getState().toast("Walk inside your house, then tap 🛋️ Decor"); if (homeGeo) walkTo(homeGeo.spawn[0], homeGeo.spawn[1]); useGame.getState().closePhone(); }
+                }}>🛋️ Decorate my house</button>
               </div>
             </>
           ) : h.taken ? (

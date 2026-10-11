@@ -23,6 +23,7 @@ class Move(_In):
     c: bool = False  # crouch
     r: bool = False  # run
     st: bool = False  # sitting
+    ly: bool = False  # lying down (sleeping on a bed)
     s: int = Field(ge=0, le=2**31)
 
 

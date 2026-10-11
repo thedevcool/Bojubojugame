@@ -319,5 +319,150 @@
       "bungalow": 250000,
       "duplex": 1500000
     }
-  }
+  },
+  "furniture": [
+    {
+      "id": "bed",
+      "name": "Spring bed",
+      "price": 180000,
+      "w": 1.8,
+      "d": 2.1,
+      "h": 0.55,
+      "category": "Bedroom",
+      "seat": 0.55,
+      "bed": true
+    },
+    {
+      "id": "bed_king",
+      "name": "King-size bed",
+      "price": 450000,
+      "w": 2.1,
+      "d": 2.3,
+      "h": 0.6,
+      "category": "Bedroom",
+      "seat": 0.6,
+      "bed": true
+    },
+    {
+      "id": "wardrobe",
+      "name": "Wardrobe",
+      "price": 220000,
+      "w": 1.4,
+      "d": 0.6,
+      "h": 2.0,
+      "category": "Bedroom"
+    },
+    {
+      "id": "bookshelf",
+      "name": "Bookshelf",
+      "price": 90000,
+      "w": 1.0,
+      "d": 0.35,
+      "h": 1.8,
+      "category": "Bedroom"
+    },
+    {
+      "id": "sofa",
+      "name": "3-seater sofa",
+      "price": 350000,
+      "w": 2.2,
+      "d": 0.9,
+      "h": 0.85,
+      "category": "Parlour",
+      "seat": 0.45
+    },
+    {
+      "id": "armchair",
+      "name": "Armchair",
+      "price": 120000,
+      "w": 0.9,
+      "d": 0.9,
+      "h": 0.85,
+      "category": "Parlour",
+      "seat": 0.45
+    },
+    {
+      "id": "tv",
+      "name": "Flat-screen TV + stand",
+      "price": 280000,
+      "w": 1.4,
+      "d": 0.5,
+      "h": 1.3,
+      "category": "Parlour"
+    },
+    {
+      "id": "center_table",
+      "name": "Centre table",
+      "price": 60000,
+      "w": 1.0,
+      "d": 0.6,
+      "h": 0.45,
+      "category": "Parlour"
+    },
+    {
+      "id": "dining",
+      "name": "Dining set (4 chairs)",
+      "price": 300000,
+      "w": 1.6,
+      "d": 1.6,
+      "h": 0.8,
+      "category": "Parlour"
+    },
+    {
+      "id": "fridge",
+      "name": "Fridge",
+      "price": 400000,
+      "w": 0.7,
+      "d": 0.7,
+      "h": 1.7,
+      "category": "Kitchen"
+    },
+    {
+      "id": "cooker",
+      "name": "Gas cooker",
+      "price": 150000,
+      "w": 0.6,
+      "d": 0.6,
+      "h": 0.9,
+      "category": "Kitchen"
+    },
+    {
+      "id": "plant",
+      "name": "Potted plant",
+      "price": 25000,
+      "w": 0.5,
+      "d": 0.5,
+      "h": 1.2,
+      "category": "Decor"
+    },
+    {
+      "id": "rug",
+      "name": "Persian rug",
+      "price": 70000,
+      "w": 2.6,
+      "d": 1.8,
+      "h": 0.02,
+      "category": "Decor",
+      "solid": false
+    },
+    {
+      "id": "ceiling_fan",
+      "name": "Ceiling fan",
+      "price": 45000,
+      "w": 1.2,
+      "d": 1.2,
+      "h": 0.1,
+      "category": "Decor",
+      "solid": false
+    },
+    {
+      "id": "standing_fan",
+      "name": "Standing fan",
+      "price": 35000,
+      "w": 0.45,
+      "d": 0.45,
+      "h": 1.3,
+      "category": "Decor"
+    }
+  ]
 }

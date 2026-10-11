@@ -1,7 +1,8 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
 import { useGame } from "./store";
-import type { ChatMsg, GroupState, Home, RosterEntry, Standing } from "./types";
+import type { ChatMsg, GroupState, Home, PlacedItem, RosterEntry, Standing } from "./types";
+import { setAllFurniture, setHomeFurniture } from "@/game/furniture";
 import { sound } from "@/game/sound";
 import { cam, clock, fx, local, pushSnapshot, remotes } from "@/game/state";
 
@@ -81,8 +82,9 @@ class Net {
         cam.aerial.on = false;
         local.path = [];
         g.setBend(false); // never arrive somewhere still bent down
-        local.sit = false;
-        g.set({ aerial: false, sitting: false, stayed: false });
+        local.sit = local.lie = false;
+        local.seatTarget = null;
+        g.set({ aerial: false, sitting: false, sleeping: false, seatAsk: false, decor: null, stayed: false });
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
@@ -91,14 +93,20 @@ class Net {
         local.x = m.x as number;
         local.z = m.z as number;
         local.path = [];
-        local.sit = false;
-        g.set({ sitting: false });
+        local.sit = local.lie = false;
+        g.set({ sitting: false, sleeping: false });
         break;
       case "home": {
         const home = (m.home as Home | null) ?? null;
         g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
         break;
       }
+      case "furn_all":
+        setAllFurniture(m.homes as Record<string, PlacedItem[]>);
+        break;
+      case "furn":
+        setHomeFurniture(m.home as string, m.items as PlacedItem[]);
+        break;
       case "doors":
         g.set({ doorOwners: m.owners as Record<string, string> });
         break;

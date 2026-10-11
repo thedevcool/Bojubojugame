@@ -3,7 +3,8 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { GameMap, Rect } from "@/lib/types";
+import type { FurnitureSpec, GameMap, Rect } from "@/lib/types";
+import { FurnitureMesh } from "./FurnitureMeshes";
 import Avatar, { type Motion } from "./Avatar";
 import { MapProps } from "./props";
 import { grass } from "./textures";
@@ -102,6 +103,26 @@ export function MapPreview({ map, focus, className }: { map: GameMap; focus?: Re
         <MapProps props={map.props} lowDetail />
         {focus && <FocusMarker rect={focus} />}
         <OrbitRig map={map} focus={focus ?? null} />
+      </Canvas>
+    </div>
+  );
+}
+
+/** Turning 3D preview of a piece of furniture in the shop. */
+export function FurniturePreview({ spec, className }: { spec: FurnitureSpec; className?: string }) {
+  const size = Math.max(spec.w, spec.d, spec.h * 1.2, 0.8);
+  return (
+    <div className={className}>
+      <Canvas dpr={[1, 1.5]} gl={GL} camera={{ fov: 30, position: [0, size * 1.5, size * 3] }} onCreated={({ camera }) => camera.lookAt(0, spec.h * 0.4, 0)}>
+        <hemisphereLight args={["#fff6e8", "#4a3a2a", 1.3]} />
+        <directionalLight position={[2, 4, 3]} intensity={2.2} />
+        <Turntable speed={0.7}>
+          <FurnitureMesh s={spec} ceiling={Math.max(1.4, spec.h + 1)} />
+        </Turntable>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+          <circleGeometry args={[size * 0.9, 40]} />
+          <meshBasicMaterial color="#c9b48f" />
+        </mesh>
       </Canvas>
     </div>
   );

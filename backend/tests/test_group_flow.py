@@ -292,7 +292,6 @@ async def test_interstate_fares_and_ride_mode(db):
     assert await world.economy.balance(a.pid) == 20000 - 15000
 
 
-
 async def test_gather_times_out_and_walks_stragglers_in(db):
     world, clock, players = await setup(db, 2)
     (a, ca), (b, _) = players

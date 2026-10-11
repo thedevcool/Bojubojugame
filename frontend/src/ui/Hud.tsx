@@ -166,7 +166,7 @@ export function ActionButtons() {
             {!inGame && hasCar && !local.insideHome && !sleeping && (
               <button aria-label="Drive"
                 className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${driving ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play("pop"); }}
+                onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play(driving ? "door" : "horn"); }}
               >{driving ? "🚶🏾" : "🚗"}<br />{driving ? "Walk" : "Drive"}</button>
             )}
             {!inGame && insideMine && !sleeping && (

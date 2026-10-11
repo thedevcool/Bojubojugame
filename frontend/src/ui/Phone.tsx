@@ -93,7 +93,7 @@ export default function Phone() {
               {inApp ? (
                 <div key={app} className="anim-app absolute inset-0 flex flex-col">
                   <div className="relative z-10 flex h-11 shrink-0 items-center px-2 backdrop-blur-xl" style={{ background: "rgba(11,17,32,.78)", boxShadow: "inset 0 -0.5px 0 rgba(255,255,255,.1)" }}>
-                    <button className="flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[15px] text-[var(--accent)] active:opacity-50" onClick={back}>
+                    <button aria-label="Back" className="flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[15px] text-[var(--accent)] active:opacity-50" onClick={back}>
                       <span className="text-2xl leading-none">‹</span>{backLabel}
                     </button>
                     <div className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-[15px] font-semibold">{title}</div>

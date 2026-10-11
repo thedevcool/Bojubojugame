@@ -7,6 +7,20 @@ bought, sold, withdrawn or cashed out.
 
 > Read **[ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md)** before you change anything.
 
+## New in 2.1 — real homes, cars & travel
+
+- **Room-and-parlour houses** (`backend/app/houses.py`): parlour + bedroom (duplex adds a kitchen),
+  porch, louvre windows with burglar bars, water tanks. Same placement rules run on the server and in
+  `frontend/src/game/furniture.ts`.
+- **Furniture** (`/api/shop/furniture`, `/api/furniture`, `/api/home/layout`): owned items, starter set on
+  first rent, solid for everyone, decorate mode (drag / turn / store), layout validated server-side.
+- **Sleep & sit**: tap a bed or seat; lying and sitting are synced (`mv.ly`, `mv.st`).
+- **Map & travel**: HUD minimap → full map (pin, walk/drive) and a Naija map; `trip` WS message boards
+  at any bus stop or drives your own car into an explore room per city venue.
+- **Cars** (`/api/shop/car`): Tokunbo Autos; driving speed and no-driving-into-houses enforced by the server.
+- **Games**: a `gather` phase (everyone walks into the circle before the dice), automatic catch when
+  Boju reaches you, and a short line-of-sight grace so runners don't pop out of view.
+
 ## New in 2.0 — Boju Boju v1: life in Lagos
 
 - **Onboarding story**: new players land beside the phone shop, buy any phone, launch it, rent a

@@ -1,7 +1,8 @@
 import type { Content } from "./types";
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+import { API_URL } from "./env";
+
+export { API_URL };
 export const WS_URL = API_URL.replace(/^http/, "ws") + "/ws";
 
 const KEY = "boju.account.v1";

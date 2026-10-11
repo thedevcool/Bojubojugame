@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadAccount, naira, reportPlayer, SITE_URL, getLeaderboard, getWallet, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { loadAccount, naira, reportPlayer, getLeaderboard, getWallet, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
 import { useRole, useSecondsLeft } from "./hooks";
@@ -60,7 +61,7 @@ export function GroupPanel() {
   }
 
   const isCreator = g.creator === me;
-  const link = `${SITE_URL}/play?join=${g.code}`;
+  const link = `${siteUrl()}/play?join=${g.code}`;
   const share = async () => {
     const text = `Join my Boju Boju group in Lagos! Code ${g.code}`;
     try {
@@ -200,7 +201,7 @@ export function GameOverPanel() {
   const g = useGame((s) => s.group);
   const set = useGame((s) => s.set);
   if (!over || g?.phase !== "over") return null;
-  const url = `${SITE_URL}/share/${over.gameId}`;
+  const url = `${siteUrl()}/share/${over.gameId}`;
   const winner = over.results[0];
   const tweet = `I just played Boju Boju in Lagos! ${winner ? `${winner.nick} won ${naira(winner.earned)} 🏆` : ""} Come play:`;
   return (

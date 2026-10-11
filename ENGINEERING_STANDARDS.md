@@ -14,6 +14,10 @@ cheats, crashes, or player harm. When a rule here conflicts with convenience, th
 2. **Naira is virtual.** No real money, payments, withdrawals, bank names, account-number
    fields, card fields, or payment-style UI. Every wallet surface shows
    *"In-game naira — not real money"*.
+   **The one exception is wall ads** (`backend/app/ads.py`): advertisers pay real naira through
+   Paystack's hosted checkout (we never see card details). Ad money never touches a game wallet,
+   game naira can never buy an ad, the ad sheet says "real money" plainly, every poster is
+   approved by an admin before it goes live, and a rejected ad is refunded automatically.
 3. **Minimal personal data.** Accounts are username + password. Email is **optional** and used
    only for password resets — never shown to other players or used for marketing. No phone,
    precise location or real names. "Home" is an area name from a fixed list.
@@ -102,7 +106,7 @@ exactly one copy of every number and every map.
 - [ ] CORS allows only `FRONTEND_ORIGIN`. Security headers middleware untouched or improved.
 - [ ] New REST endpoint has a rate limit; new WS message type has a rate limit.
 - [ ] User text (nicknames, chat) passes `safety.clean_text` (length, profanity, no links).
-- [ ] No real‑money wording, payment UI, or real brand logos/people.
+- [ ] No real‑money wording, payment UI, or real brand logos/people (wall ads are the only exception — see rule 2).
 - [ ] Server decides the outcome; client value is only a request.
 - [ ] Chat rules: 300 chars max, text only, no links, disabled for in‑game players during
       hide/seek (taunt emotes only), 30‑day retention.

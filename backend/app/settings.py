@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     mail_from: str = "Boju Boju <no-reply@example.com>"
+    # Ads (the only real money in the game: advertisers pay with Paystack; game naira is separate)
+    paystack_secret_key: str = ""
+    admin_token: str = ""  # protects /admin (approve / reject ads)
+    ads_fake_payments: bool = False  # dev/tests only: skip Paystack and treat payments as successful
 
     @property
     def async_database_url(self) -> str:
@@ -45,4 +49,6 @@ def get_settings() -> Settings:
     s = Settings()
     if s.env == "prod" and s.jwt_secret.startswith("dev-only"):
         raise RuntimeError("JWT_SECRET must be set in production")
+    if s.env == "prod" and s.ads_fake_payments:
+        raise RuntimeError("ADS_FAKE_PAYMENTS must never be on in production")
     return s

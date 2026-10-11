@@ -60,7 +60,7 @@ function Landing() {
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-4 py-8">
       <div className="anim-pop flex items-center gap-3">
-        <span className="logo-peek grid h-16 w-16 place-items-center rounded-[22px] bg-[var(--accent)] text-4xl shadow-lg shadow-blue-500/30">🙈</span>
+        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[22px] bg-[var(--accent)] text-4xl leading-none shadow-lg shadow-blue-500/30"><span className="logo-peek">🙈</span></span>
         <h1 className="text-5xl font-black tracking-tight">Boju Boju</h1>
       </div>
       <p className="mt-1 text-lg">Hide &amp; seek, Lagos style. 🚌🌴</p>

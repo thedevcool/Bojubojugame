@@ -19,6 +19,7 @@ from starlette.responses import Response
 
 from app import auth
 from app.accounts import Me, make_router
+from app.ads import make_router as make_ads_router
 from app.content import get_config, get_maps
 from app.db import Database, Device, Game, LedgerEntry, Player, Report, RoundStat
 from app.life import make_router as make_life_router
@@ -111,7 +112,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.frontend_origin.split(",") if o.strip()],
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
         max_age=600,
     )
 
@@ -154,6 +155,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
 
     app.include_router(make_router(db, world, cfg))
     app.include_router(make_life_router(db, world, cfg))
+    app.include_router(make_ads_router(db, cfg, maps))
 
     @app.get("/api/wallet")
     async def wallet(pid: Me) -> dict[str, Any]:

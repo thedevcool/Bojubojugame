@@ -143,6 +143,20 @@ class Car(BaseModel):
     tagline: str = ""
 
 
+class AdSize(BaseModel):
+    id: str
+    name: str
+    w: float = Field(gt=0, le=6)
+    h: float = Field(gt=0, le=4)
+    price: int = Field(ge=100)  # REAL naira (Paystack), not game naira
+
+
+class Ads(BaseModel):
+    days: int = Field(ge=1)
+    currency_note: str
+    sizes: list[AdSize]
+
+
 class Rent(BaseModel):
     days: int = Field(ge=1)
     prices: dict[str, int]
@@ -165,6 +179,7 @@ class GameConfig(BaseModel):
     phones: list[Phone]
     furniture: list[Furniture]
     cars: list[Car]
+    ads: Ads
     rent: Rent
     home_coords: dict[str, tuple[float, float]]
 

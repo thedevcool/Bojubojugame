@@ -14,6 +14,9 @@ export function detectQuality(): Quality {
   return mobile ? "medium" : "high";
 }
 
+/** A wall face that can carry a paid poster (see backend/app/ads.py find_face). */
+export interface AdSpot { map: string; x: number; y: number; z: number; nx: number; nz: number; lo: number; hi: number; top: number; at: number; sx: number; sy: number }
+
 export interface Toast { id: number; msg: string; kind: "info" | "error" | "good" }
 
 interface GameStore {
@@ -77,6 +80,10 @@ interface GameStore {
   emotes: { n: number; text: string; until: number }[];
   quality: Quality;
   muted: string[];
+  /** tapped an ad-able wall: a tiny "Place ad here" bubble, then the ad sheet */
+  adTap: AdSpot | null;
+  adSheet: AdSpot | null;
+  adsVersion: number;
   set: (p: Partial<GameStore>) => void;
   openApp: (app: string | null) => void;
   closePhone: () => void;
@@ -138,6 +145,9 @@ export const useGame = create<GameStore>((set, get) => ({
   knock: null,
   decor: null,
   guide: null,
+  adTap: null,
+  adSheet: null,
+  adsVersion: 0,
   homeArea: null,
   dice: null,
   over: null,

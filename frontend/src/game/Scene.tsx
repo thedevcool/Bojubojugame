@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import type { GameMap, Home, RosterEntry } from "@/lib/types";
+import { adFaceAt, AdsLayer } from "./Ads";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
 import { setCatalog, toWorld, worldRotY, furn, checkLayout, solidColliders } from "./furniture";
@@ -443,6 +444,19 @@ function TapMover() {
         return;
       }
     }
+    {
+      // tapped a kiosk / shop / arena wall? offer "📢 Place ad here" (tap-to-go still walks you there)
+      const map = navState.map;
+      let block = Infinity;
+      for (const c of solidColliders()) {
+        box3.min.set(c[0], 0, c[1]);
+        box3.max.set(c[2], c[4], c[3]);
+        if (ray.ray.intersectBox(box3, wallHit)) block = Math.min(block, ray.ray.origin.distanceTo(wallHit));
+      }
+      if (map && ray.ray.intersectPlane(groundPlane, hit)) block = Math.min(block, ray.ray.origin.distanceTo(hit) + 0.01);
+      const spot = map && !st.decor ? adFaceAt(ray.ray, map, block, t.x, t.y) : null;
+      if (spot || st.adTap) st.set({ adTap: spot });
+    }
     if (!t.walk) return;
     ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -680,6 +694,7 @@ function World({ map }: { map: GameMap }) {
       <LocalPlayer map={map} />
       <Remotes map={map} />
       <TapMover />
+      <AdsLayer map={map} />
       <DebugHook />
       <DestMarker />
       <GuideMarker />

@@ -6,7 +6,20 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, inspect, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    inspect,
+    text,
+)
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -83,6 +96,35 @@ class FurnitureItem(Base):
     lz: Mapped[float] = mapped_column(Float, default=0.0)
     rot: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Ad(Base):
+    """A paid poster on a wall in the game. Paid with REAL naira via Paystack (never game naira)."""
+
+    __tablename__ = "ads"
+    __table_args__ = (Index("ix_ads_map_status", "map_id", "status"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    map_id: Mapped[str] = mapped_column(String(40))
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    z: Mapped[float] = mapped_column(Float)
+    nx: Mapped[int] = mapped_column(Integer)  # wall faces this way (-1/0/1)
+    nz: Mapped[int] = mapped_column(Integer)
+    w: Mapped[float] = mapped_column(Float)
+    h: Mapped[float] = mapped_column(Float)
+    size: Mapped[str] = mapped_column(String(8))
+    price: Mapped[int] = mapped_column(Integer)  # real naira
+    title: Mapped[str] = mapped_column(String(40))
+    email: Mapped[str] = mapped_column(String(254))
+    reference: Mapped[str] = mapped_column(String(64), unique=True)
+    # awaiting_payment -> review -> live -> (expired) ; or rejected / refunded
+    status: Mapped[str] = mapped_column(String(20), default="awaiting_payment")
+    image: Mapped[bytes] = mapped_column(LargeBinary)
+    image_type: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DirectMessage(Base):

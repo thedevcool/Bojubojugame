@@ -186,3 +186,29 @@ export const nairaShort = (n: number) => {
   if (a >= 1e5) return fmt(a / 1e3, "K");
   return naira(n);
 };
+
+// ---------------------------------------------------------------- wall ads (REAL naira via Paystack — separate from game money)
+export interface AdSize { id: string; name: string; w: number; h: number; price: number }
+export interface AdsConfig { days: number; currency_note: string; sizes: AdSize[]; enabled: boolean }
+export interface AdRect { x: number; y: number; z: number; nx: number; nz: number; w: number; h: number }
+export interface LiveAd extends AdRect { id: string; title: string; image: string }
+export interface MyAd { id: string; title: string; status: string; price: number; map_id: string; size: string; live_until: string | null }
+let adsConfigPromise: Promise<AdsConfig> | null = null;
+export const getAdsConfig = () => (adsConfigPromise ??= fetch(`${API_URL}/api/ads/config`).then((r) => json<AdsConfig>(r)).catch((e) => { adsConfigPromise = null; throw e; }));
+export const getAdsOnMap = async (mapId: string) => json<{ live: LiveAd[]; taken: AdRect[] }>(await fetch(`${API_URL}/api/ads/map/${encodeURIComponent(mapId)}`));
+export const createAd = (acc: Account, body: Omit<AdRect, "w" | "h"> & { map_id: string; size: string; title: string; email: string; image: string }) =>
+  send<{ id: string; reference: string; pay_url: string; price: number }>(acc, "/api/ads", body);
+export const verifyAd = (acc: Account, reference: string) =>
+  get<{ status: string; title: string; price: number; map_id: string }>(acc, `/api/ads/verify?reference=${encodeURIComponent(reference)}`);
+export const getMyAds = (acc: Account) => get<{ ads: MyAd[] }>(acc, "/api/ads/mine");
+
+export interface AdminAd extends MyAd { by: string; email: string }
+const admin = (token: string) => ({ "X-Admin-Token": token });
+export const adminListAds = async (token: string) => json<{ ads: AdminAd[] }>(await fetch(`${API_URL}/api/admin/ads`, { headers: admin(token) }));
+export const adminAct = async (token: string, id: string, action: "approve" | "reject" | "remove") =>
+  json<{ ok: boolean; status: string }>(await fetch(`${API_URL}/api/admin/ads/${id}/${action}`, { method: "POST", headers: admin(token) }));
+export const adminAdImage = async (token: string, id: string) => {
+  const r = await fetch(`${API_URL}/api/ads/${id}/image`, { headers: admin(token) });
+  if (!r.ok) throw new Error("image");
+  return URL.createObjectURL(await r.blob());
+};

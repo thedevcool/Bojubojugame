@@ -12,6 +12,7 @@ import { useMap } from "@/ui/hooks";
 import { sound } from "@/game/sound";
 import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
+import { AdBubble } from "@/ui/AdBubble";
 import { ActionButtons, BlindOverlay, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
@@ -23,6 +24,7 @@ import Onboarding, { onboardingDone } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
 const DecorateOverlay = dynamic(() => import("@/ui/Decorate").then((m) => m.DecorateOverlay), { ssr: false });
+const AdSheet = dynamic(() => import("@/ui/AdSheet").then((m) => m.AdSheet), { ssr: false });
 const RideMap = dynamic(() => import("@/ui/RealMap").then((m) => m.RideMap), { ssr: false });
 
 export default function PlayPage() {
@@ -161,6 +163,8 @@ export default function PlayPage() {
             <SeatAsk />
             <KnockPrompt />
             <WhatsNew />
+            {!decor && <AdBubble />}
+            <AdSheet />
           </div>
           <DecorateOverlay />
           <MapScreen />

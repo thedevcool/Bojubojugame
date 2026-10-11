@@ -43,6 +43,21 @@ On Render: **Environment → FRONTEND_ORIGIN** = your exact Vercel URL, e.g. `ht
 - Accounts created before passwords existed get a username from their nickname and the temporary
   password `123456`; they must choose a new password before they can play.
 
+### Wall ads (real money, Paystack)
+Advertisers tap a kiosk/shop/billboard/arena wall in the game → **📢 Place ad here** → pick a size
+(₦5,000 – ₦30,000, set in `backend/app/content/game_config.json` → `ads`) → pay on Paystack.
+1. In the Paystack dashboard → **Settings → API Keys & Webhooks**, copy your **Secret key**
+   (`sk_live_…`; use `sk_test_…` first to try it with Paystack's test cards).
+2. On Render set `PAYSTACK_SECRET_KEY` to it, and `ADMIN_TOKEN` to a long random string
+   (`python -c "import secrets; print(secrets.token_urlsafe(32))"`).
+3. Still in Paystack → **Webhook URL**: `https://<your-service>.onrender.com/api/paystack/webhook`.
+   (The callback page `https://<your-vercel-app>/ads/return` is sent automatically per payment.)
+4. Paid ads wait for you at `https://<your-vercel-app>/admin` (paste `ADMIN_TOKEN`).
+   **Approve** puts the poster up for 7 days; **Reject + refund** refunds through Paystack;
+   **Take down** removes a live ad without a refund.
+Without `PAYSTACK_SECRET_KEY` the ad sheet just says "coming soon". Never set
+`ADS_FAKE_PAYMENTS` in production — it skips payment and exists only for local testing.
+
 ### Optional: keep it awake
 To skip the 1‑minute wake‑up, create a free job at cron-job.org that opens
 `https://<your-service>.onrender.com/health` every 10 minutes. One service running

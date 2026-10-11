@@ -31,3 +31,8 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false
+      # Wall ads (real money via Paystack) — see DEPLOY.md
+      - key: PAYSTACK_SECRET_KEY
+        sync: false            # sk_live_... (or sk_test_... while trying it out)
+      - key: ADMIN_TOKEN
+        generateValue: true    # paste into /admin to approve ads

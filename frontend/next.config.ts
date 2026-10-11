@@ -14,7 +14,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      `img-src 'self' data: blob: ${api}`, // wall-ad posters are served by the API
       `connect-src 'self' blob: ${api} ${wsApi}`,
       "worker-src 'self' blob:",
       "child-src 'self' blob:",

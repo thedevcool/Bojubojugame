@@ -19,27 +19,27 @@ export function TopBar() {
   const stamina = local.stamina / 5;
   return (
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
-      <div className="panel flex items-center gap-3 px-3 py-2">
+      <div className="panel flex min-w-0 items-center gap-2.5 px-3 py-2">
         <button onClick={() => set({ panel: "wallet" })} className="text-left">
-          <div className="text-lg font-black leading-none text-[var(--accent)]">{naira(balance)}</div>
-          <div className="text-[10px] opacity-70">in-game naira · not real money</div>
+          <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg">{naira(balance)}</div>
+          <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
         </button>
-        <div className="w-20">
+        <div className="w-14 sm:w-20">
           <div className="text-[10px] opacity-80">Belle {Math.round(hunger)}%</div>
           <div className="h-1.5 rounded bg-white/15"><div className="h-1.5 rounded bg-[var(--clay)]" style={{ width: `${hunger}%` }} /></div>
           <div className="mt-1 h-1 rounded bg-white/15"><div className="h-1 rounded bg-sky-300" style={{ width: `${stamina * 100}%` }} /></div>
         </div>
         <span title={connected ? "Online" : "Reconnecting"} className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-400" : "animate-pulse bg-red-500"}`} />
       </div>
-      <div className="flex flex-wrap justify-end gap-1.5">
-        <button className="btn btn-primary relative" onClick={() => set({ panel: "group" })}>
-          {group ? `Group ${group.code}` : "Play Boju"}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button className="btn btn-primary relative h-10 px-3 text-sm sm:px-4" onClick={() => set({ panel: "group" })}>
+          {group ? `🙈 ${group.code}` : "Play Boju"}
         </button>
-        <button className="btn btn-ghost relative" onClick={() => set({ chatOpen: true, unread: 0 })}>
+        <button aria-label="Chat" className="btn btn-ghost relative grid h-10 w-10 place-items-center p-0" onClick={() => set({ chatOpen: true, unread: 0 })}>
           💬{unread > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 text-[10px]">{unread}</span>}
         </button>
-        <button className="btn btn-ghost" onClick={() => set({ panel: "leaders" })}>🏆</button>
-        <button className="btn btn-ghost" onClick={() => set({ panel: "settings" })}>⚙️</button>
+        <button aria-label="Leaderboards" className="btn btn-ghost grid h-10 w-10 place-items-center p-0 max-sm:hidden" onClick={() => set({ panel: "leaders" })}>🏆</button>
+        <button aria-label="Settings" className="btn btn-ghost grid h-10 w-10 place-items-center p-0" onClick={() => set({ panel: "settings" })}>⚙️</button>
       </div>
     </div>
   );
@@ -64,7 +64,7 @@ export function PhaseBar() {
     const inside = local.insideHome;
     const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
     const label = homeLabel ?? (section ? `📍 ${section.name}` : null);
-    return label ? <div className="panel absolute left-1/2 top-16 z-10 max-w-[92vw] -translate-x-1/2 px-3 py-1 text-center text-xs">{label}</div> : null;
+    return label ? <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">{label}</div> : null;
   }
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
@@ -76,7 +76,7 @@ export function PhaseBar() {
   const safeLeft = r && me && r.safe.includes(me) ? Math.max(0, safeTotal - (r.safe_used[me] ?? 0)) : null;
   const safeName = map?.safe_houses.find((s) => s.id === g.settings.safe)?.name;
   return (
-    <div className="panel absolute left-1/2 top-16 z-10 -translate-x-1/2 px-4 py-1.5 text-center">
+    <div className="panel absolute left-1/2 top-[3.9rem] z-10 w-max max-w-[92vw] -translate-x-1/2 px-4 py-1.5 text-center">
       <div className="text-sm font-bold">
         {labels[g.phase]} {g.phase !== "over" && <span className="tabular-nums text-[var(--accent)]">{fmtTime(left)}</span>}
       </div>
@@ -124,14 +124,14 @@ export function ActionButtons() {
       <div className="flex gap-2">
         {canTaunt && <button className="btn btn-ghost h-14 w-14 rounded-full text-xl" onClick={() => setWheel(!wheel)}>😜</button>}
         {canAerial && (
-          <button aria-label="Aerial view" className={`btn h-14 w-14 rounded-full text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
+          <button aria-label="Aerial view" className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
             🛰️<br />{aerial ? "Back" : "Aerial"}
           </button>
         )}
         {!aerial && (
           <>
             <button
-              className={`btn h-14 w-14 rounded-full text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
+              className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
               onClick={() => { input.crouchToggle = !crouch; setCrouch(!crouch); }}
             >🧎<br />{crouch ? "Stand" : "Bend"}</button>
             <button
@@ -235,7 +235,7 @@ export function Minimap() {
     const id = setInterval(draw, 200);
     return () => clearInterval(id);
   }, [map, g?.settings.safe]);
-  return <canvas ref={ref} width={110} height={110} className="pointer-events-none absolute bottom-6 left-3 z-10 rounded-lg opacity-90 max-sm:bottom-auto max-sm:left-auto max-sm:right-3 max-sm:top-20 max-sm:h-[84px] max-sm:w-[84px]" />;
+  return <canvas ref={ref} width={110} height={110} className="pointer-events-none absolute bottom-6 left-3 z-10 rounded-lg opacity-90 max-sm:hidden" />;
 }
 
 export function Toasts() {

@@ -76,11 +76,11 @@ export default function CreateGame() {
       </div>
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--accent-2)]">Step {step + 1} of {STEPS.length}</div>
 
-      <div key={step} className="anim-step min-h-[19rem]">
+      <div key={step} className="anim-step">
         {step === 0 && (
           <>
             <h3 className="mb-2 text-xl font-black">Which city we dey go?</h3>
-            <CityMap selected={city} onSelect={chooseCity} className="mb-3 h-40 overflow-hidden rounded-2xl" />
+            <CityMap selected={city} onSelect={chooseCity} className="mb-3 h-32 overflow-hidden rounded-2xl" />
             <div className="mb-3 grid grid-cols-3 gap-2">
               {cities.map((c) => {
                 const fares = c.fares ?? cfg.fares;
@@ -94,9 +94,13 @@ export default function CreateGame() {
                 );
               })}
             </div>
-            <p key={city} className="anim-fade mb-2 text-xs opacity-80">{cities.find((c) => c.id === city)?.blurb}</p>
-            <MapPreview map={map} className="mb-2 h-36 overflow-hidden rounded-2xl" />
-            <div className="mb-2 text-center text-xs font-semibold">{map.name}</div>
+            <div className="mb-2 flex items-center gap-3">
+              <MapPreview map={map} className="h-24 w-32 shrink-0 overflow-hidden rounded-2xl" />
+              <div key={city} className="anim-fade min-w-0 text-xs">
+                <div className="font-bold">{map.name}</div>
+                <div className="opacity-75">{cities.find((c) => c.id === city)?.blurb}</div>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {SOON.map((c) => (
                 <span key={c.name} className="rounded-full bg-white/5 px-2 py-1 text-[11px] opacity-50">{c.emoji} {c.name} · soon</span>
@@ -128,7 +132,7 @@ export default function CreateGame() {
           <>
             <h3 className="mb-1 text-xl font-black">Pick the safe house</h3>
             <p className="mb-2 text-sm opacity-75">Inside, nobody can catch you — but only 2 people, {cfg.game.safe_house_total_s}s max.</p>
-            <MapPreview map={map} focus={safeRect} className="mb-3 h-44 overflow-hidden rounded-2xl" />
+            <MapPreview map={map} focus={safeRect} className="mb-3 h-36 overflow-hidden rounded-2xl" />
             <div className="grid grid-cols-1 gap-2">
               {map.safe_houses.map((s) => (
                 <button key={s.id} data-on={s.id === safe} onClick={() => setSafe(s.id)} className="choice flex items-center gap-3 p-3 text-left">
@@ -165,7 +169,8 @@ export default function CreateGame() {
         )}
       </div>
 
-      <div className="mt-4 flex gap-2">
+      {/* Sticky action bar: Next/Create is always reachable, however tall the step is. */}
+      <div className="sticky bottom-0 z-10 -mx-3 mt-4 flex gap-2 rounded-b-[20px] bg-[#101c36]/95 px-3 py-3 backdrop-blur">
         {step > 0 && <button className="btn btn-ghost" onClick={() => setStep(step - 1)}>Back</button>}
         {last ? (
           <button className="btn btn-primary flex-1 text-lg" onClick={create}>{bots ? `Create & play with ${bots} NPC${bots > 1 ? "s" : ""}` : "Create group"}</button>

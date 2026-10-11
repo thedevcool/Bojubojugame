@@ -12,13 +12,14 @@ import { useRole, useSecondsLeft } from "./hooks";
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="panel anim-sheet max-h-[88vh] w-full max-w-md overflow-y-auto rounded-b-none p-4 sm:rounded-b-[20px]">
+      <div className="panel anim-sheet touch-scroll max-h-[88dvh] w-full max-w-md rounded-b-none p-4 pb-0 sm:rounded-b-[20px]">
         <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-white/25 sm:hidden" />
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black">{title}</h2>
           <button className="btn btn-ghost px-3 py-1" onClick={onClose}>✕</button>
         </div>
         {children}
+        <div className="h-4" />
       </div>
     </div>
   );
@@ -284,7 +285,7 @@ export function ChatDrawer() {
         <span className="text-sm font-bold">{g ? `Group chat · ${g.code}` : "Nearby chat"}</span>
         <button className="btn btn-ghost px-2 py-0.5" onClick={() => set({ chatOpen: false, unread: 0 })}>✕</button>
       </div>
-      <div className="flex-1 space-y-1 overflow-y-auto px-1 text-sm">
+      <div className="touch-scroll flex-1 space-y-1 px-1 text-sm">
         {chat.map((m, i) => (
           <div key={i}>
             <button className="font-bold text-[var(--accent)]" onClick={() => m.from !== me && setMenu(menu === `${i}` ? null : `${i}`)}>{m.nick}</button>
@@ -370,6 +371,7 @@ export function SettingsPanel() {
       </ul>
       <button className="btn btn-ghost mt-4 w-full" onClick={screenshot}>📸 Take screenshot</button>
       <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "changelog" })}>✨ What&apos;s new</button>
+      <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "leaders" })}>🏆 Leaderboards</button>
     </Modal>
   );
 }

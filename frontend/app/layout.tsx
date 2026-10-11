@@ -1,11 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { BUILD_SITE_URL } from "@/lib/env";
 import SwRegister from "./sw-register";
 
-const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(site),
+  metadataBase: new URL(BUILD_SITE_URL),
   title: "Boju Boju — Lagos hide & seek",
   description: "Live 3D multiplayer Boju Boju with your friends in Lagos. In-game naira only — not real money.",
   manifest: "/manifest.webmanifest",

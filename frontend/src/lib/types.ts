@@ -10,6 +10,12 @@ export interface Prop {
   color?: string;
   text?: string;
   label?: string;
+  dir?: "x" | "z";
+  face?: "n" | "s" | "e" | "w";
+  ad?: string;
+  line?: string;
+  style?: string;
+  y?: number;
   collider: [number, number, number, number, number] | null;
 }
 
@@ -28,7 +34,14 @@ export interface GameMap {
   sections: Area[];
   safe_houses: Area[];
   zones: Zone[];
+  homes?: Home[];
+  arrival?: [number, number];
+  npc_paths?: { pts: [number, number][]; n: number }[];
+  vendors?: { x: number; z: number; ry: number; say: string }[];
+  vehicles?: { kind: string; pts: [number, number][]; speed: number; n: number }[];
 }
+
+export interface Home { id: string; name: string; rect: Rect; spawn: [number, number]; door: [number, number] }
 
 export interface Item { id: string; name: string; category: string; price: number; hunger: number; spot: string | null }
 export interface Fare { id: string; name: string; price: number; ride_s: number }
@@ -74,6 +87,7 @@ export interface Member {
   retired: boolean;
   left: boolean;
   pick: number | null;
+  bot?: boolean;
 }
 
 export interface RoundInfo {
@@ -120,4 +134,4 @@ export interface GroupState {
 }
 
 export interface ChatMsg { ch: "group" | "near"; from: string; nick: string; text: string; ts: number }
-export interface RosterEntry { n: number; id: string; nick: string; av: number[] }
+export interface RosterEntry { n: number; id: string; nick: string; av: number[]; bot?: boolean }

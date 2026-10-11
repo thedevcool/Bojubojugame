@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
-
-const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL as api } from "./src/lib/env";
 const wsApi = api.replace(/^http/, "ws");
 
 const securityHeaders = [

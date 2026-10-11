@@ -31,6 +31,7 @@ class GroupCreate(_In):
     hide: int
     search: int
     safe: str = Field(max_length=40)
+    bots: int = Field(default=0, ge=0, le=5)
 
 
 class GroupSettings(_In):
@@ -47,7 +48,12 @@ class GroupJoin(_In):
 
 
 class Bare(_In):
-    t: Literal["g_leave", "g_start", "g_tag", "ping"]
+    t: Literal["g_leave", "g_start", "g_tag", "ping", "g_add_bot"]
+
+
+class RemoveBot(_In):
+    t: Literal["g_remove_bot"]
+    id: str = Field(max_length=40)
 
 
 class Board(_In):
@@ -86,6 +92,8 @@ INBOUND: dict[str, type[_In]] = {
     "g_start": Bare,
     "g_tag": Bare,
     "ping": Bare,
+    "g_add_bot": Bare,
+    "g_remove_bot": RemoveBot,
     "g_board": Board,
     "g_pick": Pick,
     "emote": Emote,

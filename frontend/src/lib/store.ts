@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMsg, Content, GroupState, RosterEntry, Standing } from "./types";
+import type { ChatMsg, Content, GroupState, Home, RosterEntry, Standing } from "./types";
 
 export type Quality = "low" | "medium" | "high";
 
@@ -18,6 +18,7 @@ export interface Toast { id: number; msg: string; kind: "info" | "error" | "good
 interface GameStore {
   content: Content | null;
   me: { id: string; nick: string; n: number } | null;
+  home: Home | null;
   connected: boolean;
   mapId: string | null;
   roster: Record<number, RosterEntry>;
@@ -45,6 +46,7 @@ let toastId = 0;
 export const useGame = create<GameStore>((set, get) => ({
   content: null,
   me: null,
+  home: null,
   connected: false,
   mapId: null,
   roster: {},

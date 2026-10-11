@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.engine.geometry import Box
+from app.engine.geometry import Box, BoxIndex
+from app.engine.nav import NavGrid, hide_spots
 from app.engine.rules import Scoring
 
 CONTENT_DIR = Path(__file__).parent / "content"
@@ -121,7 +123,24 @@ class GameConfig(BaseModel):
         return min(self.fares, key=lambda f: f.price)
 
 
-NON_SOLID = {"road", "bus_shelter", "sign", "lamp"}
+NON_SOLID = {
+    "road",
+    "bus_shelter",
+    "sign",
+    "lamp",
+    "roof",
+    "rug",
+    "fan",
+    "sidewalk",
+    "zebra",
+    "gutter",
+    "field",
+    "floor",
+    "wire",
+    "puddle",
+    "lawn",
+    "lot",
+}
 TRUNK = {"tree": 0.7, "big_tree": 1.6, "palm": 0.5}
 WALL_T = 0.3
 DOOR_W = 2.0
@@ -169,6 +188,78 @@ def _expand_room(p: dict[str, Any]) -> list[dict[str, Any]]:
     return [floor, *walls]
 
 
+# Furniture for a home with its door on the +z ("s") side, in local coordinates:
+# (kind, local_x as fraction-offset helper, local_z, w, d, h)
+def _furniture(w: float, d: float) -> list[tuple[str, float, float, float, float, float]]:
+    return [
+        ("bed", -w / 2 + 1.25, -d / 2 + 1.3, 1.8, 2.1, 0.55),
+        ("wardrobe", w / 2 - 0.95, -d / 2 + 0.55, 1.4, 0.6, 2.0),
+        ("tv", w / 2 - 0.5, 0.4, 0.5, 1.4, 1.1),
+        ("table", -w / 2 + 1.0, d / 2 - 1.5, 1.0, 1.0, 0.75),
+        ("rug", 0.0, 0.0, 2.6, 1.8, 0.02),
+        ("fan", 0.0, -0.3, 1.2, 1.2, 0.1),
+    ]
+
+
+def _to_world(door: str, x: float, z: float, lx: float, lz: float) -> tuple[float, float]:
+    if door == "n":
+        return x - lx, z - lz
+    if door == "e":
+        return x + lz, z - lx
+    if door == "w":
+        return x - lz, z + lx
+    return x + lx, z + lz
+
+
+def _expand_home(p: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """A home = room walls with a doorway + roof + furniture + a spawn point inside."""
+    door = p.get("door", "s")
+    room = _expand_room({**p, "kind": "room"})
+    room[0]["color"] = "#b9a58a"  # tiled floor
+    x, z, w, d, h = p["x"], p["z"], p["w"], p["d"], p["h"]
+    local_w, local_d = (w, d) if door in ("n", "s") else (d, w)
+    out = list(room)
+    for kind, lx, lz, fw, fd, fh in _furniture(local_w, local_d):
+        wx, wz = _to_world(door, x, z, lx, lz)
+        if door in ("e", "w"):
+            fw, fd = fd, fw
+        out.append(
+            {
+                "kind": kind,
+                "x": wx,
+                "z": wz,
+                "w": fw,
+                "d": fd,
+                "h": fh,
+                "label": p["id"],
+                "y": h - 0.35 if kind == "fan" else 0,
+            }
+        )
+    out.append(
+        {
+            "kind": "roof",
+            "x": x,
+            "z": z,
+            "w": w + 0.8,
+            "d": d + 0.8,
+            "h": h,
+            "label": p["id"],
+            "color": p.get("roof", "#7a3b2a"),
+            "style": p.get("style", "bungalow"),
+        }
+    )
+    sx, sz = _to_world(door, x, z, 0.0, 0.6)
+    ox, oz = _to_world(door, x, z, 0.0, local_d / 2 + 1.6)
+    home = {
+        "id": p["id"],
+        "name": p.get("name", "Home"),
+        "rect": [x - w / 2 + 0.2, z - d / 2 + 0.2, x + w / 2 - 0.2, z + d / 2 - 0.2],
+        "spawn": [round(sx, 2), round(sz, 2)],
+        "door": [round(ox, 2), round(oz, 2)],
+    }
+    return out, home
+
+
 def _collider(p: dict[str, Any]) -> list[float] | None:
     if not p.get("solid", p["kind"] not in NON_SOLID):
         return None
@@ -182,20 +273,47 @@ def _collider(p: dict[str, Any]) -> list[float] | None:
 class MapData:
     def __init__(self, raw: dict[str, Any]) -> None:
         props: list[dict[str, Any]] = []
+        homes: list[dict[str, Any]] = []
         for p in raw["props"]:
-            props.extend(_expand_room(p) if p["kind"] == "room" else [dict(p)])
+            if p["kind"] == "room":
+                props.extend(_expand_room(p))
+            elif p["kind"] == "home":
+                parts, home = _expand_home(p)
+                props.extend(parts)
+                homes.append(home)
+            else:
+                props.append(dict(p))
         for p in props:
             p["collider"] = _collider(p)
-        self.raw = {**raw, "props": props}
+        self.raw = {**raw, "props": props, "homes": homes}
+        self.homes = homes
+        self.arrival: tuple[float, float] = tuple(raw.get("arrival", raw["spawn"]))  # type: ignore[assignment]
         self.id: str = raw["id"]
         self.kind: str = raw["kind"]
         self.bounds: list[float] = raw["bounds"]
         self.spawn: tuple[float, float] = (raw["spawn"][0], raw["spawn"][1])
         self.found_area: tuple[float, float] = tuple(raw.get("found_area", raw["spawn"]))  # type: ignore[assignment]
         self.boxes: list[Box] = [Box(*p["collider"]) for p in props if p["collider"]]
+        self.index = BoxIndex(self.boxes)
         self.zones: dict[str, dict[str, Any]] = {z["id"]: z for z in raw.get("zones", [])}
         self.safe_houses: dict[str, dict[str, Any]] = {s["id"]: s for s in raw.get("safe_houses", [])}
         self.sections: list[dict[str, Any]] = raw.get("sections", [])
+
+    def near(self, x0: float, z0: float, x1: float, z1: float, pad: float = 1.0) -> list[Box]:
+        return self.index.query(x0, z0, x1, z1, pad)
+
+    def home_for(self, player_id: str) -> dict[str, Any] | None:
+        if not self.homes:
+            return None
+        return self.homes[int(hashlib.sha256(player_id.encode()).hexdigest(), 16) % len(self.homes)]
+
+    @cached_property
+    def nav(self) -> NavGrid:
+        return NavGrid(self.bounds, self.boxes, 0.35)
+
+    @cached_property
+    def hide_spots(self) -> list[tuple[float, float]]:
+        return hide_spots(self.nav, self.boxes)
 
 
 @lru_cache

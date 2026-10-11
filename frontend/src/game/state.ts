@@ -10,6 +10,7 @@ export const local = {
   stamina: 5,
   seq: 0,
   frozen: false,
+  insideHome: null as string | null,
 };
 
 export const input = {

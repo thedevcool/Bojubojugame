@@ -16,7 +16,9 @@ bought, sold, withdrawn or cashed out.
 - **Friends & DMs** (`/api/friends*`, `/api/dm/*`): add by username, private chat between friends
   only, one-tap game invites.
 - **Houses** (`/api/homes`, `/api/home/rent`): one tenant per house (unique index), 7-day rent paid
-  from the ledger, you respawn at home, anyone can walk in to visit. An expired house goes to the
+  from the ledger, you respawn at home. Visiting is server-enforced: walk to the door and knock (`knock`); the owner must
+  be online and answer (`knock_answer`) before the server lets you step inside, and guests are
+  walked back out when the owner goes offline. Unrented houses stay open for viewing. An expired house goes to the
   next renter. More houses = add a street in `backend/tools/build_hub.py` and regenerate the map.
 - **Controls**: joystick or tap-to-go (client A* in `frontend/src/game/nav.ts`), two-finger pinch
   zoom, map-like aerial view with momentum; sit on beds, benches or the floor.

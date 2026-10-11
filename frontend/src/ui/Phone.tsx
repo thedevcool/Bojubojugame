@@ -414,7 +414,7 @@ function HousesApp() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs">
-        <span className="opacity-75">One family per house — visit anyone, any time.</span>
+        <span className="opacity-75">One family per house — knock to visit when they&apos;re home.</span>
         <span className="rounded-full bg-white/10 px-2 py-0.5 font-semibold">{data.free} of {data.homes.length} free</span>
       </div>
       {data.free === 0 && !data.mine && <div className="rounded-2xl bg-[var(--clay)]/25 p-2.5 text-xs">🏗️ Every house is taken right now — new streets are being built. Check back soon!</div>}
@@ -446,11 +446,11 @@ function HousesApp() {
             </>
           ) : h.taken ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button className="btn btn-primary py-2 text-sm" onClick={() => {
-                if (homeGeo && useGame.getState().mapId === "hub_plaza") { useGame.getState().set({ guide: { x: homeGeo.door[0], z: homeGeo.door[1], label: `🏠 @${h.owner}` } }); walkTo(homeGeo.door[0], homeGeo.door[1]); }
+              <button className="btn btn-primary py-2 text-sm" disabled={!h.owner_online} onClick={() => {
+                if (homeGeo && useGame.getState().mapId === "hub_plaza") { useGame.getState().set({ guide: { x: homeGeo.door[0], z: homeGeo.door[1], label: `🚪 Knock here` } }); walkTo(homeGeo.door[0], homeGeo.door[1]); }
                 else useGame.getState().toast("Ride back to Lagos first 🚌");
                 useGame.getState().closePhone();
-              }}>🧭 Visit</button>
+              }}>{h.owner_online ? "🧭 Visit" : "😴 Not home"}</button>
               <button className="btn btn-ghost py-2 text-sm" onClick={() => { useGame.getState().closePhone(); useGame.getState().set({ card: h.owner_id }); }}>👤 @{h.owner}</button>
             </div>
           ) : (

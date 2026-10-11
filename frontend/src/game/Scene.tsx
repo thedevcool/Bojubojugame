@@ -113,8 +113,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       speed = (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
       const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
-      local.x = nx;
-      local.z = nz;
+      const locked = map.kind === "hub" && lockedHomeAt(map, nx, nz);
+      if (locked && !(map.homes?.find((h) => h.id === locked && inRect(h.rect, local.x, local.z)))) {
+        // someone's house: knock first (the server would refuse the step anyway)
+        if (local.path.length) stopWalking();
+      } else {
+        local.x = nx;
+        local.z = nz;
+      }
       local.ry = Math.atan2(vx, vz);
     }
     // sitting: snap to the nearest bed/bench, or sit on the floor
@@ -271,6 +277,15 @@ function Remotes({ map }: { map: GameMap }) {
   return <>{Object.values(roster).filter((r) => r.id !== meId).map((r) => <RemotePlayer key={r.n} r={r} map={map} />)}</>;
 }
 
+/** id of a house at (x, z) that I may not enter (owned by someone else who hasn't let me in). */
+function lockedHomeAt(map: GameMap, x: number, z: number): string | null {
+  const h = map.homes?.find((x0) => inRect(x0.rect, x, z));
+  if (!h) return null;
+  const st = useGame.getState();
+  const owner = st.doorOwners[h.id];
+  return owner && owner !== st.me?.id && !st.openDoors.includes(h.id) ? h.id : null;
+}
+
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 /** Tap-to-move: turns a screen tap into a ground point and plans a walk there. */
@@ -346,6 +361,7 @@ function GuideMarker() {
     if (arrow.current) {
       const d = Math.hypot(guide.x - local.x, guide.z - local.z);
       arrow.current.visible = d > 2.5;
+      if (d < 1.8 && !useGame.getState().onboard) useGame.getState().set({ guide: null }); // arrived
       arrow.current.position.set(local.x, 0.08, local.z);
       arrow.current.rotation.y = Math.atan2(guide.x - local.x, guide.z - local.z);
     }

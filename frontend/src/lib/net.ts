@@ -99,6 +99,18 @@ class Net {
         g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
         break;
       }
+      case "doors":
+        g.set({ doorOwners: m.owners as Record<string, string> });
+        break;
+      case "door": {
+        const h = m.home as string;
+        g.set({ openDoors: m.open ? [...g.openDoors.filter((x) => x !== h), h] : g.openDoors.filter((x) => x !== h) });
+        break;
+      }
+      case "knock":
+        g.set({ knock: { from: m.from as string, nick: m.nick as string, home: m.home as string, at: Date.now() } });
+        sound.play("door");
+        break;
       case "invite":
         g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
         sound.play("pop");

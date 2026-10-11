@@ -136,6 +136,9 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
                     "owner": t[1] if t is not None and t[0] != pid else None,
                     "owner_id": t[0] if t is not None and t[0] != pid else None,
                     "taken": taken,
+                    "owner_online": bool(
+                        t is not None and t[0] != pid and (o := world.sessions.get(t[0])) is not None and o.connected
+                    ),
                 }
             )
         return {

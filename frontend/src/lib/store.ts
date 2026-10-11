@@ -53,6 +53,10 @@ interface GameStore {
   invite: { from: string; nick: string; code: string; at: number } | null;
   /** invite this player as soon as our new lobby exists */
   pendingInvite: string | null;
+  /** house id -> tenant id; houses whose owner let me in; someone knocking at my door */
+  doorOwners: Record<string, string>;
+  openDoors: string[];
+  knock: { from: string; nick: string; home: string; at: number } | null;
   /** onboarding guide target in the world (arrow + "walk me there") */
   guide: { x: number; z: number; label: string } | null;
   homeArea: string | null;
@@ -110,6 +114,9 @@ export const useGame = create<GameStore>((set, get) => ({
   card: null,
   invite: null,
   pendingInvite: null,
+  doorOwners: {},
+  openDoors: [],
+  knock: null,
   guide: null,
   homeArea: null,
   dice: null,

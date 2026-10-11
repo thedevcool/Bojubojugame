@@ -62,6 +62,17 @@ class Invite(_In):
     to: str = Field(max_length=40)
 
 
+class Knock(_In):
+    t: Literal["knock"]
+    home: str = Field(max_length=40)
+
+
+class KnockAnswer(_In):
+    t: Literal["knock_answer"]
+    to: str = Field(max_length=40)
+    ok: bool
+
+
 class Board(_In):
     t: Literal["g_board"]
     fare: str = Field(max_length=20)
@@ -103,6 +114,8 @@ INBOUND: dict[str, type[_In]] = {
     "g_remove_bot": RemoveBot,
     "g_board": Board,
     "g_invite": Invite,
+    "knock": Knock,
+    "knock_answer": KnockAnswer,
     "g_pick": Pick,
     "emote": Emote,
     "chat": Chat,

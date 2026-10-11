@@ -15,6 +15,7 @@ import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard } from "@/ui/PlayerCard";
+import { DoorPanel, KnockPrompt } from "@/ui/Doors";
 import Onboarding, { onboardingDone } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -150,6 +151,8 @@ export default function PlayPage() {
             <Phone />
             <PlayerCard />
             <InviteBanner />
+            <DoorPanel />
+            <KnockPrompt />
             <WhatsNew />
           </div>
           <BlindOverlay />

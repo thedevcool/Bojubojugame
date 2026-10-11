@@ -93,6 +93,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await db.create_all()
+        await world.load_home_owners()
         task = asyncio.create_task(world.run()) if run_tick else None
         yield
         if task:

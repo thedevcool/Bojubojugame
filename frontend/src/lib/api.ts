@@ -141,7 +141,7 @@ const send = async <T,>(acc: Account, path: string, body: unknown) => json<T>(aw
 export const buyPhone = (acc: Account, phoneId: string) =>
   send<{ ok: boolean; phone_id: string }>(acc, "/api/shop/phone", { phone_id: phoneId, key: crypto.randomUUID() });
 
-export interface HouseInfo { id: string; name: string; rent: number; duplex: boolean; door: [number, number]; owner: string | null; owner_id: string | null; taken: boolean }
+export interface HouseInfo { id: string; name: string; rent: number; duplex: boolean; door: [number, number]; owner: string | null; owner_id: string | null; taken: boolean; owner_online: boolean }
 export const getHomes = (acc: Account) => get<{ days: number; mine: string | null; rent_until: string | null; free: number; homes: HouseInfo[] }>(acc, "/api/homes");
 export const rentHome = (acc: Account, homeId: string) =>
   send<{ ok: boolean; rent_until: string }>(acc, "/api/home/rent", { home_id: homeId, key: crypto.randomUUID() });

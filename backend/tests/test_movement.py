@@ -67,3 +67,45 @@ async def test_invite_any_online_player_to_lobby(db):
     await send(world, s, t="g_invite", to=pid2)
     inv = c2.last("invite")
     assert inv and inv["code"] == s.group.code and inv["nick"] == "walker"
+
+
+async def walk(world, clock, s, to_x, to_z, steps=40):
+    """Walk in small, legal steps; returns True if we got there."""
+    for _ in range(steps):
+        dx, dz = to_x - s.x, to_z - s.z
+        d = (dx * dx + dz * dz) ** 0.5
+        if d < 0.05:
+            return True
+        k = min(1.0, 0.28 / d)
+        clock.t += 0.1
+        nx, nz = round(s.x + dx * k, 2), round(s.z + dz * k, 2)
+        await send(world, s, t="mv", x=nx, z=nz, ry=0, c=False, r=False, st=False, s=1)
+    return False
+
+
+async def test_visitors_must_knock_and_owner_must_be_online(db):
+    world, clock, owner, oc = await setup(db)
+    home = get_maps()["hub_plaza"].homes[0]
+    world.set_home(owner.pid, home["id"])
+    vid = await make_player(db, "visitor")
+    vc = Client()
+    v = await world.connect(vid, "visitor", vc)
+    v.place(*home["door"], clock.t, notify=False)
+    inside = home["spawn"]
+    # the door is locked
+    assert not await walk(world, clock, v, *inside, steps=20)
+    assert world.home_at(v.x, v.z) is None and vc.last("corr")
+    # knock -> owner sees it -> lets you in
+    v.place(*home["door"], clock.t, notify=False)
+    await send(world, v, t="knock", home=home["id"])
+    assert oc.last("knock")["from"] == vid
+    await send(world, owner, t="knock_answer", to=vid, ok=True)
+    assert vc.last("door")["open"]
+    v.limits.clear()  # the per-socket mv rate limit runs on real time; this test fakes time
+    assert await walk(world, clock, v, *inside)
+    # owner goes offline: the visitor is walked back out
+    world.disconnect(owner, owner.sender)
+    assert world.home_at(v.x, v.z) is None
+    # knocking on an offline owner's door gets no answer
+    await send(world, v, t="knock", home=home["id"])
+    assert "not online" in vc.last("err")["msg"]

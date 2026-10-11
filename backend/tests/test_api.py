@@ -21,7 +21,8 @@ def test_content_health_and_websocket(tmp_path):
         assert me["username"] == "Ade" and me["balance"] == start + me["daily_bonus"] + me["topup"]
         assert client.get("/api/me").status_code == 401
         content = client.get("/api/content").json()
-        assert "arena_park" in content["maps"] and content["config"]["scoring"]["hider_not_found"] == 7500
+        assert "arena_park" in content["maps"]
+        assert content["config"]["scoring"]["hider_not_found"] == get_config().scoring.hider_not_found
         assert client.get("/api/leaderboards?kind=hider&period=all").json()["rows"] == []
         wallet = client.get("/api/wallet", headers=h).json()
         assert wallet["balance"] == sum(e["amount"] for e in wallet["entries"])

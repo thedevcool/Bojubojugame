@@ -108,3 +108,14 @@ def check_layout(lay: Layout, placed: list[Placement], catalog: dict[str, Any]) 
                 return f"{spec.name} is on top of the {name.lower()}"
         solids.append((spec.name, r))
     return None
+
+
+def starter_set(lay: Layout) -> list[tuple[str, float, float, int]]:
+    """What your first house comes with: a bed, a chair and a fan (item, lx, lz, rot). The rest you buy."""
+    hw, hd = lay.w / 2, lay.d / 2
+    split = -lay.d * 0.1
+    return [
+        ("bed", -hw + 1.35, -hd + 1.45, 0),
+        ("standing_fan", -hw + 2.75, -hd + 0.6, 0),
+        ("armchair", -hw + 0.8, (split + hd) / 2, 1),
+    ]

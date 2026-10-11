@@ -40,17 +40,17 @@ def outcome(**kw):
 
 def test_score_one_find():
     d = rules.score_round(outcome(found_order=["a"], safe_at_end={"b"}), S)
-    assert d == {"s": 5000, "a": 0, "b": 3500, "c": 7500}
+    assert d == {"s": S.seeker_find_one, "a": 0, "b": S.hider_safe, "c": S.hider_not_found}
 
 
 def test_score_multi_find_doubles():
     d = rules.score_round(outcome(found_order=["a", "b"]), S)
-    assert d["s"] == 20000 and d["c"] == 7500
+    assert d["s"] == 2 * S.seeker_per_hider_multi and d["c"] == S.hider_not_found
 
 
 def test_score_no_find_penalty_and_idle():
     d = rules.score_round(outcome(idle={"c"}), S)
-    assert d == {"s": -2500, "a": 7500, "b": 7500, "c": 0}
+    assert d == {"s": -S.seeker_none_penalty, "a": S.hider_not_found, "b": S.hider_not_found, "c": 0}
 
 
 def test_skipped_round_scores_nothing():

@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import * as THREE from "three";
 import { checkLayout, furn, ITEM_ICON, itemRect, toLocal } from "@/game/furniture";
-import { local, sceneRefs } from "@/game/state";
+import { sceneRefs } from "@/game/state";
 import { sound } from "@/game/sound";
-import { getFurniture, loadAccount, saveLayout } from "@/lib/api";
+import { loadAccount, saveLayout } from "@/lib/api";
 import { useGame } from "@/lib/store";
 import type { Home } from "@/lib/types";
 import { useMap } from "./hooks";
@@ -28,25 +28,6 @@ function toFloor(h: Home, x: number, y: number): [number, number] | null {
   ray.setFromCamera(ndc, cam);
   if (!ray.ray.intersectPlane(plane, hit)) return null;
   return toLocal(h, hit.x, hit.z);
-}
-
-export async function startDecorating(): Promise<void> {
-  const st = useGame.getState();
-  const home = st.home;
-  if (!home || local.insideHome !== home.id) {
-    st.toast("Go inside your house to decorate 🏠", "error");
-    return;
-  }
-  const acc = loadAccount();
-  if (!acc) return;
-  try {
-    const { items } = await getFurniture(acc);
-    st.set({ decor: { home: home.id, items, sel: null }, phoneOpen: false, phoneApp: null, aerial: false });
-    local.path = [];
-    sound.play("pop");
-  } catch (e) {
-    st.toast((e as Error).message, "error");
-  }
 }
 
 /** Find a free spot for an item (centre of the parlour first, then a grid sweep). */

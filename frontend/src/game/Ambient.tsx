@@ -141,7 +141,7 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
       <instancedMesh ref={heads} args={[head, material, n]} castShadow frustumCulled={false} />
       <instancedMesh ref={hairs} args={[hair, material, n]} frustumCulled={false} />
       {bubble && (
-        <Html position={[bubble.x, 2.4, bubble.z]} center distanceFactor={9} style={{ pointerEvents: "none" }}>
+        <Html position={[bubble.x, 2.4, bubble.z]} center distanceFactor={9} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded-xl bg-white px-2 py-1 text-xs font-bold text-black shadow">{bubble.text}</div>
         </Html>
       )}

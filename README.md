@@ -41,7 +41,7 @@ bought, sold, withdrawn or cashed out.
 
 ## New in v1.3 — Travel Naija
 
-- **Real maps & rides** (MapLibre GL + OpenFreeMap tiles, © OpenStreetMap): boarding shows your
+- **Our own map & rides** (SVG, `frontend/src/ui/WorldMap.tsx` + `src/lib/geo.ts`): boarding shows your
   danfo/keke/bus/plane travelling the real route from your home area to the venue. Road routes
   come from OSRM once per route and are cached in Postgres (`/api/route`); flights draw an arc.
 - **Cities**: Lagos, Ibadan (Agodi Gardens-style) and Abuja (Millennium Park-style) arenas,

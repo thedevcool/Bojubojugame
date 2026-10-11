@@ -1,185 +1,73 @@
 "use client";
 
-import "maplibre-gl/dist/maplibre-gl.css";
-import type { Map as MLMap, Marker, StyleSpecification } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
-import { API_URL } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { flightPath, HUB_LNGLAT, lineKm, routeBetween, type LngLat } from "@/lib/geo";
 import { useGame } from "@/lib/store";
+import WorldMap, { type Place } from "./WorldMap";
 
-/**
- * Real-world maps (MapLibre GL + free OpenFreeMap tiles, © OpenStreetMap).
- * If the tiles can't load (bad network), we fall back to a plain style so the
- * route and the moving vehicle still show.
- */
-const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-const FALLBACK: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [{ id: "bg", type: "background", paint: { "background-color": "#dfe9f5" } }],
-};
-
-let stylePromise: Promise<string | StyleSpecification> | null = null;
-function pickStyle(): Promise<string | StyleSpecification> {
-  stylePromise ??= (async () => {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 4500);
-      const r = await fetch(STYLE_URL, { signal: ctrl.signal });
-      clearTimeout(t);
-      return r.ok ? STYLE_URL : FALLBACK;
-    } catch {
-      stylePromise = null; // try again next time
-      return FALLBACK;
-    }
-  })();
-  return stylePromise;
-}
-
-async function createMap(el: HTMLDivElement, center: [number, number], zoom: number, interactive = true): Promise<{ map: MLMap; ml: typeof import("maplibre-gl") }> {
-  const ml = await import("maplibre-gl");
-  const style = await pickStyle();
-  const map = new ml.Map({
-    container: el,
-    style,
-    center,
-    zoom,
-    attributionControl: false, // we show our own one-line credit (see <Credit/>), the default box is huge on phones
-    interactive,
-    dragRotate: false,
-    pitchWithRotate: false,
-  });
-  await new Promise<void>((res) => (map.loaded() ? res() : map.once("load", () => res())));
-  map.resize();
-  return { map, ml };
-}
-
-/** Required OpenStreetMap/OpenFreeMap credit, kept to one small line. */
-function Credit() {
-  return (
-    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
-      className="absolute bottom-1 right-1 z-10 rounded bg-white/75 px-1.5 py-px text-[9px] leading-tight text-black/70">
-      © OpenStreetMap · OpenFreeMap
-    </a>
-  );
-}
-
-function pinEl(html: string, cls: string): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = cls;
-  el.innerHTML = html;
-  return el;
-}
-
-// ------------------------------------------------------------------ ride
-interface Route { from: { name: string; lng: number; lat: number }; to: { name: string; lng: number; lat: number }; coords: [number, number][]; source: string }
+/** Rides, the city picker and the travel map all use our own map (src/ui/WorldMap.tsx). */
 
 const MODE_ICON: Record<string, string> = { danfo: "🚌", keke: "🛺", bus: "🚍", car: "🚗", flight: "✈️", own_car: "🚘" };
 const MODE_NAME: Record<string, string> = { danfo: "Danfo", keke: "Keke", bus: "Bus", car: "Shared car", flight: "Flight", own_car: "Your car" };
 
-function haversine(a: [number, number], b: [number, number]): number {
-  const R = 6371, toR = Math.PI / 180;
-  const dLat = (b[1] - a[1]) * toR, dLng = (b[0] - a[0]) * toR;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * toR) * Math.cos(b[1] * toR) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-/** Full-screen ride: the vehicle travels the real route from your home area to the venue. */
+// ------------------------------------------------------------------ ride
+/** Full-screen ride: your vehicle travels our roads from the Lagos hub to the venue (or back home). */
 export function RideMap() {
   const ride = useGame((s) => s.ride);
-  const homeArea = useGame((s) => s.homeArea);
   const maps = useGame((s) => s.content?.maps);
   const set = useGame((s) => s.set);
-  const box = useRef<HTMLDivElement>(null);
-  const [info, setInfo] = useState<{ km: number; from: string; to: string } | null>(null);
   const [progress, setProgress] = useState(0);
 
-  useEffect(() => {
-    if (!ride || !box.current) return;
-    let alive = true, raf = 0;
-    let map: MLMap | null = null;
-    const start = Date.now();
-    const total = Math.max(1, ride.until - start);
-    (async () => {
-      const q = new URLSearchParams({ home: homeArea ?? "Yaba", arena: ride.arena, mode: ride.mode });
-      let route: Route;
-      try {
-        route = (await (await fetch(`${API_URL}/api/route?${q}`)).json()) as Route;
-      } catch {
-        return;
-      }
-      if (!alive || !box.current || !route.coords?.length) return;
-      const home = ride.dir === "home";
-      const coords = home ? [...route.coords].reverse() : route.coords; // going home: same road, other way
-      const { map: m, ml } = await createMap(box.current, coords[0], 11);
-      if (!alive) { m.remove(); return; }
-      map = m;
-      const cum = [0];
-      for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
-      const km = cum[cum.length - 1];
-      const venue = maps?.[ride.arena]?.venue?.name ?? route.to.name;
-      setInfo(home ? { km, from: venue, to: route.from.name } : { km, from: route.from.name, to: venue });
-      m.addSource("route", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } } });
-      m.addSource("done", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [coords[0]] } } });
-      m.addLayer({ id: "route-casing", type: "line", source: "route", paint: { "line-color": "#ffffff", "line-width": 9 }, layout: { "line-cap": "round", "line-join": "round" } });
-      m.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#9cc3ff", "line-width": 5, ...(ride.mode === "flight" ? { "line-dasharray": [1.5, 1.5] } : {}) }, layout: { "line-cap": "round", "line-join": "round" } });
-      m.addLayer({ id: "done", type: "line", source: "done", paint: { "line-color": "#2f7cf6", "line-width": 6 }, layout: { "line-cap": "round", "line-join": "round" } });
-      new ml.Marker({ element: pinEl("🏠", "grid h-8 w-8 place-items-center rounded-full bg-white text-lg shadow-lg") }).setLngLat(home ? coords[coords.length - 1] : coords[0]).addTo(m);
-      new ml.Marker({ element: pinEl("🌳", "grid h-9 w-9 place-items-center rounded-full bg-[#22b573] text-lg shadow-lg ring-4 ring-white") }).setLngLat(home ? coords[0] : coords[coords.length - 1]).addTo(m);
-      const vehicle: Marker = new ml.Marker({ element: pinEl(MODE_ICON[ride.mode] ?? "🚌", "grid h-11 w-11 place-items-center rounded-full bg-[#2f7cf6] text-2xl shadow-xl ring-4 ring-white") })
-        .setLngLat(coords[0]).addTo(m);
-      const bounds = coords.reduce((b, c) => b.extend(c), new ml.LngLatBounds(coords[0], coords[0]));
-      const follow = km < 60 && ride.mode !== "flight";
-      m.fitBounds(bounds, { padding: 60, duration: 0 });
-      const tick = () => {
-        if (!alive) return;
-        const t = Math.min(1, (Date.now() - start) / total);
-        const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; // ease in-out, like a real ride
-        const target = e * km;
-        let i = 1;
-        while (i < cum.length - 1 && cum[i] < target) i++;
-        const seg = cum[i] - cum[i - 1] || 1;
-        const k = Math.max(0, Math.min(1, (target - cum[i - 1]) / seg));
-        const p: [number, number] = [coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * k, coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * k];
-        vehicle.setLngLat(p);
-        (m.getSource("done") as unknown as { setData: (d: unknown) => void }).setData({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [...coords.slice(0, i), p] } });
-        if (follow && t > 0.12) m.jumpTo({ center: p, zoom: Math.min(14, m.getZoom() + 0.02) });
-        setProgress(t);
-        if (t < 1) raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-    })();
-    return () => { alive = false; cancelAnimationFrame(raf); map?.remove(); };
-  }, [ride, homeArea, maps]);
+  const plan = useMemo(() => {
+    if (!ride || !maps) return null;
+    const venue = maps[ride.arena]?.venue;
+    const there: LngLat = venue ? [venue.lng, venue.lat] : HUB_LNGLAT;
+    const [a, b] = ride.dir === "home" ? [there, HUB_LNGLAT] : [HUB_LNGLAT, there];
+    const pts = ride.mode === "flight" ? flightPath(a, b) : routeBetween(a, b);
+    const lngs = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
+    // short Lagos rides still show some of the city around them
+    const pad = Math.max(0, 0.09 - (Math.max(...lngs) - Math.min(...lngs))) / 2;
+    const fit: [LngLat, LngLat] = [[Math.min(...lngs) - pad, Math.min(...lats) - pad], [Math.max(...lngs) + pad, Math.max(...lats) + pad]];
+    const venueName = venue?.name ?? maps[ride.arena]?.name ?? "the venue";
+    return { pts, fit, km: lineKm(pts), from: ride.dir === "home" ? venueName : "Lagos hub", to: ride.dir === "home" ? "Lagos hub (home)" : venueName };
+  }, [ride, maps]);
 
   useEffect(() => {
     if (!ride) return;
-    const id = setTimeout(() => {
+    const start = Date.now(), total = Math.max(1, ride.until - start);
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / total);
+      setProgress(t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2); // ease in-out like a real ride
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    setProgress(0);
+    raf = requestAnimationFrame(tick);
+    const done = setTimeout(() => {
       set({ ride: null });
       if (useGame.getState().group?.phase === "gather") useGame.getState().toast("You don reach! Waka join the others inside the circle ⭕", "good");
-    }, Math.max(0, ride.until - Date.now()) + 900);
-    return () => clearTimeout(id);
+    }, total + 900);
+    return () => { cancelAnimationFrame(raf); clearTimeout(done); };
   }, [ride, set]);
 
-  if (!ride) return null;
+  if (!ride || !plan) return null;
   const left = Math.max(0, Math.ceil((1 - progress) * ride.seconds));
   return (
-    <div className="anim-fade absolute inset-0 z-[55] bg-[#dfe9f5]">
-      {/* maplibre's CSS forces position:relative on the container, so size it explicitly */}
-      <div className="absolute inset-0"><div ref={box} style={{ width: "100%", height: "100%" }} /></div>
-      <Credit />
+    <div className="anim-fade absolute inset-0 z-[55]">
+      <WorldMap route={plan.pts} progress={progress} vehicle={MODE_ICON[ride.mode] ?? "🚌"} fit={plan.fit} interactive={false} className="absolute inset-0" />
       <div className="panel anim-banner absolute left-3 right-3 top-3 mx-auto max-w-md p-3">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-2xl">{MODE_ICON[ride.mode] ?? "🚌"}</span>
           <div className="min-w-0 flex-1">
-            <div className="text-xs opacity-75">{MODE_NAME[ride.mode] ?? "Ride"} · {info ? `${Math.round(info.km)} km` : "finding route…"}</div>
-            <div className="truncate font-bold">{info ? `${info.from} → ${info.to}` : "Oya, we dey go!"}</div>
+            <div className="text-xs opacity-75">{MODE_NAME[ride.mode] ?? "Ride"} · {Math.max(1, Math.round(plan.km))} km</div>
+            <div className="truncate font-bold">{plan.from} → {plan.to}</div>
           </div>
           <span className="text-sm font-black tabular-nums">{progress >= 1 ? "✓" : `${left}s`}</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
           <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${progress * 100}%` }} />
         </div>
-        <div className="mt-1 text-[11px] opacity-70">{progress >= 1 ? (ride.dir === "home" ? "Home sweet home 🏠" : "We don reach! Enter the arena 🙌🏾") : ride.dir === "home" ? "Heading back home — good game! 🙌🏾" : ride.mode === "flight" ? "Fasten your seatbelt — Abuja here we come!" : "Conductor: “Enter with your change o!”"}</div>
+        <div className="mt-1 text-[11px] opacity-70">{progress >= 1 ? (ride.dir === "home" ? "Home sweet home 🏠" : "We don reach! 🙌🏾") : ride.dir === "home" ? "Heading back home — good game! 🙌🏾" : ride.mode === "flight" ? "Fasten your seatbelt — Abuja here we come!" : ride.mode === "own_car" ? "Your own motor — no conductor wahala 😎" : "Conductor: “Enter with your change o!”"}</div>
       </div>
     </div>
   );
@@ -189,45 +77,11 @@ export function RideMap() {
 /** Nigeria map with a pin per playable city. */
 export function CityMap({ selected, onSelect, className }: { selected: string; onSelect: (id: string) => void; className?: string }) {
   const cities = useGame((s) => s.content?.config.cities);
-  const box = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MLMap | null>(null);
-  const pins = useRef<Record<string, HTMLDivElement>>({});
-  const [ready, setReady] = useState(false);
-  const pick = useRef(onSelect);
-  pick.current = onSelect;
-
-  useEffect(() => {
-    if (!box.current || !cities) return;
-    let alive = true;
-    (async () => {
-      const { map, ml } = await createMap(box.current!, [5.6, 7.6], 4.9, false);
-      if (!alive) { map.remove(); return; }
-      mapRef.current = map;
-      for (const c of cities) {
-        const el = pinEl(`📍 ${c.name}`, "cursor-pointer whitespace-nowrap rounded-full bg-[#0a1324]/85 px-2.5 py-1 text-xs font-bold text-white shadow-lg transition-transform duration-300");
-        el.onclick = () => pick.current(c.id);
-        pins.current[c.id] = el;
-        new ml.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(map);
-      }
-      setReady(true);
-    })();
-    return () => { alive = false; mapRef.current?.remove(); mapRef.current = null; pins.current = {}; };
-  }, [cities]);
-
-  useEffect(() => {
-    const c = cities?.find((x) => x.id === selected);
-    for (const [id, el] of Object.entries(pins.current)) {
-      el.style.transform = id === selected ? "scale(1.25)" : "scale(1)";
-      el.style.background = id === selected ? "#2f7cf6" : "rgba(10,19,36,.85)";
-    }
-    if (c && mapRef.current) mapRef.current.flyTo({ center: [c.lng, c.lat], zoom: 6.2, duration: 1400, essential: true });
-  }, [selected, cities, ready]);
-
+  const places: Place[] = useMemo(() => (cities ?? []).map((c) => ({ id: c.id, label: c.name, lng: c.lng, lat: c.lat, icon: "📍", kind: "city" })), [cities]);
+  const c = cities?.find((x) => x.id === selected);
   return (
-    <div className={`relative ${className ?? ""}`}>
-      <div ref={box} style={{ width: "100%", height: "100%" }} />
-      <Credit />
-    </div>
+    <WorldMap places={places} selected={selected} onSelect={onSelect} interactive={false} showDistricts={false}
+      focus={c ? { at: [c.lng, c.lat], s: 0.9 } : null} className={className} />
   );
 }
 
@@ -236,43 +90,18 @@ export function CityMap({ selected, onSelect, className }: { selected: string; o
 export function NaijaMap({ dests, selected, onSelect, className }: {
   dests: { to: string; label: string; lat: number; lng: number }[]; selected: string | null; onSelect: (to: string) => void; className?: string;
 }) {
-  const box = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MLMap | null>(null);
-  const pins = useRef<Record<string, HTMLDivElement>>({});
-  const pick = useRef(onSelect);
-  pick.current = onSelect;
-  const [ready, setReady] = useState(false);
-  const key = dests.map((d) => d.to).join();
-  useEffect(() => {
-    if (!box.current) return;
-    let alive = true;
-    (async () => {
-      const { map, ml } = await createMap(box.current!, [5.4, 7.4], 5.2, true);
-      if (!alive) { map.remove(); return; }
-      mapRef.current = map;
-      for (const d of dests) {
-        const el = pinEl(d.label, "cursor-pointer whitespace-nowrap rounded-full bg-[#0a1324]/85 px-2.5 py-1 text-xs font-bold text-white shadow-lg transition-transform duration-300");
-        el.onclick = () => pick.current(d.to);
-        pins.current[d.to] = el;
-        new ml.Marker({ element: el }).setLngLat([d.lng, d.lat]).addTo(map);
-      }
-      setReady(true);
-    })();
-    return () => { alive = false; mapRef.current?.remove(); mapRef.current = null; pins.current = {}; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  useEffect(() => {
-    for (const [id, el] of Object.entries(pins.current)) {
-      el.style.transform = id === selected ? "scale(1.2)" : "scale(1)";
-      el.style.background = id === selected ? "#2f7cf6" : "rgba(10,19,36,.85)";
-    }
-    const d = dests.find((x) => x.to === selected);
-    if (d && mapRef.current) mapRef.current.flyTo({ center: [d.lng, d.lat], zoom: 9, duration: 1400, essential: true });
-  }, [selected, ready, dests]);
+  const [look, setLook] = useState<string | null>(null);
+  const places: Place[] = useMemo(() => {
+    const out: Place[] = dests.map((d) => ({ id: d.to, label: d.label.replace(/^\S+\s/, ""), lng: d.lng, lat: d.lat, icon: d.to === "hub" ? "🙈" : "🌳", kind: d.to === "hub" ? "hub" : "venue" }));
+    // you can always find our Lagos hub on the map, even while you're in it
+    if (!dests.some((d) => d.to === "hub")) out.push({ id: "here:hub", label: "You're here · Lagos hub", lng: HUB_LNGLAT[0], lat: HUB_LNGLAT[1], icon: "🙈", kind: "hub" });
+    return out;
+  }, [dests]);
+  const focusId = look ?? selected;
+  const f = places.find((x) => x.id === focusId);
   return (
-    <div className={`relative ${className ?? ""}`}>
-      <div ref={box} style={{ width: "100%", height: "100%" }} />
-      <Credit />
-    </div>
+    <WorldMap places={places} selected={selected ?? look} className={className}
+      onSelect={(id) => { setLook(id); if (!id.startsWith("here:")) onSelect(id); }}
+      focus={f ? { at: [f.lng, f.lat], s: f.kind === "hub" ? 2600 : 30 } : null} />
   );
 }

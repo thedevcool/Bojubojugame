@@ -80,7 +80,7 @@ export default function CreateGame({ isPublic = true }: { isPublic?: boolean }) 
         {step === 0 && (
           <>
             <h3 className="mb-2 text-xl font-black">Which city we dey go?</h3>
-            <CityMap selected={city} onSelect={chooseCity} className="mb-3 h-32 overflow-hidden rounded-2xl" />
+            <CityMap selected={city} onSelect={chooseCity} className="relative mb-3 h-32 overflow-hidden rounded-2xl" />
             <div className="mb-3 grid grid-cols-3 gap-2">
               {cities.map((c) => {
                 const fares = c.fares ?? cfg.fares;

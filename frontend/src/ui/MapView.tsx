@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { walkTo } from "@/game/nav";
 import { local, remotes, sample } from "@/game/state";
@@ -10,8 +9,9 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import type { GameMap } from "@/lib/types";
 import { useMap, useRole, useTicker } from "./hooks";
+import { HUB_LNGLAT } from "@/lib/geo";
 
-const NaijaMap = dynamic(() => import("./RealMap").then((m) => m.NaijaMap), { ssr: false });
+import { NaijaMap } from "./RealMap";
 
 interface View { cx: number; cz: number; s: number } // world centre + pixels per metre
 
@@ -276,7 +276,7 @@ function TravelMap() {
   if (!cfg || !maps) return null;
   const here = mapId === "hub_plaza" ? "hub" : mapId;
   const dests = [
-    { to: "hub", label: "🏠 Home · Lagos hub", lat: cfg.cities[0]?.lat ?? 6.5, lng: (cfg.cities[0]?.lng ?? 3.35) + 0.02 },
+    { to: "hub", label: "🏠 Home · Lagos hub", lat: HUB_LNGLAT[1], lng: HUB_LNGLAT[0] },
     ...cfg.cities.flatMap((c) => c.arenas.map((a) => ({ to: a, label: `🌳 ${maps[a]?.venue?.name ?? maps[a]?.name ?? a}`, lat: maps[a]?.venue?.lat ?? c.lat, lng: maps[a]?.venue?.lng ?? c.lng }))),
   ].filter((d) => d.to !== here);
   const fares = (to: string) => (cfg.cities.find((c) => c.arenas.includes(to === "hub" ? (mapId ?? "") : to))?.fares ?? cfg.fares);

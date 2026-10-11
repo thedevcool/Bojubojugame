@@ -283,7 +283,7 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             await ses.execute(update(FurnitureItem).where(FurnitureItem.player_id == owner).values(placed=False))
 
     async def furnish(owner: str, home: dict[str, Any]) -> list[dict[str, Any]]:
-        """Moving in: houses come empty (you buy furniture); your own furniture moves with you where it fits."""
+        """Moving in: your first house comes with a bed, chair and fan; after that your furniture moves with you."""
         lay, catalog = layout_of(home), cfg.furniture_by_id()
         async with db.sessions() as ses, ses.begin():
             mine = list(
@@ -293,6 +293,11 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
                     )
                 ).all()
             )
+            if not mine:
+                for item, lx, lz, rot in houses.starter_set(lay):
+                    ses.add(FurnitureItem(player_id=owner, item=item, placed=True, lx=lx, lz=lz, rot=rot))
+                await ses.flush()
+                mine = list((await ses.scalars(select(FurnitureItem).where(FurnitureItem.player_id == owner))).all())
             ok: list[houses.Placement] = []
             for it in mine:
                 if not it.placed:

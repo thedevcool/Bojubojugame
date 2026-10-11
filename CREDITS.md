@@ -16,13 +16,12 @@ with its source URL and license **in the same commit**.
 ### Maps & data
 | What | Source | License |
 |---|---|---|
-| Map tiles & style | [OpenFreeMap](https://openfreemap.org) | Free, open (no key) |
-| Map data | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors | ODbL — attribution shown on every map |
+| Game map | Original Boju Boju map (`frontend/src/lib/geo.ts`): simplified, hand-placed shapes of Nigeria's coast, rivers, roads and cities | Our own work |
 | Road routes (cached once per route) | [OSRM](https://project-osrm.org) public demo server | BSD-2 software; OSM data (ODbL) |
 
 All sound effects and music are synthesised in code at runtime (Tone.js) — no audio files.
 
 ### Software
 three.js (MIT), @react-three/fiber and drei (MIT), Next.js (MIT), React (MIT), Zustand (MIT),
-Tailwind CSS (MIT), MapLibre GL JS (BSD-3), Tone.js (MIT), postprocessing / @react-three/postprocessing (Zlib/MIT), httpx (BSD-3), @msgpack/msgpack (ISC), FastAPI (MIT), SQLAlchemy (MIT), Pydantic (MIT),
+Tailwind CSS (MIT), Tone.js (MIT), postprocessing / @react-three/postprocessing (Zlib/MIT), httpx (BSD-3), @msgpack/msgpack (ISC), FastAPI (MIT), SQLAlchemy (MIT), Pydantic (MIT),
 msgpack‑python (Apache‑2.0), PyJWT (MIT).

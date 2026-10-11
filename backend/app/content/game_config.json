@@ -2,11 +2,11 @@
   "currency_symbol": "₦",
   "money_disclaimer": "In-game naira — not real money",
   "scoring": {
-    "seeker_find_one": 5000,
-    "seeker_per_hider_multi": 10000,
-    "seeker_none_penalty": 2500,
-    "hider_not_found": 7500,
-    "hider_safe": 3500,
+    "seeker_find_one": 500000,
+    "seeker_per_hider_multi": 1000000,
+    "seeker_none_penalty": 250000,
+    "hider_not_found": 750000,
+    "hider_safe": 350000,
     "hider_found": 0
   },
   "game": {

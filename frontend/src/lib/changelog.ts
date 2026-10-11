@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.3.0",
+    date: "2026-10-11",
+    title: "Our own map of Naija 🗺️",
+    items: [
+      { emoji: "🗺️", title: "The Boju Boju map", text: "A brand-new map drawn just for the game: coast, rivers, highways and every place you can go. Zoom into Lagos to see our own streets and houses.", tryIt: "Tap the round map → Naija" },
+      { emoji: "💰", title: "Bigger prizes", text: "Round rewards are 100× bigger — finding hiders and staying hidden now pays hundreds of thousands." },
+      { emoji: "🛏️", title: "Starter furniture", text: "Your first house comes with a bed, an armchair and a standing fan. The rest is up to you." },
+      { emoji: "🚪", title: "Proper front doors", text: "Panelled double doors with frames — no more floating door slab." },
+    ],
+  },
+  {
     version: "2.2.0",
     date: "2026-10-11",
     title: "Play with real people 👥",

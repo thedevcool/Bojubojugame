@@ -8,10 +8,12 @@ from tests.test_life import _give_phone, c, drain, reg  # noqa: F401  (fixture r
 CATALOG = get_config().furniture_by_id()
 
 
-def test_every_house_has_its_rooms():
+def test_every_house_has_its_rooms_and_fits_the_starter_set():
     for h in get_maps()["hub_plaza"].homes:
         lay = houses.layout(h["lw"], h["ld"], h["style"])
         assert len(lay.rooms) == (3 if h["style"] == "duplex" else 2)
+        placed = [houses.Placement(i, it, lx, lz, rot) for i, (it, lx, lz, rot) in enumerate(houses.starter_set(lay))]
+        assert houses.check_layout(lay, placed, CATALOG) is None, h["id"]
 
 
 def test_layout_rules_catch_walls_doors_and_overlaps():
@@ -31,7 +33,9 @@ def test_houses_come_empty_and_bought_furniture_is_solid(c):  # noqa: F811
     hub = get_maps()["hub_plaza"]
     home = hub.homes[3]
     assert c.post("/api/home/rent", json={"home_id": home["id"], "key": "rent-dec-01"}, headers=h).status_code == 200
-    assert c.get("/api/furniture", headers=h).json()["items"] == []  # nothing free: you buy your furniture
+    starter = c.get("/api/furniture", headers=h).json()["items"]
+    assert sorted(i["item"] for i in starter) == ["armchair", "bed", "standing_fan"]  # the rest you buy
+    assert all(i["placed"] for i in starter)
     world = c.app.state.world
     # the shop only sells to people standing in it
     with c.websocket_connect(f"/ws?token={acc['token']}") as ws:
@@ -44,9 +48,9 @@ def test_houses_come_empty_and_bought_furniture_is_solid(c):  # noqa: F811
         r = c.post("/api/shop/furniture", json={"item": "sofa", "key": "furn-key-01"}, headers=h)
         assert r.status_code == 200 and not r.json()["item"]["placed"]
     items = c.get("/api/furniture", headers=h).json()["items"]
-    sofa = items[0]
+    sofa = next(i for i in items if i["item"] == "sofa")
     placed = c.post(
-        "/api/home/layout", json={"items": [{**sofa, "lx": -4.7, "lz": 3.0, "rot": 1, "placed": True}]}, headers=h
+        "/api/home/layout", json={"items": [{**sofa, "lx": -0.6, "lz": 2.4, "rot": 0, "placed": True}]}, headers=h
     )
     assert placed.status_code == 200, placed.text
     assert world.furniture[home["id"]] and world.furniture_boxes[home["id"]]
@@ -58,7 +62,7 @@ def test_houses_come_empty_and_bought_furniture_is_solid(c):  # noqa: F811
     # decorate: move the sofa somewhere legal, then try an illegal spot (whole layout is rejected)
     sofa = next(i for i in items if i["item"] == "sofa")
     ok = c.post(
-        "/api/home/layout", json={"items": [{**sofa, "lx": -4.7, "lz": 3.0, "rot": 1, "placed": True}]}, headers=h
+        "/api/home/layout", json={"items": [{**sofa, "lx": -0.6, "lz": 2.4, "rot": 0, "placed": True}]}, headers=h
     )
     assert ok.status_code == 200, ok.text
     bad = c.post(

@@ -212,6 +212,7 @@ NON_SOLID = {
     "porch",
     "canopy",
     "door_leaf",
+    "door_frame",
     "ac",
 }
 TRUNK = {"tree": 0.7, "big_tree": 1.6, "palm": 0.5}
@@ -292,7 +293,21 @@ def _expand_home(p: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any
     for px in (-1.45, 1.45):
         out.append(local_box("pillar", (px - 0.13, hd + 1.15, px + 0.13, hd + 1.41), h - 0.2))
     out.append(local_box("canopy", (-1.75, hd, 1.75, hd + 1.55), h - 0.2, solid=False))
-    out.append(local_box("door_leaf", (-0.78, hd - 0.85, -0.72, hd - 0.05), 2.1, solid=False))
+    # front door: frame + wall above it (lintel) + two panelled leaves opened into the parlour
+    dw = houses.FRONT_DOOR_W / 2
+    out.append(
+        local_box("door_frame", (-dw, hd - 0.2, dw, hd + 0.2), p["h"], solid=False, color=p.get("color", "#e7d1a1"))
+    )
+    for side in (-1, 1):
+        x0 = side * (dw - 0.04)
+        out.append(
+            local_box(
+                "door_leaf",
+                (min(x0, x0 - side * 0.06), hd - 0.98, max(x0, x0 - side * 0.06), hd - 0.12),
+                2.1,
+                solid=False,
+            )
+        )
     out.append(local_box("ac", (local_w / 2 + 0.15, -0.5, local_w / 2 + 0.55, 0.5), 2.2, solid=False))
     out.append(
         {

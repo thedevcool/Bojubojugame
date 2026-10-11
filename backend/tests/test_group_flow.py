@@ -23,6 +23,9 @@ def zone_point(zone_id):
     raise AssertionError(zone_id)
 
 
+START = 5_000_000  # enough naira to cover the (big) round penalties
+
+
 class Clock:
     t = 1_000_000.0
 
@@ -86,7 +89,7 @@ async def setup(db, n=3):
     players = []
     for i in range(n):
         pid = await make_player(db, f"P{i}")
-        await world.economy.post(pid, 20000, "start", f"start:{pid}")
+        await world.economy.post(pid, START, "start", f"start:{pid}")
         c = Client()
         s = await world.connect(pid, f"P{i}", c)
         players.append((s, c))
@@ -121,7 +124,7 @@ async def test_full_game(db):
     assert g.phase == "gather" and all(s.room is g.arena for s in (a, b, c))
     await gather_all(world, clock, g)
     assert g.phase == "dice"
-    assert await world.economy.balance(b.pid) == 20000 - get_config().cheapest_fare.price
+    assert await world.economy.balance(b.pid) == START - get_config().cheapest_fare.price
 
     await send(world, a, t="g_pick", n=1)
     await send(world, b, t="g_pick", n=1)
@@ -161,7 +164,9 @@ async def test_full_game(db):
     waited = await until(world, clock, g, "result")
     assert 60 < waited < 70  # 90 s search minus the 22 s already played
     deltas = g.last_result["deltas"]
-    assert deltas[seeker.pid] == 5000 and deltas[hiders[0].pid] == 0 and deltas[hiders[1].pid] == 7500
+    sc = get_config().scoring
+    assert deltas[seeker.pid] == sc.seeker_find_one and deltas[hiders[0].pid] == 0
+    assert deltas[hiders[1].pid] == sc.hider_not_found
     assert seeker.pid in g.retired
 
     # Final round between the remaining two; first found seeks next.
@@ -171,7 +176,7 @@ async def test_full_game(db):
     assert g.round.is_final and g.round.seeker == hiders[0].pid
     scatter(world, g)
     await until(world, clock, g, "result")
-    assert g.last_result["deltas"][hiders[0].pid] == -2500
+    assert g.last_result["deltas"][hiders[0].pid] == -sc.seeker_none_penalty
     await until(world, clock, g, "over")
     assert g.final_results
     assert any(m["t"] == "g_over" for m in ca.msgs)
@@ -294,7 +299,7 @@ async def test_interstate_fares_and_ride_mode(db):
     assert ca.last("err")["msg"] == "Unknown ride"  # no danfo to Abuja
     await send(world, a, t="g_board", fare="bus")
     assert ca.last("ride")["mode"] == "bus" and ca.last("ride")["arena"] == "arena_abuja"
-    assert await world.economy.balance(a.pid) == 20000 - 15000
+    assert await world.economy.balance(a.pid) == START - 15000
 
 
 async def test_gather_times_out_and_walks_stragglers_in(db):

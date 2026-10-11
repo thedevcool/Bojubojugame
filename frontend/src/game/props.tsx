@@ -531,14 +531,38 @@ function PropMesh({ p }: { p: Prop }) {
           <B p={[0, p.h + 0.2, 0]} s={[p.w + 0.1, 0.1, p.d + 0.1]} c={mat("#7a3b2a", { map: zinc(), tile: 1.5 })} />
         </>
       );
-    case "door_leaf":
-      // the front door, swung open into the parlour
+    case "door_leaf": {
+      // one leaf of the panelled double front door, swung open into the parlour
+      const along = p.w >= p.d;
+      const len = along ? p.w : p.d;
       return (
-        <>
-          <B p={[0, 1.05, 0]} s={[Math.max(p.w, 0.06), 2.1, Math.max(p.d, 0.06)]} c="#6b3a1f" />
-          <B p={[0, 1.05, 0]} s={[Math.max(p.w, 0.06) + 0.012, 0.08, Math.max(p.d, 0.06) + 0.012]} c="#c9a227" shadow={false} />
-        </>
+        <group rotation={[0, along ? 0 : Math.PI / 2, 0]}>
+          <B p={[0, 1.05, 0]} s={[len, 2.1, 0.055]} c="#6e3f22" />
+          {[0.55, 1.45].map((y) => (
+            <group key={y}>
+              <B p={[0, y, 0.03]} s={[len * 0.7, 0.62, 0.012]} c="#8a5531" shadow={false} />
+              <B p={[0, y, -0.03]} s={[len * 0.7, 0.62, 0.012]} c="#8a5531" shadow={false} />
+            </group>
+          ))}
+          <B p={[len * 0.38, 1.0, 0.045]} s={[0.035, 0.14, 0.03]} c={mat("#d4af37", { rough: 0.3 })} shadow={false} />
+          <B p={[len * 0.38, 1.0, -0.045]} s={[0.035, 0.14, 0.03]} c={mat("#d4af37", { rough: 0.3 })} shadow={false} />
+        </group>
       );
+    }
+    case "door_frame": {
+      // wall above the door + white architrave + a stone threshold
+      const along = p.w >= p.d;
+      const len = along ? p.w : p.d;
+      const lintel = Math.max(0.2, p.h - 2.25);
+      return (
+        <group rotation={[0, along ? 0 : Math.PI / 2, 0]}>
+          <B p={[0, 2.25 + lintel / 2, 0]} s={[len + 0.02, lintel, 0.3]} c={wallMat(c ?? "#e7d1a1")} />
+          <B p={[0, 2.31, 0]} s={[len + 0.3, 0.12, 0.36]} c="#f4f1ea" />
+          {[-1, 1].map((sx) => <B key={sx} p={[sx * (len / 2 + 0.06), 1.13, 0]} s={[0.12, 2.26, 0.36]} c="#f4f1ea" />)}
+          <B p={[0, 0.025, 0]} s={[len, 0.05, 0.42]} c={mat("#8f8a80", { rough: 0.6 })} shadow={false} />
+        </group>
+      );
+    }
     case "ac":
       return (
         <>

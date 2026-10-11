@@ -12,7 +12,7 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { ChatContent, GroupPanel, LeadersPanel, SettingsPanel, WalletPanel, screenshot } from "./Panels";
 import { ChangelogContent } from "./WhatsNew";
-import { startDecorating } from "./Decorate";
+import { startDecorating } from "./decorStart";
 import { LiveGamesList } from "./Live";
 import { useMap, useTicker } from "./hooks";
 

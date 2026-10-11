@@ -62,7 +62,9 @@ class World:
         self._shard_ids = itertools.count(1)
 
     # ------------------------------------------------------------ connection lifecycle
-    async def connect(self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None) -> Session:
+    async def connect(
+        self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None, home_id: str | None = None
+    ) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
         if s is not None:
@@ -72,6 +74,7 @@ class World:
             s.disconnected_at = None
         else:
             s = Session(
+                home_id=home_id,
                 pid=pid,
                 nick=nick,
                 net_id=next(self._net_ids),
@@ -85,13 +88,12 @@ class World:
             {
                 "t": "hello",
                 "me": {"id": pid, "nick": s.nick, "n": s.net_id},
-                "home": self.maps[HUB_MAP_ID].home_for(pid),
+                "home": self.maps[HUB_MAP_ID].home_by_id(s.home_id),
                 "server_time": int(now * 1000),
             }
         )
         if s.room is None:
-            home = self.maps[HUB_MAP_ID].home_for(pid)
-            self.join_hub(s, at=(home["spawn"][0], home["spawn"][1]) if home else None)
+            self.join_hub(s, at=self.home_spawn(s))
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
         if s.group is not None:
@@ -111,6 +113,33 @@ class World:
             s.group.broadcast_state("player_offline")
 
     # ------------------------------------------------------------ hub
+    def home_spawn(self, s: Session) -> tuple[float, float]:
+        """Inside your rented home; brand-new players start beside the phone shop."""
+        hub = self.maps[HUB_MAP_ID]
+        home = hub.home_by_id(s.home_id)
+        return (home["spawn"][0], home["spawn"][1]) if home else hub.newcomer
+
+    def set_home(self, pid: str, home_id: str | None) -> None:
+        s = self.sessions.get(pid)
+        if s is None:
+            return
+        s.home_id = home_id
+        s.send({"t": "home", "home": self.maps[HUB_MAP_ID].home_by_id(home_id)})
+
+    def go_home(self, s: Session) -> None:
+        """Ride from the arena back to your house (or the motor park if you have none)."""
+        g = s.group
+        arena = g.settings["arena"] if g else None
+        if g is not None:
+            self.leave_group(s, quiet=True)
+        hub = self.maps[HUB_MAP_ID]
+        at = self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point()
+        self.join_hub(s, at=at)
+        s.crouch = s.sit = False
+        if arena:
+            fare = min(self.cfg.fares_for(arena), key=lambda f: f.price)
+            s.send({"t": "ride", "seconds": fare.ride_s, "mode": fare.id, "arena": arena, "dir": "home"})
+
     def join_hub(self, s: Session, prefer: HubShard | None = None, at: tuple[float, float] | None = None) -> None:
         shard = prefer if prefer is not None and not prefer.full else None
         if shard is None and s.group is not None:
@@ -224,7 +253,7 @@ class World:
             s.stamina -= span
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
-        s.x, s.z, s.ry, s.crouch, s.run = m.x, m.z, m.ry, m.c, m.r
+        s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st
         s.last_move_at = now
 
     def _correct(self, s: Session, seq: int, now: float) -> None:
@@ -275,6 +304,10 @@ class World:
                 g.remove_bot(s, msg.id)
             elif msg.t == "g_leave":
                 self.leave_group(s)
+            elif msg.t == "g_return":
+                if g.phase != "over":
+                    raise GroupError("Finish the game first")
+                self.go_home(s)
 
     def validate_settings(self, raw: dict[str, Any]) -> dict[str, Any]:
         arena = self.maps.get(str(raw.get("arena")))
@@ -310,12 +343,12 @@ class World:
         log.info("group_created game=%s code=%s by=%s", game_id, code, s.pid)
         return g
 
-    def leave_group(self, s: Session) -> None:
+    def leave_group(self, s: Session, quiet: bool = False) -> None:
         g = s.group
         if g is None:
             return
         g.leave(s)
-        if not isinstance(s.room, HubShard):
+        if not quiet and not isinstance(s.room, HubShard):
             self.join_hub(s, at=self.arrival_point())
         s.send({"t": "g_left"})
 
@@ -500,7 +533,9 @@ class World:
     def _group_expired(self, g: GroupRoom, now: float) -> bool:
         online = [p for p in g.members if p not in g.left and (s := self.sessions.get(p)) and s.connected and not s.bot]
         if g.phase == "over":
-            return not online or now - g.phase_end > 600
+            # players may stay and explore the venue; close it once no human is left there
+            exploring = [p for p in online if (s := self.sessions.get(p)) and s.room is g.arena]
+            return not exploring or now - g.phase_end > 2700
         if g.phase == "lobby":
             return not g.members or (not online and now - g.last_activity > self.cfg.game.lobby_idle_expiry_s)
         return (

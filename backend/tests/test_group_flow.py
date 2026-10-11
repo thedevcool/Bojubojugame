@@ -149,6 +149,11 @@ async def test_full_game(db):
     assert g.final_results
     assert any(m["t"] == "g_over" for m in ca.msgs)
 
+    # Stay & explore: still in the arena and free to walk. Then ride home.
+    assert a.room is g.arena and not a.frozen
+    await send(world, a, t="g_return")
+    assert a.group is None and a.room is not g.arena and ca.last("ride")["dir"] == "home"
+
     # Wallet always matches ledger.
     for s in (a, b, c):
         wallet = [m for m in players[[a, b, c].index(s)][1].msgs if m["t"] == "wallet"][-1]

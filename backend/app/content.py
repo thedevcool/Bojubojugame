@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -112,6 +111,19 @@ class City(BaseModel):
     fares: list[Fare] | None = None  # None = local fares (danfo/keke)
 
 
+class Phone(BaseModel):
+    id: str
+    name: str
+    price: int = Field(ge=0)
+    color: str
+    tagline: str = ""
+
+
+class Rent(BaseModel):
+    days: int = Field(ge=1)
+    prices: dict[str, int]
+
+
 class GameConfig(BaseModel):
     currency_symbol: str
     money_disclaimer: str
@@ -126,6 +138,8 @@ class GameConfig(BaseModel):
     chat: ChatCfg
     network: NetCfg
     cities: list[City]
+    phones: list[Phone]
+    rent: Rent
     home_coords: dict[str, tuple[float, float]]
 
     def city_of(self, arena_id: str) -> City | None:
@@ -325,10 +339,13 @@ class MapData:
     def near(self, x0: float, z0: float, x1: float, z1: float, pad: float = 1.0) -> list[Box]:
         return self.index.query(x0, z0, x1, z1, pad)
 
-    def home_for(self, player_id: str) -> dict[str, Any] | None:
-        if not self.homes:
-            return None
-        return self.homes[int(hashlib.sha256(player_id.encode()).hexdigest(), 16) % len(self.homes)]
+    def home_by_id(self, home_id: str | None) -> dict[str, Any] | None:
+        return next((h for h in self.homes if h["id"] == home_id), None) if home_id else None
+
+    @property
+    def newcomer(self) -> tuple[float, float]:
+        n = self.raw.get("newcomer") or self.raw["spawn"]
+        return float(n[0]), float(n[1])
 
     @cached_property
     def nav(self) -> NavGrid:

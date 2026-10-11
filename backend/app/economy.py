@@ -46,6 +46,7 @@ class Economy:
         ref: str | None = None,
         *,
         clamp: bool = False,
+        record_zero: bool = False,
     ) -> tuple[int, int]:
         """Atomically apply ``amount`` (negative = spend). Idempotent by ``key``.
 
@@ -64,7 +65,7 @@ class Economy:
                 if not clamp:
                     raise InsufficientFunds()
                 amount = -bal
-            if amount != 0:
+            if amount != 0 or record_zero:
                 s.add(LedgerEntry(player_id=player_id, amount=amount, reason=reason, ref=ref, idempotency_key=key))
             try:
                 await s.flush()
@@ -87,10 +88,10 @@ class Economy:
         async with self.sessions() as s:
             if await s.scalar(select(LedgerEntry.id).where(LedgerEntry.idempotency_key == key)) is not None:
                 return 0  # this campaign already paid this player
-        missing = target - await self.balance(player_id)
-        if missing <= 0:
-            return 0
-        applied, _ = await self.post(player_id, missing, "topup", key, ref=self.cfg.economy.topup_id)
+        # Always write the campaign row (even ₦0) so a player who later spends below the
+        # target is never topped up again by the same campaign.
+        missing = max(0, target - await self.balance(player_id))
+        applied, _ = await self.post(player_id, missing, "topup", key, ref=self.cfg.economy.topup_id, record_zero=True)
         return applied
 
     # ---- hunger (stored value + timestamp, decays lazily) ----

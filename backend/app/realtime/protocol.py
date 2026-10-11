@@ -22,6 +22,7 @@ class Move(_In):
     ry: float = Field(ge=-10, le=10)
     c: bool = False  # crouch
     r: bool = False  # run
+    st: bool = False  # sitting
     s: int = Field(ge=0, le=2**31)
 
 
@@ -48,7 +49,7 @@ class GroupJoin(_In):
 
 
 class Bare(_In):
-    t: Literal["g_leave", "g_start", "g_tag", "ping", "g_add_bot"]
+    t: Literal["g_leave", "g_start", "g_tag", "ping", "g_add_bot", "g_return"]
 
 
 class RemoveBot(_In):
@@ -93,6 +94,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_tag": Bare,
     "ping": Bare,
     "g_add_bot": Bare,
+    "g_return": Bare,
     "g_remove_bot": RemoveBot,
     "g_board": Board,
     "g_pick": Pick,

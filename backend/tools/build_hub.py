@@ -175,6 +175,7 @@ hub = {
     "ground": "#a8734a",
     "spawn": [8, 10],
     "arrival": [50, 17],
+    "newcomer": [8.4, 20.5],  # brand-new players start here, right beside the phone shop
     "props": props,
     "sections": [
         {"id": "adeniji", "name": "Adeniji Street", "rect": [-80, 14, -8, 66]},
@@ -187,6 +188,7 @@ hub = {
     "safe_houses": [],
     "zones": [
         {"id": "bus_stop", "kind": "bus_stop", "name": "Motor Park", "rect": [44, 9, 56, 18]},
+        {"id": "phone_shop", "kind": "phone_shop", "name": "Oga Phone", "rect": [6.8, 23.6, 9.9, 28.4]},
         {"id": "suya", "kind": "food", "name": "Suya Spot", "rect": [11, 8.5, 19, 15]},
         {"id": "corn", "kind": "food", "name": "Roasted Corn", "rect": [19, 8.5, 24, 15]},
         {"id": "mama_put", "kind": "food", "name": "Mama Put", "rect": [26.8, 12.4, 33.2, 17.6]},

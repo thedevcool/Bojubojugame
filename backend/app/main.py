@@ -21,6 +21,7 @@ from app import auth
 from app.accounts import Me, make_router
 from app.content import get_config, get_maps
 from app.db import Database, Device, Game, LedgerEntry, Player, Report, RoundStat
+from app.life import make_router as make_life_router
 from app.realtime.protocol import BadMessage
 from app.realtime.rooms import writer
 from app.realtime.world import World
@@ -151,6 +152,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         return {"token": auth.issue_token(p.id, must_change=p.must_change_password)}
 
     app.include_router(make_router(db, world, cfg))
+    app.include_router(make_life_router(db, world, cfg))
 
     @app.get("/api/wallet")
     async def wallet(pid: Me) -> dict[str, Any]:
@@ -282,7 +284,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             queue.put_nowait(data)
 
         out_task = asyncio.create_task(writer(queue, ws.send_bytes))
-        session = await world.connect(pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]))
+        session = await world.connect(pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]), home_id=p.home_id)
         strikes = 0
         try:
             while True:

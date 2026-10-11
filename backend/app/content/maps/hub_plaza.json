@@ -17,6 +17,10 @@
   50,
   17
  ],
+ "newcomer": [
+  8.4,
+  20.5
+ ],
  "props": [
   {
    "kind": "road",
@@ -1406,6 +1410,17 @@
     9,
     56,
     18
+   ]
+  },
+  {
+   "id": "phone_shop",
+   "kind": "phone_shop",
+   "name": "Oga Phone",
+   "rect": [
+    6.8,
+    23.6,
+    9.9,
+    28.4
    ]
   },
   {

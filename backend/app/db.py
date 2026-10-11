@@ -36,6 +36,10 @@ class Player(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    # Life sim: the phone you bought and the house you rent
+    phone_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    home_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    rent_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
     hunger: Mapped[float] = mapped_column(default=80.0)
@@ -51,6 +55,30 @@ class Device(Base):
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
     secret_hash: Mapped[str] = mapped_column(String(128), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Friendship(Base):
+    """One row per pair (a_id < b_id). status: pending | accepted."""
+
+    __tablename__ = "friendships"
+    __table_args__ = (Index("ux_friend_pair", "a_id", "b_id", unique=True),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    a_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    b_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    requested_by: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(10), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DirectMessage(Base):
+    __tablename__ = "direct_messages"
+    __table_args__ = (Index("ix_dm_pair_id", "sender_id", "recipient_id", "id"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
+    recipient_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class PasswordReset(Base):

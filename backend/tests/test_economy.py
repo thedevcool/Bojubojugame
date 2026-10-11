@@ -55,3 +55,14 @@ async def test_topup_is_once_per_campaign(db):
     await eco.post(pid, -5000, "food", "f1")
     assert await eco.ensure_topup(pid) == 0  # same campaign never pays twice
     assert await eco.balance(pid) == cfg.economy.topup_to - 5000
+
+
+async def test_new_player_is_never_topped_up_after_spending(db):
+    cfg = get_config()
+    eco = Economy(db.sessions, cfg)
+    pid = await make_player(db, "Fresh")
+    await eco.post(pid, cfg.economy.topup_to, "starting_balance", "start-fresh")
+    assert await eco.ensure_topup(pid) == 0  # already at target: campaign recorded with ₦0
+    await eco.post(pid, -450000, "phone", "p1")
+    assert await eco.ensure_topup(pid) == 0
+    assert await eco.balance(pid) == cfg.economy.topup_to - 450000

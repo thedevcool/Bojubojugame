@@ -28,13 +28,12 @@ export function mat(color: string, opts: MatOpts = {}): THREE.MeshStandardMateri
   if (!m) {
     m = new THREE.MeshStandardMaterial({
       color,
-      map: opts.map,
       roughness: opts.rough ?? 0.85,
       metalness: 0.03,
-      emissive: opts.emissive ? new THREE.Color(color) : undefined,
-      emissiveIntensity: opts.emissive ? 0.6 : 0,
       transparent: opts.transparent !== undefined && opts.transparent < 1,
       opacity: opts.transparent ?? 1,
+      ...(opts.map ? { map: opts.map } : {}),
+      ...(opts.emissive ? { emissive: new THREE.Color(color), emissiveIntensity: 0.6 } : {}),
     });
     // Batched static meshes get world-space UVs: ``tile`` = metres per texture repeat.
     if (opts.tile) m.userData.tile = opts.tile;
@@ -465,6 +464,32 @@ function PropMesh({ p }: { p: Prop }) {
           <B p={[0, 0, 0]} s={[p.w, 0.02, 0.15]} c="#eeeeee" shadow={false} />
           <B p={[0, 0, 0]} s={[0.15, 0.02, p.w]} c="#eeeeee" shadow={false} />
         </group>
+      );
+    case "fountain":
+      return (
+        <>
+          <mesh geometry={cyl} material={wallMat("#e6dfd2")} position={[0, p.h / 2, 0]} scale={[p.w, p.h, p.d]} castShadow receiveShadow />
+          <mesh geometry={cyl} material={mat("#4aa3df", { rough: 0.15 })} position={[0, p.h + 0.01, 0]} scale={[p.w * 0.88, 0.04, p.d * 0.88]} />
+          <mesh geometry={cyl} material={wallMat("#e6dfd2")} position={[0, p.h + 0.9, 0]} scale={[1.2, 1.8, 1.2]} castShadow />
+          <mesh geometry={cyl} material={wallMat("#e6dfd2")} position={[0, p.h + 1.85, 0]} scale={[3, 0.2, 3]} castShadow />
+          <mesh geometry={sphere} material={mat("#bfe3ff", { transparent: 0.65, rough: 0.1 })} position={[0, p.h + 2.4, 0]} scale={[1.2, 1.6, 1.2]} />
+        </>
+      );
+    case "rock":
+      return (
+        <>
+          <mesh geometry={sphere} material={mat("#8a8378", { rough: 1 })} position={[0, p.h * 0.45, 0]} scale={[p.w, p.h, p.d]} castShadow receiveShadow />
+          <mesh geometry={sphere} material={mat("#9b9387", { rough: 1 })} position={[p.w * 0.25, p.h * 0.75, -p.d * 0.1]} scale={[p.w * 0.55, p.h * 0.55, p.d * 0.55]} castShadow />
+        </>
+      );
+    case "tower":
+      return (
+        <>
+          <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={wallMat("#d9cdb8")} />
+          <Windows w={p.w} d={p.d} h={p.h} floors={Math.round(p.h / 3)} />
+          <B p={[0, p.h + 0.6, 0]} s={[p.w * 0.7, 1.2, p.d * 0.7]} c={wallMat("#b9a58a")} />
+          {p.text && <group position={[0, 0, p.d / 2 + 0.12]}><Label text={p.text} y={3.2} w={p.w * 0.9} bg="#2f6db5" fg="#ffffff" /></group>}
+        </>
       );
     default:
       return <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={c ?? "#aaaaaa"} />;

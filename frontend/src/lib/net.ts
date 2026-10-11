@@ -2,7 +2,8 @@ import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
 import { useGame } from "./store";
 import type { ChatMsg, GroupState, Home, RosterEntry, Standing } from "./types";
-import { clock, local, pushSnapshot, remotes } from "@/game/state";
+import { sound } from "@/game/sound";
+import { cam, clock, fx, local, pushSnapshot, remotes } from "@/game/state";
 
 type Msg = { t: string } & Record<string, unknown>;
 
@@ -77,6 +78,8 @@ class Net {
         break;
       case "zone":
         remotes.clear();
+        cam.aerial.on = false;
+        g.set({ aerial: false });
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
@@ -99,6 +102,7 @@ class Net {
         break;
       }
       case "wallet":
+        if ((m.balance as number) > g.balance && g.balance > 0) sound.play("coin");
         g.set({ balance: m.balance as number, hunger: m.hunger as number });
         break;
       case "g_state": {
@@ -117,18 +121,28 @@ class Net {
         break;
       case "g_dice":
         g.set({ dice: { rolls: m.rolls as number[], seeker: m.seeker as string, at: Date.now() } });
+        sound.play("dice");
         break;
       case "g_tag":
-        if (m.ok) g.toast(`Mo ti ri e! ${m.nick as string} don cast!`, "good");
-        else g.toast((m.msg as string) ?? "Missed", "error");
+        if (m.ok) {
+          const mine = m.target === g.me?.id;
+          g.toast(mine ? "Omo, you don cast! 😩" : `Mo ti ri e! ${m.nick as string} don cast!`, mine ? "error" : "good");
+          sound.play(mine ? "caught" : "gotcha");
+          fx.shake = mine ? 1 : 0.5;
+        } else {
+          g.toast((m.msg as string) ?? "Missed", "error");
+          sound.play("error");
+        }
         break;
       case "g_over":
         g.set({ over: { gameId: m.game_id as string, results: m.results as Standing[] } });
+        sound.play("win");
         break;
       case "g_event":
         break;
       case "ride":
-        g.set({ ride: { until: Date.now() + (m.seconds as number) * 1000 } });
+        g.set({ ride: { until: Date.now() + (m.seconds as number) * 1000, seconds: m.seconds as number, mode: (m.mode as string) ?? "danfo", arena: (m.arena as string) ?? "" } });
+        sound.play("horn");
         break;
       case "chat":
         g.addChat(m as unknown as ChatMsg);
@@ -147,6 +161,7 @@ class Net {
         break;
       case "err":
         g.toast(m.msg as string, "error");
+        sound.play("error");
         break;
       case "kicked":
         this.closedByUs = true;
@@ -164,8 +179,14 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   switch (gs.phase) {
     case "travel": g.toast("Game don start! Waka go the Motor Park and board a danfo.", "good"); break;
     case "dice": g.set({ dice: null }); g.toast("Pick your number 1–6!"); break;
-    case "hide": g.toast(seeker === me ? "You be Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good"); break;
-    case "seek": g.toast(seeker === me ? "Open your eyes — go find them!" : "Boju is coming… hide well!", "good"); break;
+    case "hide":
+      g.toast(seeker === me ? "You be Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
+      if (seeker === me) { cam.aerial.on = false; g.set({ aerial: false }); }
+      break;
+    case "seek":
+      g.toast(seeker === me ? "Open your eyes — go find them!" : "Boju is coming… hide well!", "good");
+      sound.play("whistle");
+      break;
   }
 }
 

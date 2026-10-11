@@ -9,6 +9,19 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.3.0",
+    date: "2026-10-11",
+    title: "Travel Naija 🇳🇬",
+    items: [
+      { emoji: "🗺️", title: "Real maps, real rides", text: "Watch your danfo, keke, bus or plane travel the real route from your area to the venue.", tryIt: "Start a game and board at the Motor Park" },
+      { emoji: "🏙️", title: "New cities", text: "Play in Ibadan (Agodi Gardens-style hills) and Abuja (Millennium Park-style gardens) with your friends.", tryIt: "Play Boju → pick a city on the map" },
+      { emoji: "🛰️", title: "Aerial view", text: "Hiders can fly up and scan the whole map, with labels for every section and the safe house." },
+      { emoji: "🔊", title: "Sound & music", text: "Afrobeat groove, street noise, danfo horns, footsteps — and a heartbeat when Boju dey near you!" },
+      { emoji: "🧎🏾", title: "Bend down", text: "Real knees now! Bend down behind hedges to hide, and see proper walking and running." },
+      { emoji: "🕹️", title: "Smoother controls", text: "The stick never gets stuck again, push it all the way to run, and the camera won't go through walls." },
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-10-11",
     title: "Fresh new look 🙈",

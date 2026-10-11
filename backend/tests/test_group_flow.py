@@ -247,3 +247,17 @@ async def test_game_with_npc_players(db):
     await send(world, a, t="g_leave")
     await advance(world, clock, 1)
     assert not any(p.startswith("bot_") for p in world.sessions)
+
+
+async def test_interstate_fares_and_ride_mode(db):
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, _) = players
+    await send(world, a, t="g_create", arena="arena_abuja", hide=15, search=90, safe="pavilion")
+    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
+    await send(world, a, t="g_start")
+    a.x, a.z = zone_point("bus_stop")
+    await send(world, a, t="g_board", fare="danfo")
+    assert ca.last("err")["msg"] == "Unknown ride"  # no danfo to Abuja
+    await send(world, a, t="g_board", fare="bus")
+    assert ca.last("ride")["mode"] == "bus" and ca.last("ride")["arena"] == "arena_abuja"
+    assert await world.economy.balance(a.pid) == 20000 - 15000

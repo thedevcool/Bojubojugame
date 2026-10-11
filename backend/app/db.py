@@ -84,6 +84,15 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
+class RouteCache(Base):
+    """Road geometry fetched once from OSRM (keeps us far inside its usage policy)."""
+
+    __tablename__ = "route_cache"
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    coords: Mapped[list[list[float]]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Report(Base):
     __tablename__ = "reports"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

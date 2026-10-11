@@ -6,12 +6,17 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 
 const MapPreview = dynamic(() => import("@/game/Previews").then((m) => m.MapPreview), { ssr: false });
+const CityMap = dynamic(() => import("./RealMap").then((m) => m.CityMap), {
+  ssr: false,
+  loading: () => <div className="h-40 animate-pulse rounded-2xl bg-white/5" />,
+});
+const CITY_EMOJI: Record<string, string> = { lagos: "🌊", ibadan: "⛰️", abuja: "🏛️" };
 
-const STEPS = ["Arena", "Hide time", "Search time", "Safe house", "Players"] as const;
+const STEPS = ["City", "Hide time", "Search time", "Safe house", "Players"] as const;
 const SOON = [
-  { name: "Tafawa Balewa Square-style", emoji: "🏟️" },
-  { name: "Bar Beach-style", emoji: "🏖️" },
-  { name: "Balogun Market-style", emoji: "🛍️" },
+  { name: "Port Harcourt", emoji: "🛢️" },
+  { name: "Enugu", emoji: "⛏️" },
+  { name: "Kano", emoji: "🐪" },
 ];
 const NPC_FACES = ["🧑🏾", "👩🏾", "👨🏿", "👩🏿", "🧔🏾"];
 
@@ -39,7 +44,14 @@ export default function CreateGame() {
   const maps = useGame((s) => s.content?.maps);
   const arenas = Object.values(maps ?? {}).filter((m) => m.kind === "arena");
   const [step, setStep] = useState(0);
-  const [arena, setArena] = useState(arenas[0]?.id ?? "");
+  const cities = cfg?.cities ?? [];
+  const [city, setCity] = useState(cities[0]?.id ?? "lagos");
+  const [arena, setArena] = useState(cities[0]?.arenas[0] ?? arenas[0]?.id ?? "");
+  const chooseCity = (id: string) => {
+    setCity(id);
+    const first = cities.find((c) => c.id === id)?.arenas[0];
+    if (first) setArena(first);
+  };
   const [hide, setHide] = useState(cfg?.game.default_hide_time ?? 30);
   const [search, setSearch] = useState(cfg?.game.default_search_time ?? 180);
   const map = maps?.[arena];
@@ -67,21 +79,27 @@ export default function CreateGame() {
       <div key={step} className="anim-step min-h-[19rem]">
         {step === 0 && (
           <>
-            <h3 className="mb-2 text-xl font-black">Where una wan play?</h3>
-            <MapPreview map={map} className="mb-3 h-44 overflow-hidden rounded-2xl" />
-            <div className="space-y-2">
-              {arenas.map((a) => (
-                <button key={a.id} data-on={a.id === arena} onClick={() => setArena(a.id)} className="choice flex w-full items-center gap-3 p-3 text-left">
-                  <span className="text-2xl">🌳</span>
-                  <span><span className="block font-bold">{a.name}</span><span className="text-xs opacity-70">{a.sections.length} sections · {a.safe_houses.length} safe houses</span></span>
-                </button>
-              ))}
-              {SOON.map((s) => (
-                <div key={s.name} className="choice flex items-center gap-3 p-3 opacity-45">
-                  <span className="text-2xl grayscale">{s.emoji}</span>
-                  <span className="font-semibold">{s.name}</span>
-                  <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px]">Soon</span>
-                </div>
+            <h3 className="mb-2 text-xl font-black">Which city we dey go?</h3>
+            <CityMap selected={city} onSelect={chooseCity} className="mb-3 h-40 overflow-hidden rounded-2xl" />
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              {cities.map((c) => {
+                const fares = c.fares ?? cfg.fares;
+                const cheapest = Math.min(...fares.map((f) => f.price));
+                return (
+                  <button key={c.id} data-on={c.id === city} onClick={() => chooseCity(c.id)} className="choice p-2 text-center">
+                    <span className="block text-2xl">{CITY_EMOJI[c.id] ?? "📍"}</span>
+                    <span className="block text-sm font-bold">{c.name}</span>
+                    <span className="block text-[10px] opacity-70">from ₦{cheapest.toLocaleString("en-NG")}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p key={city} className="anim-fade mb-2 text-xs opacity-80">{cities.find((c) => c.id === city)?.blurb}</p>
+            <MapPreview map={map} className="mb-2 h-36 overflow-hidden rounded-2xl" />
+            <div className="mb-2 text-center text-xs font-semibold">{map.name}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {SOON.map((c) => (
+                <span key={c.name} className="rounded-full bg-white/5 px-2 py-1 text-[11px] opacity-50">{c.emoji} {c.name} · soon</span>
               ))}
             </div>
           </>
@@ -141,7 +159,7 @@ export default function CreateGame() {
               {bots === 0 && <span className="anim-fade text-sm opacity-70">+ friends via invite link</span>}
             </div>
             <div className="mt-4 rounded-2xl bg-white/5 p-3 text-xs opacity-85">
-              {map.name} · hide {hide}s · search {Math.round((search / 60) * 10) / 10} min · safe: {map.safe_houses.find((s) => s.id === safe)?.name}
+              {cities.find((c) => c.id === city)?.name} · {map.name} · hide {hide}s · search {Math.round((search / 60) * 10) / 10} min · safe: {map.safe_houses.find((s) => s.id === safe)?.name}
             </div>
           </>
         )}

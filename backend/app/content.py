@@ -98,6 +98,16 @@ class NetCfg(BaseModel):
     max_frame_bytes: int
 
 
+class City(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lng: float
+    blurb: str = ""
+    arenas: list[str]
+    fares: list[Fare] | None = None  # None = local fares (danfo/keke)
+
+
 class GameConfig(BaseModel):
     currency_symbol: str
     money_disclaimer: str
@@ -111,6 +121,15 @@ class GameConfig(BaseModel):
     emotes: list[Emote]
     chat: ChatCfg
     network: NetCfg
+    cities: list[City]
+    home_coords: dict[str, tuple[float, float]]
+
+    def city_of(self, arena_id: str) -> City | None:
+        return next((c for c in self.cities if arena_id in c.arenas), None)
+
+    def fares_for(self, arena_id: str) -> list[Fare]:
+        city = self.city_of(arena_id)
+        return city.fares if city and city.fares else self.fares
 
     def item(self, item_id: str) -> Item | None:
         return next((i for i in self.items if i.id == item_id), None)

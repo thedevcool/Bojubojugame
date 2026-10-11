@@ -16,11 +16,21 @@ export const local = {
 export const input = {
   joyX: 0, joyY: 0, // -1..1 (joyY up = forward)
   keys: new Set<string>(),
+  joyRun: false,
   runHeld: false,
   crouchToggle: false,
 };
 
-export const cam = { yaw: Math.PI, pitch: 0.35, dist: 6 };
+export const cam = {
+  yaw: Math.PI,
+  pitch: 0.35,
+  dist: 6,
+  /** Aerial "scan the map" mode: drag pans x/z, wheel/pinch changes height. */
+  aerial: { on: false, x: 0, z: 0, h: 55 },
+};
+
+/** Short-lived screen effects (camera shake on a tag, etc.). */
+export const fx = { shake: 0 };
 
 /** Remote players: net id -> snapshot buffer (server time, ms). */
 export const remotes = new Map<number, Snap[]>();

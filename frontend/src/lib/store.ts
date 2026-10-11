@@ -29,7 +29,9 @@ interface GameStore {
   unread: number;
   chatOpen: boolean;
   toasts: Toast[];
-  ride: { until: number } | null;
+  ride: { until: number; seconds: number; mode: string; arena: string } | null;
+  aerial: boolean;
+  homeArea: string | null;
   dice: { rolls: number[]; seeker: string; at: number } | null;
   over: { gameId: string; results: Standing[] } | null;
   emotes: { n: number; text: string; until: number }[];
@@ -58,6 +60,8 @@ export const useGame = create<GameStore>((set, get) => ({
   chatOpen: false,
   toasts: [],
   ride: null,
+  aerial: false,
+  homeArea: null,
   dice: null,
   over: null,
   emotes: [],

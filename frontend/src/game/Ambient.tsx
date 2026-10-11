@@ -8,7 +8,9 @@ import { useGame } from "@/lib/store";
 import type { GameMap } from "@/lib/types";
 import { BOTTOMS, SKIN, TOPS } from "./palette";
 import { Vehicle } from "./props";
+import { sound } from "./sound";
 import { local, serverNow } from "./state";
+import { localBody, otherPlayers, traffic, type Body, type Pt } from "./traffic";
 
 /**
  * Ambient street life for the hub: pedestrians, vendors and traffic.
@@ -95,9 +97,11 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
     setColors(heads.current, (w) => SKIN[w.colors[0]]);
     setColors(hairs.current, () => "#15100c");
     let near: { d: number; x: number; z: number; text: string } | null = null;
+    traffic.peds.length = 0;
     walkers.forEach((w, i) => {
       const p = pose(w, t);
       const far = Math.hypot(p.x - local.x, p.z - local.z) > VIEW;
+      if (!far) traffic.peds.push({ x: p.x, z: p.z });
       if (far) {
         for (const [m, per] of [[legs, 2], [arms, 2], [torso, 1], [heads, 1], [hairs, 1]] as const)
           for (let k = 0; k < per; k++) m.current?.setMatrixAt(i * per + k, HIDDEN);
@@ -149,21 +153,72 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
   );
 }
 
-interface Car { kind: string; ax: number; az: number; dx: number; dz: number; len: number; speed: number; offset: number; color: string }
+interface Car { kind: string; ax: number; az: number; dx: number; dz: number; len: number; speed: number; offset: number; color: string; half: number; r: number }
 const CAR_COLORS = ["#8a8f96", "#a23b3b", "#22313f", "#f3efe6", "#2f6db5", "#1d1a16"];
+const SIZE: Record<string, [number, number]> = { danfo: [3, 1.2], keke: [1.2, 0.7], car: [2.1, 1] }; // half length, radius
+const SHOUTS = [
+  "Comot for road! 😤", "Oga shift! You no see moto?", "I go jam you o!", "Ode! Clear road!", "You wan make I bash you?",
+  "Oya waka commot!", "Na road be this o, no be your papa house!", "Abeg move before I vex!",
+];
 
+/**
+ * Traffic that behaves: every car looks ahead along its lane, slows and waits for anything in
+ * the way (players, the crowd, other cars, your car), leans on the horn, and the driver shouts.
+ * Each phone simulates its own traffic, starting from the shared server clock.
+ */
 function Traffic({ cars }: { cars: Car[] }) {
   const refs = useRef<(THREE.Group | null)[]>([]);
-  useFrame(() => {
-    const t = serverNow() / 1000;
+  const st = useRef(cars.map((c) => ({ s: ((serverNow() / 1000) * c.speed + c.offset) % c.len, v: c.speed, wait: 0, horn: -9 })));
+  const [shout, setShout] = useState<{ x: number; z: number; text: string; at: number } | null>(null);
+  useFrame((state, delta) => {
+    const dt = Math.min(delta, 0.1), now = state.clock.elapsedTime;
+    const bodies: Body[] = cars.map((c, i) => ({ x: c.ax + c.dx * st.current[i].s, z: c.az + c.dz * st.current[i].s, dx: c.dx, dz: c.dz, half: c.half, r: c.r }));
+    traffic.cars = bodies;
+    const others = otherPlayers(), me = localBody();
+    const people: (Pt & { me?: boolean })[] = [...others.people, ...traffic.peds];
+    if (me.person) people.push({ ...me.person, me: true });
+    const carsToo: (Body & { me?: boolean })[] = [...others.cars];
+    if (me.car) carsToo.push({ ...me.car, me: true });
+    // pass 1: what's in front of each car
+    const blockedBy: (number | "person" | "car" | null)[] = bodies.map((b, i) => {
+      const fx = b.x + b.dx * b.half, fz = b.z + b.dz * b.half;
+      const look = 1.6 + st.current[i].v * 0.55;
+      const ahead = (x: number, z: number, wide: number) => {
+        const rx = x - fx, rz = z - fz, a = rx * b.dx + rz * b.dz;
+        return a > -0.4 && a < look && Math.abs(rx * b.dz - rz * b.dx) < b.r + wide;
+      };
+      for (const p of people) if (ahead(p.x, p.z, 0.75)) return "person";
+      for (const c of carsToo) for (const k of [-1, 0, 1]) if (ahead(c.x + c.dx * c.half * k, c.z + c.dz * c.half * k, c.r + 0.3)) return "car";
+      for (let j = 0; j < bodies.length; j++) {
+        if (j === i) continue;
+        const c = bodies[j];
+        for (const k of [-1, 0, 1]) if (ahead(c.x + c.dx * c.half * k, c.z + c.dz * c.half * k, c.r + 0.2)) return j;
+      }
+      return null;
+    });
     cars.forEach((c, i) => {
+      const s = st.current[i];
+      let by = blockedBy[i];
+      // two cars waiting for each other (a junction): the first one goes
+      if (typeof by === "number" && blockedBy[by] === i && i < by) by = null;
+      const target = by === null ? c.speed : 0;
+      s.v = target < s.v ? Math.max(target, s.v - 14 * dt) : Math.min(target, s.v + 3.5 * dt);
+      s.s = (s.s + s.v * dt) % c.len;
+      s.wait = by === null ? 0 : s.wait + dt;
+      const b = bodies[i];
+      if ((by === "person" || by === "car") && s.wait > 0.5 && now - s.horn > 2.4) {
+        s.horn = now;
+        const d = Math.hypot(b.x - local.x, b.z - local.z);
+        if (d < 45) sound.play("horn", Math.max(0.15, 1 - d / 45));
+        if (d < 14) setShout({ x: b.x, z: b.z, text: SHOUTS[Math.floor(Math.random() * SHOUTS.length)], at: now });
+      }
       const g = refs.current[i];
       if (!g) return;
-      const s = (t * c.speed + c.offset) % c.len;
-      g.position.set(c.ax + c.dx * s, 0, c.az + c.dz * s);
+      g.position.set(c.ax + c.dx * s.s, 0, c.az + c.dz * s.s);
       g.rotation.y = Math.atan2(c.dx, c.dz);
       g.visible = Math.hypot(g.position.x - local.x, g.position.z - local.z) < VIEW + 20;
     });
+    if (shout && now - shout.at > 2.6) setShout(null);
   });
   return (
     <>
@@ -172,6 +227,11 @@ function Traffic({ cars }: { cars: Car[] }) {
           {c.kind === "danfo" ? <Vehicle kind="danfo" w={2.4} d={6} h={2.6} /> : c.kind === "keke" ? <Vehicle kind="keke" w={1.4} d={2.4} h={1.8} /> : <Vehicle kind="car" w={2} d={4.2} h={1.5} color={c.color} />}
         </group>
       ))}
+      {shout && (
+        <Html position={[shout.x, 3.1, shout.z]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+          <div className="anim-pop max-w-[60vw] whitespace-nowrap rounded-xl bg-[#ffd400] px-2 py-1 text-[11px] font-black text-black shadow">📢 {shout.text}</div>
+        </Html>
+      )}
     </>
   );
 }
@@ -187,7 +247,10 @@ export default function Ambient({ map }: { map: GameMap }) {
       const [[ax, az], [bx, bz]] = v.pts;
       const len = Math.hypot(bx - ax, bz - az);
       for (let k = 0; k < v.n; k++)
-        out.push({ kind: v.kind, ax, az, dx: (bx - ax) / len, dz: (bz - az) / len, len, speed: v.speed, offset: (len / v.n) * k + vi * 13, color: CAR_COLORS[(vi + k) % CAR_COLORS.length] });
+        out.push({
+          kind: v.kind, ax, az, dx: (bx - ax) / len, dz: (bz - az) / len, len, speed: v.speed, offset: (len / v.n) * k + vi * 13,
+          color: CAR_COLORS[(vi + k) % CAR_COLORS.length], half: (SIZE[v.kind] ?? SIZE.car)[0], r: (SIZE[v.kind] ?? SIZE.car)[1],
+        });
     });
     return out.slice(0, maxCars);
   }, [map, quality]);
@@ -195,7 +258,7 @@ export default function Ambient({ map }: { map: GameMap }) {
   return (
     <>
       {walkers.length > 0 && <Crowd key={walkers.length} walkers={walkers} />}
-      <Traffic cars={cars} />
+      <Traffic key={cars.length} cars={cars} />
     </>
   );
 }

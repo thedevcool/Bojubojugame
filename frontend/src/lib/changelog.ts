@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.6.0",
+    date: "2026-10-11",
+    title: "Lagos traffic with wahala 🚦",
+    items: [
+      { emoji: "🚗", title: "Drive on the roads", text: "Tap somewhere while driving and your car follows the streets instead of cutting across compounds." },
+      { emoji: "🛑", title: "Nothing passes through anything", text: "Cars stop for people and for other cars, and your car can't drive through anyone. You can't walk through a danfo either." },
+      { emoji: "📢", title: "Comot for road!", text: "Stand in the road and the traffic waits, leans on the horn, and the driver lets you hear word." },
+      { emoji: "🚪", title: "Out through the door", text: "At your front door, tap outside and you step out and keep going. Anywhere else inside, use the door or the 🗺️ map." },
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-10-11",
     title: "Boju Boju is coming to LagosLife 🎮",

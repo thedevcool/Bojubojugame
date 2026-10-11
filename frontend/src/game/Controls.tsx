@@ -52,12 +52,29 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
       if (look.current?.id === e.pointerId) look.current = null;
     };
     const visibility = () => document.hidden && resetAll();
+    // iOS Safari sometimes never delivers pointerup/pointercancel (e.g. when its
+    // edge-swipe "back" gesture grabs the touch). TouchEvent.touches is the
+    // authoritative list of fingers on the glass, so reconcile against it.
+    const reconcile = (e: TouchEvent) => {
+      const fingers = Array.from(e.touches);
+      const j = joy.current;
+      if (j && !fingers.some((t) => Math.hypot(t.clientX - j.ox, t.clientY - j.oy) < R * 3.5)) {
+        joy.current = null;
+        input.joyX = 0;
+        input.joyY = 0;
+        input.joyRun = false;
+        setKnob(null);
+      }
+      if (look.current && fingers.length === 0) look.current = null;
+      if (fingers.length === 0) input.runHeld = false;
+    };
     const focusIn = (e: FocusEvent) => typing(e.target) && input.keys.clear();
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", resetAll);
     window.addEventListener("pointerup", globalUp, true);
     window.addEventListener("pointercancel", globalUp, true);
+    for (const t of ["touchend", "touchcancel", "touchstart"] as const) window.addEventListener(t, reconcile, { capture: true, passive: true });
     document.addEventListener("visibilitychange", visibility);
     document.addEventListener("focusin", focusIn);
     return () => {
@@ -66,6 +83,7 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
       window.removeEventListener("blur", resetAll);
       window.removeEventListener("pointerup", globalUp, true);
       window.removeEventListener("pointercancel", globalUp, true);
+      for (const t of ["touchend", "touchcancel", "touchstart"] as const) window.removeEventListener(t, reconcile, { capture: true });
       document.removeEventListener("visibilitychange", visibility);
       document.removeEventListener("focusin", focusIn);
       resetAll();
@@ -79,8 +97,10 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
     const leftSide = e.clientX < window.innerWidth * 0.45 && e.pointerType !== "mouse" && !cam.aerial.on;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
     if (leftSide && !joy.current) {
-      joy.current = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
-      setKnob({ x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY });
+      // keep the base fully on screen (and off the iOS back-swipe edge)
+      const ox = Math.max(R + 12, e.clientX), oy = Math.min(window.innerHeight - R - 12, e.clientY);
+      joy.current = { id: e.pointerId, ox, oy };
+      setKnob({ x: ox, y: oy, ox, oy });
     } else if (!look.current) {
       look.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
     }

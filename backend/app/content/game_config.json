@@ -54,11 +54,13 @@
     "crouch_height": 0.9
   },
   "economy": {
-    "starting_balance": 20000,
+    "starting_balance": 100000000,
     "daily_bonus": 2000,
     "max_hunger": 100,
     "starting_hunger": 80,
-    "hunger_decay_per_hour": 6
+    "hunger_decay_per_hour": 6,
+    "topup_to": 100000000,
+    "topup_id": "test-phase-1"
   },
   "fares": [
     {

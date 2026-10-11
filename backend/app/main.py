@@ -283,6 +283,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
                 if row is not None and row.tag is None:
                     row.tag = await free_tag(s, row.nickname)
                 p = row or p
+        topup = await world.economy.ensure_topup(pid)
         bonus = await world.economy.claim_daily_bonus(pid)
         return {
             "boju_id": auth.boju_id(p.nickname, p.tag),
@@ -294,6 +295,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             "balance": await world.economy.balance(pid),
             "hunger": round(world.economy.hunger_now(p), 1),
             "daily_bonus": bonus,
+            "topup": topup,
         }
 
     @app.get("/api/wallet")

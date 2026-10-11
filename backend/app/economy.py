@@ -78,6 +78,21 @@ class Economy:
         applied, _ = await self.post(player_id, self.cfg.economy.daily_bonus, "daily_bonus", f"daily:{player_id}:{day}")
         return applied
 
+    async def ensure_topup(self, player_id: str) -> int:
+        """Bring a player's balance up to ``topup_to`` once per campaign (idempotent)."""
+        target = self.cfg.economy.topup_to
+        if target <= 0:
+            return 0
+        key = f"topup:{self.cfg.economy.topup_id}:{player_id}"
+        async with self.sessions() as s:
+            if await s.scalar(select(LedgerEntry.id).where(LedgerEntry.idempotency_key == key)) is not None:
+                return 0  # this campaign already paid this player
+        missing = target - await self.balance(player_id)
+        if missing <= 0:
+            return 0
+        applied, _ = await self.post(player_id, missing, "topup", key, ref=self.cfg.economy.topup_id)
+        return applied
+
     # ---- hunger (stored value + timestamp, decays lazily) ----
     def hunger_now(self, p: Player, now: datetime | None = None) -> float:
         now = now or datetime.now(UTC)

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
-import { naira } from "@/lib/api";
+import { naira, nairaShort } from "@/lib/api";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { fmtTime, useMap, useRole, useSecondsLeft, useTicker, useWhere } from "./hooks";
@@ -21,7 +21,7 @@ export function TopBar() {
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
       <div className="panel flex min-w-0 items-center gap-2.5 px-3 py-2">
         <button onClick={() => set({ panel: "wallet" })} className="text-left">
-          <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg">{naira(balance)}</div>
+          <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg" title={naira(balance)}>{nairaShort(balance)}</div>
           <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
         </button>
         <div className="w-14 sm:w-20">

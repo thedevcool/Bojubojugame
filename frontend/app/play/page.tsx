@@ -40,7 +40,9 @@ export default function PlayPage() {
         const fresh = await refreshToken(acc);
         const [content, profile] = await Promise.all([getContent(), getMe(fresh)]);
         set({ content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area });
+        if (profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
         if (profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
+        if (!profile.has_pin) setTimeout(() => useGame.getState().toast("🔐 Set a PIN in ⚙️ Settings so you can log in on any phone"), 6000);
         net.start(fresh);
       } catch (e) {
         setError((e as Error).message || "Can't connect");

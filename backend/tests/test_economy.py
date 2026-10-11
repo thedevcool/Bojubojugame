@@ -42,3 +42,16 @@ async def test_food_refills_hunger_and_daily_bonus_once(db):
     assert await eco.claim_daily_bonus(pid) == cfg.economy.daily_bonus
     assert await eco.claim_daily_bonus(pid) == cfg.economy.daily_bonus  # same key -> same row
     assert await eco.balance(pid) == bal + cfg.economy.daily_bonus
+
+
+async def test_topup_is_once_per_campaign(db):
+    cfg = get_config()
+    eco = Economy(db.sessions, cfg)
+    pid = await make_player(db, "Old")
+    await eco.post(pid, 20000, "start", "s")
+    first = await eco.ensure_topup(pid)
+    assert first == cfg.economy.topup_to - 20000
+    assert await eco.balance(pid) == cfg.economy.topup_to
+    await eco.post(pid, -5000, "food", "f1")
+    assert await eco.ensure_topup(pid) == 0  # same campaign never pays twice
+    assert await eco.balance(pid) == cfg.economy.topup_to - 5000

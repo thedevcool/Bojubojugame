@@ -5,7 +5,8 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, inspect, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -28,9 +29,24 @@ class Player(Base):
     nickname: Mapped[str] = mapped_column(String(24))
     home_area: Mapped[str] = mapped_column(String(40))
     device_secret_hash: Mapped[str] = mapped_column(String(128))
+    # Login without email/phone: Boju ID = nickname#tag, plus an optional hashed PIN.
+    tag: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pin_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
     hunger: Mapped[float] = mapped_column(default=80.0)
     hunger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Device(Base):
+    """Extra devices a player logged in on (each gets its own refresh secret)."""
+
+    __tablename__ = "devices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    secret_hash: Mapped[str] = mapped_column(String(128), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -103,6 +119,27 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+def _add_missing_columns(conn: Connection) -> None:
+    """Tiny forward-only migration: add new nullable/defaulted columns to live tables.
+
+    create_all() never alters existing tables, so columns added to a model after
+    launch are added here. Only ever ADD COLUMN — never drop or rewrite data.
+    """
+    insp = inspect(conn)
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            ddl = col.type.compile(dialect=conn.dialect)
+            default = ""
+            if col.default is not None and getattr(col.default, "is_scalar", False):
+                default = f" DEFAULT {col.default.arg!r}"
+            conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {ddl}{default}'))
+
+
 class Database:
     def __init__(self, url: str) -> None:
         kw: dict[str, Any] = {"pool_pre_ping": True}
@@ -114,6 +151,10 @@ class Database:
     async def create_all(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
+            await conn.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS ux_players_nick_tag ON players (lower(nickname), tag)")
+            )
 
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.sessions() as s:

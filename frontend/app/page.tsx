@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { BOTTOMS, SKIN, TOPS } from "@/game/palette";
 import { createGuest, getContent, loadAccount, type Account } from "@/lib/api";
+import LoginForm from "@/ui/LoginForm";
 
 const AvatarPreview = dynamic(() => import("@/game/Previews").then((m) => m.AvatarPreview), {
   ssr: false,
@@ -21,6 +22,7 @@ function Landing() {
   const [av, setAv] = useState([2, 0, 0]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"new" | "login">("new");
   const join = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("join") : null;
   const playUrl = `/play${join ? `?join=${encodeURIComponent(join)}` : ""}`;
 
@@ -63,14 +65,23 @@ function Landing() {
       {!acc && areas.length === 0 && !err && (
         <p className="mt-4 text-sm opacity-80">Waking up the game server… this can take up to a minute the first time.</p>
       )}
-      {acc ? (
+      {acc && mode === "new" ? (
         <div className="panel anim-rise mt-6 p-4">
           <div className="text-sm opacity-80">Welcome back,</div>
           <div className="text-2xl font-black">{acc.nickname}</div>
           <Link href={playUrl} className="btn btn-primary mt-4 block text-center text-lg">Enter Lagos ▶</Link>
+          <button className="mt-3 w-full text-center text-xs underline opacity-75" onClick={() => setMode("login")}>Not you? Log in to another account</button>
         </div>
       ) : (
-        <form onSubmit={submit} className="panel anim-rise mt-6 space-y-4 p-4">
+        <div className="panel anim-rise mt-6 p-4">
+          <div className="segmented mb-4">
+            <button type="button" data-on={mode === "new"} onClick={() => setMode("new")}>New player</button>
+            <button type="button" data-on={mode === "login"} onClick={() => setMode("login")}>I have an account</button>
+          </div>
+          {mode === "login" ? (
+            <LoginForm onDone={() => router.push(playUrl)} />
+          ) : (
+        <form onSubmit={submit} className="anim-step space-y-4">
           <label className="block text-sm font-bold">Nickname
             <input value={nick} onChange={(e) => setNick(e.target.value)} maxLength={16} minLength={2} required placeholder="e.g. Tunde_Fast"
               className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 font-normal outline-none" />
@@ -91,6 +102,8 @@ function Landing() {
           <button disabled={busy || nick.trim().length < 2 || !area} className="btn btn-primary w-full text-lg">{busy ? "Loading…" : "Start playing ▶"}</button>
           <p className="text-xs opacity-70">No email or phone needed. We never ask for bank or card details.</p>
         </form>
+          )}
+        </div>
       )}
       <Link href="/leaderboards" className="mt-4 text-center text-sm underline opacity-80">🏆 Leaderboards</Link>
       <footer className="mt-8 text-center text-xs opacity-60">In-game naira only — not real money. No payments, no cash-out.</footer>

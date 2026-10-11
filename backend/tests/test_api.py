@@ -1,6 +1,7 @@
 import msgpack
 from fastapi.testclient import TestClient
 
+from app.content import get_config
 from app.main import create_app
 
 
@@ -13,7 +14,8 @@ def test_guest_flow_and_websocket(tmp_path):
         r = client.post("/api/auth/guest", json={"nickname": "Ade <b>", "home_area": "Yaba"}).json()
         h = {"Authorization": f"Bearer {r['token']}"}
         me = client.get("/api/me", headers=h).json()
-        assert me["nickname"] == "Ade b" and me["balance"] == 20000 + me["daily_bonus"]
+        start = get_config().economy.starting_balance
+        assert me["nickname"] == "Ade b" and me["balance"] == start + me["daily_bonus"] + me["topup"]
         assert client.get("/api/me").status_code == 401
         assert (
             client.post(

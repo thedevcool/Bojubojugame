@@ -62,7 +62,35 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number }
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; boju_id: string | null; has_pin: boolean }
+
+/** Log in on a new phone with Boju ID (e.g. Tolu#4821) + 6-digit PIN. */
+export async function login(bojuId: string, pin: string): Promise<Account> {
+  const r = await json<{ token: string; player_id: string; device_secret: string; nickname: string }>(
+    await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boju_id: bojuId.trim(), pin }),
+    }),
+  );
+  const acc = { playerId: r.player_id, deviceSecret: r.device_secret, token: r.token, nickname: r.nickname };
+  saveAccount(acc);
+  return acc;
+}
+
+export async function setPin(acc: Account, pin: string, currentPin?: string) {
+  return json<{ ok: boolean; boju_id: string }>(
+    await fetch(`${API_URL}/api/auth/pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${acc.token}` },
+      body: JSON.stringify({ pin, ...(currentPin ? { current_pin: currentPin } : {}) }),
+    }),
+  );
+}
+
+export function logout(): void {
+  try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
+}
 
 export async function getMe(acc: Account): Promise<Me> {
   return json<Me>(await fetch(`${API_URL}/api/me`, { headers: { Authorization: `Bearer ${acc.token}` } }));
@@ -98,3 +126,13 @@ export async function reportPlayer(acc: Account, targetId: string, reason: strin
 }
 
 export const naira = (n: number) => `₦${Math.round(n).toLocaleString("en-NG")}`;
+
+/** Short form for tight spaces: ₦100M, ₦2.5M, ₦850K, ₦4,500. */
+export const nairaShort = (n: number) => {
+  const a = Math.abs(n), sign = n < 0 ? "-" : "";
+  const fmt = (v: number, u: string) => `${sign}₦${(Math.round(v * 10) / 10).toLocaleString("en-NG")}${u}`;
+  if (a >= 1e9) return fmt(a / 1e9, "B");
+  if (a >= 1e6) return fmt(a / 1e6, "M");
+  if (a >= 1e5) return fmt(a / 1e3, "K");
+  return naira(n);
+};

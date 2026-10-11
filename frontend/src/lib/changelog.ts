@@ -9,6 +9,16 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.3.1",
+    date: "2026-10-11",
+    title: "Log in on any phone 🔐",
+    items: [
+      { emoji: "🪪", title: "Your Boju ID", text: "Everyone now has a Boju ID like Tolu#4821 — find it in ⚙️ Settings → Your account.", tryIt: "Open ⚙️ Settings" },
+      { emoji: "🔐", title: "Set a PIN", text: "Add a 6-digit PIN and log in on a new phone with your Boju ID. Your naira, home and scores come with you." },
+      { emoji: "📱", title: "Smoother on phones", text: "Menus scroll properly, Next is always on screen, and the top bar is tidy." },
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-10-11",
     title: "Travel Naija 🇳🇬",

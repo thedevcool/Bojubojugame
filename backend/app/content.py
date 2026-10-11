@@ -59,6 +59,10 @@ class Economy(BaseModel):
     max_hunger: int
     starting_hunger: int
     hunger_decay_per_hour: float
+    # One-time top-up for existing players during the test phase (0 disables).
+    # Bump topup_id to run a new top-up campaign; each player gets each campaign once.
+    topup_to: int = Field(default=0, ge=0)
+    topup_id: str = "none"
 
 
 class Fare(BaseModel):

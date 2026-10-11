@@ -33,6 +33,9 @@ body {
 
 .game-root, .game-root * { user-select: none; -webkit-user-select: none; touch-action: none; }
 .game-root input, .game-root textarea { user-select: text; -webkit-user-select: text; touch-action: auto; }
+/* Menus and lists inside the game must still scroll with a finger. */
+.game-root .touch-scroll, .game-root .touch-scroll * { touch-action: pan-y; }
+.touch-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 
 /* Frosted glass cards (iOS materials) */
 .panel {

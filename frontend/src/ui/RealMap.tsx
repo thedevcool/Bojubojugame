@@ -35,7 +35,7 @@ function pickStyle(): Promise<string | StyleSpecification> {
   return stylePromise;
 }
 
-async function createMap(el: HTMLDivElement, center: [number, number], zoom: number): Promise<{ map: MLMap; ml: typeof import("maplibre-gl") }> {
+async function createMap(el: HTMLDivElement, center: [number, number], zoom: number, interactive = true): Promise<{ map: MLMap; ml: typeof import("maplibre-gl") }> {
   const ml = await import("maplibre-gl");
   const style = await pickStyle();
   const map = new ml.Map({
@@ -43,13 +43,24 @@ async function createMap(el: HTMLDivElement, center: [number, number], zoom: num
     style,
     center,
     zoom,
-    attributionControl: { compact: true, customAttribution: "© OpenStreetMap contributors · OpenFreeMap" },
+    attributionControl: false, // we show our own one-line credit (see <Credit/>), the default box is huge on phones
+    interactive,
     dragRotate: false,
     pitchWithRotate: false,
   });
   await new Promise<void>((res) => (map.loaded() ? res() : map.once("load", () => res())));
   map.resize();
   return { map, ml };
+}
+
+/** Required OpenStreetMap/OpenFreeMap credit, kept to one small line. */
+function Credit() {
+  return (
+    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
+      className="absolute bottom-1 right-1 z-10 rounded bg-white/75 px-1.5 py-px text-[9px] leading-tight text-black/70">
+      © OpenStreetMap · OpenFreeMap
+    </a>
+  );
 }
 
 function pinEl(html: string, cls: string): HTMLDivElement {
@@ -150,6 +161,7 @@ export function RideMap() {
     <div className="anim-fade absolute inset-0 z-[55] bg-[#dfe9f5]">
       {/* maplibre's CSS forces position:relative on the container, so size it explicitly */}
       <div className="absolute inset-0"><div ref={box} style={{ width: "100%", height: "100%" }} /></div>
+      <Credit />
       <div className="panel anim-banner absolute left-3 right-3 top-3 mx-auto max-w-md p-3">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-2xl">{MODE_ICON[ride.mode] ?? "🚌"}</span>
@@ -183,7 +195,7 @@ export function CityMap({ selected, onSelect, className }: { selected: string; o
     if (!box.current || !cities) return;
     let alive = true;
     (async () => {
-      const { map, ml } = await createMap(box.current!, [5.6, 7.6], 4.9);
+      const { map, ml } = await createMap(box.current!, [5.6, 7.6], 4.9, false);
       if (!alive) { map.remove(); return; }
       mapRef.current = map;
       for (const c of cities) {
@@ -206,5 +218,10 @@ export function CityMap({ selected, onSelect, className }: { selected: string; o
     if (c && mapRef.current) mapRef.current.flyTo({ center: [c.lng, c.lat], zoom: 6.2, duration: 1400, essential: true });
   }, [selected, cities, ready]);
 
-  return <div ref={box} className={className} />;
+  return (
+    <div className={`relative ${className ?? ""}`}>
+      <div ref={box} style={{ width: "100%", height: "100%" }} />
+      <Credit />
+    </div>
+  );
 }

@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.8.1",
+    date: "2026-10-11",
+    title: "Boju Boju, the song 🎤",
+    items: [
+      { emoji: "🎤", title: "The real Boju Boju song", text: "While Boju closes their eyes and counts, everyone hears the song, sung by real voices. Male and female voices take turns each round.", tryIt: "⚙️ Settings → Boju Boju song" },
+    ],
+  },
+  {
     version: "2.8.0",
     date: "2026-10-11",
     title: "The game now teaches you 🧭",

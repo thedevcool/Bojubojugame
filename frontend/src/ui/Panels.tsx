@@ -12,6 +12,7 @@ import CreateGame from "./CreateGame";
 import { LiveGamesList } from "./Live";
 import { useRole, useSecondsLeft, useTicker } from "./hooks";
 import { gamesPlayed } from "./Coach";
+import { getSongVoice, setSongVoice, type SongVoice } from "./BojuSong";
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
 function Modal({ children }: { children: React.ReactNode }) {
@@ -463,6 +464,7 @@ export function SettingsPanel() {
   const [prefs, setPrefs] = useState({ ...sound.prefs });
   const [help, setHelp] = useState(false);
   const mini = useGame((s) => !!s.mini);
+  const [songVoice, setSongVoiceState] = useState<SongVoice>(() => getSongVoice());
   const flip = (k: "sound" | "music", v: boolean) => {
     const next = { ...prefs, [k]: v };
     setPrefs(next);
@@ -482,6 +484,12 @@ export function SettingsPanel() {
       <div className="ios-group">
         <div className="ios-row"><span className="ios-glyph bg-[#ff375f]">🔊</span><span className="flex-1 text-[15px]">Sound effects</span><Switch label="Sound effects" on={prefs.sound} onChange={(v) => flip("sound", v)} /></div>
         <div className="ios-row"><span className="ios-glyph bg-[#bf5af2]">🎶</span><span className="flex-1 text-[15px]">Music</span><Switch label="Music" on={prefs.music} onChange={(v) => flip("music", v)} /></div>
+      </div>
+      <div className="ios-section-title">Boju Boju song (while Boju counts)</div>
+      <div className="segmented" data-testid="song-voice">
+        {([["auto", "Take turns"], ["male", "Male"], ["female", "Female"], ["off", "Off"]] as [SongVoice, string][]).map(([v, label]) => (
+          <button key={v} data-on={songVoice === v} onClick={() => { setSongVoiceState(v); setSongVoice(v); }}>{label}</button>
+        ))}
       </div>
       <div className="ios-section-title">Graphics</div>
       <div className="segmented">

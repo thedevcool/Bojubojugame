@@ -15,6 +15,7 @@ import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
 import { MiniBridge } from "@/ui/LagosLife";
 import { CoachGuide, CoachMoments, HowToPlay } from "@/ui/Coach";
+import { BojuSong } from "@/ui/BojuSong";
 import { ActionButtons, BlindOverlay, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
@@ -158,6 +159,7 @@ export default function PlayPage() {
             <PhaseBar />
             <CoachGuide />
             <CoachMoments />
+            <BojuSong />
             <ZonePanel />
             <SafeCompass />
             {!decor && !onboarding && <MiniMapWidget />}

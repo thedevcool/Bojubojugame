@@ -2,6 +2,7 @@
  * Procedural game audio with Tone.js — every sound is synthesised, so there
  * is nothing to download and nothing to license. Tone is lazy-loaded on the
  * first user gesture (browsers block audio before that anyway).
+ * The one recording is the Boju Boju song (public/audio), sung while Boju's eyes are closed.
  */
 import type * as ToneNS from "tone";
 
@@ -18,6 +19,9 @@ class SoundEngine {
   private sfxBus!: ToneNS.Gain;
   private musicBus!: ToneNS.Gain;
   private ambBus!: ToneNS.Gain;
+  private songBus!: ToneNS.Gain;
+  private song: { url: string; player: ToneNS.Player } | null = null;
+  private songWanted: string | null = null;
   private s: Record<string, ToneNS.ToneAudioNode & { triggerAttackRelease?: unknown }> = {};
   private ambience: ToneNS.Noise | null = null;
   private ambFilter: ToneNS.Filter | null = null;
@@ -47,6 +51,7 @@ class SoundEngine {
       this.sfxBus = new T.Gain(this.prefs.sound ? 0.9 : 0).connect(comp);
       this.musicBus = new T.Gain(this.prefs.music ? 0.32 : 0).connect(comp);
       this.ambBus = new T.Gain(this.prefs.sound ? 0.5 : 0).connect(comp);
+      this.songBus = new T.Gain(this.prefs.sound ? 1 : 0).connect(this.master);
       const reverb = new T.Freeverb({ roomSize: 0.3, wet: 0.12 }).connect(this.sfxBus);
       this.s = {
         blip: new T.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.002, decay: 0.08, sustain: 0, release: 0.05 } }).connect(this.sfxBus),
@@ -90,7 +95,36 @@ class SoundEngine {
     if (!this.T) return;
     this.sfxBus.gain.rampTo(this.prefs.sound ? 0.9 : 0, 0.2);
     this.ambBus.gain.rampTo(this.prefs.sound ? 0.5 : 0, 0.2);
-    this.musicBus.gain.rampTo(this.prefs.music ? 0.32 : 0, 0.3);
+    this.musicBus.gain.rampTo(this.prefs.music ? (this.song ? 0.06 : 0.32) : 0, 0.3);
+    this.songBus.gain.rampTo(this.prefs.sound ? 1 : 0, 0.2);
+  }
+
+  /** The Boju Boju song: loops while Boju counts (null = fade it out). Background music dips under it. */
+  async playSong(url: string | null): Promise<void> {
+    this.songWanted = url;
+    if (url) await this.unlock();
+    const T = this.T;
+    if (!T) return;
+    if (this.song && this.song.url !== url) {
+      const old = this.song.player;
+      this.song = null;
+      try { old.stop(); } catch { /* not started */ }
+      setTimeout(() => old.dispose(), 1500);
+      this.musicBus.gain.rampTo(this.prefs.music ? 0.32 : 0, 1.2);
+    }
+    if (!url || this.song) return;
+    const player = new T.Player({ loop: true, fadeIn: 0.05, fadeOut: 0.7 }).connect(this.songBus);
+    this.song = { url, player };
+    try {
+      await player.load(url);
+    } catch {
+      if (this.song?.player === player) this.song = null;
+      player.dispose();
+      return;
+    }
+    if (this.songWanted !== url || this.song?.player !== player) { player.dispose(); return; } // phase already moved on
+    this.musicBus.gain.rampTo(this.prefs.music ? 0.06 : 0, 0.4);
+    player.start();
   }
 
   private trig(name: string, note: string | number | string[], dur: ToneNS.Unit.Time, time?: number, vel = 1): void {

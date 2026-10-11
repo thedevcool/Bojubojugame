@@ -781,7 +781,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers, sound };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

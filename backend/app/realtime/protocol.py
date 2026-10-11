@@ -67,6 +67,12 @@ class RemoveBot(_In):
     id: str = Field(max_length=40)
 
 
+class Rematch(_In):
+    """Play again: a new private game with the same settings, everyone from the last one invited."""
+
+    t: Literal["g_rematch"]
+
+
 class Invite(_In):
     t: Literal["g_invite"]
     to: str = Field(max_length=40)
@@ -133,6 +139,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_remove_bot": RemoveBot,
     "g_board": Board,
     "g_invite": Invite,
+    "g_rematch": Rematch,
     "knock": Knock,
     "trip": Trip,
     "watch": Watch,

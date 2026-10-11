@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from app.content import GameConfig, MapData
 from app.economy import InsufficientFunds
 from app.engine import rules
-from app.engine.geometry import distance, has_line_of_sight, in_rect
+from app.engine.geometry import collides, distance, has_line_of_sight, in_bounds, in_rect
 from app.realtime.bots import BOT_NAMES, BotBrain, drive_bots
 from app.realtime.rooms import ArenaRoom, Session
 
@@ -83,6 +84,7 @@ class GroupRoom:
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
         self.bots: dict[str, BotBrain] = {}
+        self.rematch: str | None = None  # code of the "play again" game made from this one
         self.arrive_at: dict[str, float] = {}
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
@@ -426,6 +428,17 @@ class GroupRoom:
                 self.to_found_area(s)
         self.set_phase("hide", self.settings["hide"], "hide_started")
 
+    def arena_spot(self, x: float, z: float, i: int = 0) -> tuple[float, float]:
+        """A free standing spot inside the arena, as near to (x, z) as possible."""
+        b, r = self.map.bounds, self.cfg.movement.player_radius
+        bx, bz = min(max(x, b[0] + 2), b[2] - 2), min(max(z, b[1] + 2), b[3] - 2)
+        for k in range(60):
+            ang, rad = (k + i * 7) * 2.399963, 0.0 if k == 0 else 0.8 + 0.5 * math.sqrt(k)
+            px, pz = bx + math.cos(ang) * rad, bz + math.sin(ang) * rad
+            if in_bounds(b, px, pz, r) and not collides(px, pz, r + 0.05, self.map.near(px, pz, px, pz)):
+                return round(px, 2), round(pz, 2)
+        return self.map.spawn
+
     def to_found_area(self, s: Session) -> None:
         fx, fz = self.map.found_area
         i = self.members.index(s.pid)
@@ -668,10 +681,13 @@ class GroupRoom:
         )
         self.phase = "over"
         self.phase_end = self.world.now()
-        for s in (self.session(p) for p in self.members):
+        for i, s in enumerate(self.session(p) for p in self.members):
             if s is not None:
                 s.frozen = False
                 s.spectator = False
+                # caught players watched from the stands outside the field: bring them back in to explore
+                if s.room is self.arena and not in_bounds(self.map.bounds, s.x, s.z, self.cfg.movement.player_radius):
+                    s.place(*self.arena_spot(s.x, s.z, i), self.world.now())
         self.broadcast_state("game_over")
         self.broadcast({"t": "g_over", "game_id": self.id, "results": self.final_results})
         await self.world.save_game_results(self.id, self.final_results)

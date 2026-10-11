@@ -14,6 +14,8 @@ export const local = {
   sit: false,
   lie: false,
   drive: false,
+  /** car speed along its heading (m/s, negative = reversing) */
+  carV: 0,
   seatY: 0,
   /** furniture you tapped: when you arrive, sit (or ask sleep/sit for a bed) */
   seatTarget: null as { x: number; z: number; bed: boolean } | null,
@@ -27,6 +29,10 @@ export const input = {
   joyRun: false,
   runHeld: false,
   crouchToggle: false,
+  /** on-screen driving pedals and steering (held) */
+  pedal: { gas: false, brake: false, left: false, right: false },
+  /** when the player last dragged to look around (the driving camera waits a moment after) */
+  lookedAt: 0,
   /** pending screen tap (tap-to-move), consumed by the scene */
   tap: null as { x: number; y: number; walk: boolean } | null,
 };

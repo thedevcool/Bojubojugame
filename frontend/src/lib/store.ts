@@ -63,7 +63,7 @@ interface GameStore {
   /** player card open for this player id (tap a person in the world) */
   card: string | null;
   /** live invite to someone's lobby */
-  invite: { from: string; nick: string; code: string; at: number } | null;
+  invite: { from: string; nick: string; code: string; at: number; rematch?: boolean } | null;
   /** invite this player as soon as our new lobby exists */
   pendingInvite: string | null;
   /** house id -> tenant id; houses whose owner let me in; someone knocking at my door */

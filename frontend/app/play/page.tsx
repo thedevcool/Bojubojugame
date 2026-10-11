@@ -14,7 +14,7 @@ import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
 import { MiniBridge } from "@/ui/LagosLife";
-import { ActionButtons, BlindOverlay, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { ActionButtons, BlindOverlay, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
@@ -155,6 +155,7 @@ export default function PlayPage() {
             <SafeCompass />
             {!decor && !onboarding && <MiniMapWidget />}
             {!decor && <ActionButtons />}
+            <DriveControls />
             <DicePanel />
             <RoundResultPanel />
             <GameOverPanel />

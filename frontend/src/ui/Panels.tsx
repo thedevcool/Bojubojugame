@@ -294,6 +294,9 @@ export function GameOverPanel() {
           </div>
         ))}
       </div>
+      <button className="btn btn-primary mb-2 w-full text-lg" data-testid="play-again"
+        onClick={() => { net.send({ t: "g_rematch" }); set({ phoneOpen: true, phoneApp: "boju" }); }}>🔁 Play again</button>
+      <div className="-mt-1 mb-2 text-center text-[11px] opacity-70">Same arena, same players — everyone gets a rematch invite</div>
       {mini ? (
         <div className="grid grid-cols-2 gap-2">
           <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🚌 Motor Park</button>

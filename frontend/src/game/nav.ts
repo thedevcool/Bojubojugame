@@ -55,8 +55,11 @@ const ok = (g: Grid, i: number, j: number) => i >= 0 && j >= 0 && i < g.w && j <
 const center = (g: Grid, i: number, j: number): [number, number] => [g.x0 + (i + 0.5) * CELL, g.z0 + (j + 0.5) * CELL];
 
 function nearest(g: Grid, i: number, j: number): [number, number] | null {
+  // standing just outside the map (e.g. the stands beside an arena): start from the nearest edge cell
+  i = Math.min(Math.max(i, 0), g.w - 1);
+  j = Math.min(Math.max(j, 0), g.h - 1);
   if (ok(g, i, j)) return [i, j];
-  for (let r = 1; r < 12; r++)
+  for (let r = 1; r < 24; r++)
     for (let di = -r; di <= r; di++)
       for (const [a, b] of [[i + di, j - r], [i + di, j + r], [i - r, j + di], [i + r, j + di]])
         if (ok(g, a, b)) return [a, b];

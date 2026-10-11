@@ -610,3 +610,32 @@ export function CarShop() {
     </div></div>
   );
 }
+
+/** While driving: steering on the left thumb, gas and brake (reverse) pedals on the right. */
+export function DriveControls() {
+  const driving = useGame((s) => s.driving);
+  const aerial = useGame((s) => s.aerial);
+  const decor = useGame((s) => !!s.decor);
+  useEffect(() => () => { Object.assign(input.pedal, { gas: false, brake: false, left: false, right: false }); }, []);
+  if (!driving || aerial || decor) return null;
+  const hold = (k: keyof typeof input.pedal) => ({
+    onPointerDown: (e: React.PointerEvent) => { e.stopPropagation(); input.pedal[k] = true; try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ } },
+    onPointerUp: () => { input.pedal[k] = false; },
+    onPointerCancel: () => { input.pedal[k] = false; },
+    onLostPointerCapture: () => { input.pedal[k] = false; },
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  });
+  const pad = "grid select-none place-items-center rounded-2xl bg-black/45 font-black text-white shadow-lg backdrop-blur active:scale-95 active:bg-black/65 touch-none";
+  return (
+    <>
+      <div className="pointer-events-auto absolute bottom-24 left-3 z-20 flex gap-2" data-testid="steer">
+        <button aria-label="Steer left" className={`${pad} h-16 w-16 text-3xl`} {...hold("left")}>◀</button>
+        <button aria-label="Steer right" className={`${pad} h-16 w-16 text-3xl`} {...hold("right")}>▶</button>
+      </div>
+      <div className="pointer-events-auto absolute bottom-24 right-[5.5rem] z-20 flex items-end gap-2" data-testid="pedals">
+        <button aria-label="Brake" className={`${pad} h-14 w-14 text-[11px]`} {...hold("brake")}>🛑<br />Brake</button>
+        <button aria-label="Gas" className={`${pad} h-20 w-14 bg-emerald-600/80 text-[11px]`} {...hold("gas")}>⛽<br />Gas</button>
+      </div>
+    </>
+  );
+}

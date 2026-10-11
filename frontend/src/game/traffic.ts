@@ -47,7 +47,7 @@ export function otherPlayers(): { people: Pt[]; cars: Body[] } {
 
 /**
  * How much room the local player would have at (x, z) facing ry: negative means they'd overlap
- * a car (or, when driving, a person). Used to stop you walking or driving through traffic.
+ * a car or a person. Used to stop you walking or driving through traffic, players and NPCs.
  */
 export function roomAt(x: number, z: number, ry: number, driving: boolean, others = otherPlayers()): number {
   let m = Infinity;
@@ -57,7 +57,9 @@ export function roomAt(x: number, z: number, ry: number, driving: boolean, other
     for (const c of cars) m = Math.min(m, capsuleGap(me, c));
     for (const p of [...traffic.peds, ...others.people]) m = Math.min(m, capsuleDist(me, p.x, p.z) - PERSON_R);
   } else {
+    // on foot: cars and people are solid too (squeezing past someone is fine, walking through them isn't)
     for (const c of cars) m = Math.min(m, capsuleDist(c, x, z) - PERSON_R);
+    for (const p of [...traffic.peds, ...others.people]) m = Math.min(m, Math.hypot(p.x - x, p.z - z) - PERSON_R * 1.6);
   }
   return m;
 }

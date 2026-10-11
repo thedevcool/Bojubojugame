@@ -106,12 +106,14 @@ export function InviteBanner() {
     <div className="pointer-events-auto absolute left-1/2 top-[7.5rem] z-[61] w-[min(24rem,94vw)] -translate-x-1/2">
       <div className="panel anim-banner flex items-center gap-3 p-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-xl">🙈</span>
-        <div className="min-w-0 flex-1 text-sm"><b>@{inv.nick}</b> invited you to play Boju · <span className="font-mono">{inv.code}</span></div>
+        <div className="min-w-0 flex-1 text-sm">
+          {inv.rematch ? <><b>@{inv.nick}</b> wants a rematch! 🔁</> : <><b>@{inv.nick}</b> invited you to play Boju · <span className="font-mono">{inv.code}</span></>}
+        </div>
         <button className="btn btn-primary px-3 py-1.5 text-sm" onClick={() => {
           if (group && group.phase !== "over") net.send({ t: "g_leave" });
           net.send({ t: "g_join", code: inv.code });
           set({ invite: null, phoneOpen: true, phoneApp: "boju" });
-        }}>Join</button>
+        }}>{inv.rematch ? "Play again" : "Join"}</button>
         <button className="btn btn-ghost px-2 py-1.5 text-sm" onClick={() => set({ invite: null })}>✕</button>
       </div>
     </div>

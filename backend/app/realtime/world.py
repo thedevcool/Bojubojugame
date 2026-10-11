@@ -392,6 +392,8 @@ class World:
                 await self.on_buy(s, msg)
             elif isinstance(msg, P.Invite):
                 self.on_invite(s, msg)
+            elif isinstance(msg, P.Rematch):
+                await self.on_rematch(s)
             elif isinstance(msg, P.Watch):
                 if msg.code is not None and msg.code.upper() not in self.groups:
                     raise GroupError("That game has ended")
@@ -540,6 +542,35 @@ class World:
             raise GroupError(f"{t.nick} is already in your game")
         t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": g.code})
         s.send({"t": "toast", "msg": f"Invite sent to {t.nick} 📨"})
+
+    async def on_rematch(self, s: Session) -> None:
+        """Play again with the same people: the first to ask creates the game, the rest are invited
+        (and anyone else who taps Play again just joins it)."""
+        g = s.group
+        if g is None or g.phase != "over":
+            raise GroupError("Finish this game first")
+        old_humans = [p for p in g.members if p not in g.bots and p != s.pid]
+        bots = len(g.bots)
+        ng = self.groups.get(g.rematch) if g.rematch else None
+        if ng is not None and ng.phase == "lobby":
+            await self.on_group(s, P.GroupJoin(t="g_join", code=ng.code))
+            return
+        ng = await self.create_group(
+            s,
+            P.GroupCreate(
+                t="g_create", arena=g.settings["arena"], hide=g.settings["hide"], search=g.settings["search"],
+                safe=g.settings["safe"], bots=bots, public=False,
+            ),
+        )  # fmt: skip
+        g.rematch = ng.code
+        sent = 0
+        for pid in old_humans:
+            t = self.sessions.get(pid)
+            if t is not None and t.connected and not t.bot:
+                t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": ng.code, "rematch": True})
+                sent += 1
+        who = f" — {sent} player{'s' if sent != 1 else ''} invited" if sent else ""
+        s.send({"t": "toast", "msg": f"New game ready{who} 🔁"})
 
     def _correct(self, s: Session, seq: int, now: float) -> None:
         if now - s.last_corr_at > 0.2:

@@ -107,7 +107,7 @@ export function DecorateOverlay() {
   return (
     <div className="pointer-events-auto absolute inset-0 z-40">
       <div className="absolute inset-0" style={{ touchAction: "none" }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
-      <div className="panel anim-banner absolute left-2 right-2 top-2 mx-auto flex max-w-md items-center gap-2 px-3 py-2">
+      <div className="panel anim-banner absolute left-2 right-2 top-[max(env(safe-area-inset-top),8px)] mx-auto flex max-w-md items-center gap-2 px-3 py-2">
         <span className="text-xl">🛋️</span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-black">Decorate · {h.name}</div>
@@ -116,7 +116,7 @@ export function DecorateOverlay() {
         <button className="btn btn-ghost px-3 py-1.5 text-sm" onClick={() => set({ decor: null })}>Cancel</button>
         <button className="btn btn-primary px-3 py-1.5 text-sm" disabled={busy || !!problem} onClick={save}>Save</button>
       </div>
-      <div className="absolute bottom-2 left-2 right-2 mx-auto max-w-md space-y-2">
+      <div className="absolute bottom-[max(env(safe-area-inset-bottom),8px)] left-2 right-2 mx-auto max-w-md space-y-2">
         {selected && spec && (
           <div className="panel anim-rise flex items-center gap-2 p-2">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-xl">{ITEM_ICON[selected.item] ?? "📦"}</span>

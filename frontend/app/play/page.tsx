@@ -148,12 +148,12 @@ export default function PlayPage() {
   }
 
   return (
-    <main className="game-root fixed inset-0 overflow-hidden">
+    <main className="game-root overflow-hidden">
       {map ? (
         <>
           <div className="absolute inset-0"><Scene map={map} /></div>
           <Controls disabled={decor} />
-          <div className="pointer-events-none absolute inset-0">
+          <div className="pointer-events-none absolute safe-inset">
             <TopBar />
             <PhaseBar />
             <CoachGuide />

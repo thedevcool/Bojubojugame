@@ -11,6 +11,7 @@ import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { LiveGamesList } from "./Live";
 import { useRole, useSecondsLeft, useTicker } from "./hooks";
+import { gamesPlayed } from "./Coach";
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
 function Modal({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export function GroupPanel() {
   const safe = maps?.[arena]?.safe_houses[0]?.id ?? "";
   const close = useGame((s) => s.closePhone);
   const [mode, setMode] = useState<null | "create">(null);
+  const firstGame = gamesPlayed() === 0;
   const pendingFor = useGame((s) => (s.pendingInvite ? Object.values(s.roster).find((r) => r.id === s.pendingInvite)?.nick ?? "your friend" : null));
   if (!cfg) return null;
 
@@ -52,8 +54,9 @@ export function GroupPanel() {
             {[
               { icon: "🌍", bg: "#2f7cf6", title: "Create a game for real players", text: "Anyone in Live games can join you", on: () => setMode("create") },
               { icon: "📨", bg: "#30d158", title: "Play with friends", text: "Private game — invite friends or share the code", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 0, public: false }) },
-              { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
+              { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: firstGame ? "👍 Best for your first game — start now" : "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
               { icon: "📺", bg: "#ff375f", title: "Watch games live", text: "See games in progress on the map", on: () => useGame.getState().openApp("live") },
+              { icon: "❓", bg: "#64748b", title: "How to play", text: "The rules in 30 seconds", on: () => { useGame.getState().closePhone(); useGame.getState().set({ howTo: true }); } },
             ].map((o) => (
               <button key={o.title} className="ios-row" onClick={o.on}>
                 <span className="ios-glyph" style={{ background: o.bg }}>{o.icon}</span>
@@ -489,7 +492,8 @@ export function SettingsPanel() {
       {!mini && <InstallApp className="mb-2" />}
       <div className="ios-group">
         <button className="ios-row" onClick={() => openApp("news")}><span className="ios-glyph bg-[#7b5cff]">✨</span><span className="text-[15px]">What&apos;s new</span><span className="ios-chevron">›</span></button>
-        <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>
+        <button className="ios-row" onClick={() => { useGame.getState().closePhone(); set({ howTo: true }); }}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">›</span></button>
+        <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#64748b]">🎮</span><span className="text-[15px]">Controls & tips</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>
         {help && (
           <ul className="list-disc space-y-1 px-5 py-3 pl-9 text-[13px] opacity-85">
             <li>Joystick: left thumb moves, right thumb drags to look. Tap-to-go: tap the ground and you walk there.</li>

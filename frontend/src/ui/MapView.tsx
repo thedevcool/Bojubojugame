@@ -111,6 +111,7 @@ export function MiniMapWidget() {
   const myHome = useGame((s) => s.home?.id ?? null);
   const pin = useGame((s) => s.pin);
   const { inGame, isSeeker } = useRole();
+  const inGroup = useGame((s) => !!s.group); // the Coach bar is taller during a game
   useEffect(() => {
     if (!map) return;
     const id = setInterval(() => {
@@ -124,7 +125,7 @@ export function MiniMapWidget() {
   if (!map || (inGame && isSeeker)) return null;
   return (
     <button aria-label="Open map" onClick={() => { set({ mapOpen: true }); sound.play("pop"); }}
-      className="pointer-events-auto absolute left-2 top-[7.4rem] z-10 h-[76px] w-[76px] overflow-hidden rounded-full border-[3px] border-white/85 shadow-lg active:scale-95"
+      className={`pointer-events-auto absolute left-2 ${inGroup ? "top-[10.6rem]" : "top-[7.4rem]"} z-10 h-[76px] w-[76px] overflow-hidden rounded-full border-[3px] border-white/85 shadow-lg active:scale-95`}
       style={{ transition: "transform .2s var(--ease-spring)" }}>
       <canvas ref={ref} width={168} height={168} className="h-full w-full" />
       <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-1.5 text-[9px] font-bold text-white">MAP</span>

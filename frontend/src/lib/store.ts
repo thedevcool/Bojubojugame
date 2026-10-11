@@ -65,6 +65,8 @@ interface GameStore {
   /** live invite to someone's lobby */
   invite: { from: string; nick: string; code: string; at: number } | null;
   /** Play again: someone asked me for a rematch, or I'm waiting for answers */
+  /** "How to play" cards open */
+  howTo: boolean;
   rematch: { kind: "asked"; from: string; nick: string; until: number } | { kind: "waiting"; n: number; until: number } | null;
   /** invite this player as soon as our new lobby exists */
   pendingInvite: string | null;
@@ -144,6 +146,7 @@ export const useGame = create<GameStore>((set, get) => ({
   card: null,
   invite: null,
   rematch: null,
+  howTo: false,
   pendingInvite: null,
   doorOwners: {},
   openDoors: [],

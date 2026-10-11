@@ -9,6 +9,16 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.8.0",
+    date: "2026-10-11",
+    title: "The game now teaches you 🧭",
+    items: [
+      { emoji: "❓", title: "How to play", text: "Six quick cards explain Boju Boju the first time you join a game. Open them again any time from 🙈 Boju Boju or ⚙️ Settings.", tryIt: "📱 → 🙈 Boju Boju → How to play" },
+      { emoji: "🧭", title: "Always know what to do", text: "The bar at the top tells you the one thing to do right now — board the bus, walk into the circle, RUN & HIDE, FIND THEM — with an arrow when you need to go somewhere." },
+      { emoji: "📣", title: "Big moments, big signs", text: "\"RUN & HIDE!\" and \"FIND THEM!\" flash on screen, and your phone closes so nothing is in the way." },
+    ],
+  },
+  {
     version: "2.7.1",
     date: "2026-10-11",
     title: "Rematch, the proper way 🔁",

@@ -252,20 +252,16 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   const g = useGame.getState();
   if (prev?.phase === gs.phase) return;
   const seeker = gs.round?.seeker;
-  const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
-    case "travel": g.toast("Game don start! You're at the Motor Park — board a ride 🚌", "good"); break;
+    // what to do at each step is said by the Coach (the timer bar) — no stacked toasts on top of it
     case "gather":
       if (gs.gather) g.set({ guide: { x: gs.gather.center[0], z: gs.gather.center[1], label: "⭕ The circle" } });
-      if (!g.ride) g.toast("Oya, everybody gather inside the circle ⭕", "good");
       break;
-    case "dice": g.set({ dice: null, guide: null }); g.toast("Everybody don gather! Pick your number 1–6 🎲"); break;
+    case "dice": g.set({ dice: null, guide: null }); break;
     case "hide":
-      g.toast(seeker === me ? "Na you dey Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
       if (seeker === me) { cam.aerial.on = false; g.set({ aerial: false }); }
       break;
     case "seek":
-      g.toast(seeker === me ? "Open your eyes — go find them!" : "Boju is coming… hide well!", "good");
       sound.play("whistle");
       break;
   }

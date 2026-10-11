@@ -45,7 +45,6 @@ export function RideMap() {
     raf = requestAnimationFrame(tick);
     const done = setTimeout(() => {
       set({ ride: null });
-      if (useGame.getState().group?.phase === "gather") useGame.getState().toast("You don reach! Waka join the others inside the circle ⭕", "good");
     }, total + 900);
     return () => { cancelAnimationFrame(raf); clearTimeout(done); };
   }, [ride, set]);

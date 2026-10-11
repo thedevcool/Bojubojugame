@@ -14,6 +14,7 @@ import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
 import { MiniBridge } from "@/ui/LagosLife";
+import { CoachGuide, CoachMoments, HowToPlay } from "@/ui/Coach";
 import { ActionButtons, BlindOverlay, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
@@ -73,7 +74,11 @@ export default function PlayPage() {
         getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});
         if (!mini && profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
         if (!mini && profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
-        if (!mini && !profile.email) setTimeout(() => useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"), 60000);
+        if (!mini && !profile.email) {
+          // a gentle reminder, but never in the middle of a game
+          const nag = () => (useGame.getState().group ? setTimeout(nag, 60000) : useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"));
+          setTimeout(nag, 60000);
+        }
         net.start(fresh);
       } catch (e) {
         setError((e as Error).message || "Can't connect");
@@ -151,6 +156,8 @@ export default function PlayPage() {
           <div className="pointer-events-none absolute inset-0">
             <TopBar />
             <PhaseBar />
+            <CoachGuide />
+            <CoachMoments />
             <ZonePanel />
             <SafeCompass />
             {!decor && !onboarding && <MiniMapWidget />}
@@ -165,6 +172,7 @@ export default function PlayPage() {
             <PlayerCard />
             <InviteBanner />
             <RematchBanner />
+            <HowToPlay />
             <DoorPanel />
             <SeatAsk />
             <KnockPrompt />

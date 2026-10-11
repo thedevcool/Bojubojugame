@@ -6,7 +6,20 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, inspect, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    inspect,
+    text,
+)
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -41,6 +54,9 @@ class Player(Base):
     car_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     home_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     rent_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Signed in through LagosLife (Vatar Games SDK): their per-game player id (p_… live, t_… test).
+    # These "mini" accounts have no usable password and can't log in on our own site.
+    vatar_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
     hunger: Mapped[float] = mapped_column(default=80.0)
@@ -82,6 +98,52 @@ class FurnitureItem(Base):
     lx: Mapped[float] = mapped_column(Float, default=0.0)
     lz: Mapped[float] = mapped_column(Float, default=0.0)
     rot: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Ad(Base):
+    """A paid poster on a wall in the game. Paid with REAL naira via Paystack (never game naira)."""
+
+    __tablename__ = "ads"
+    __table_args__ = (Index("ix_ads_map_status", "map_id", "status"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    map_id: Mapped[str] = mapped_column(String(40))
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    z: Mapped[float] = mapped_column(Float)
+    nx: Mapped[int] = mapped_column(Integer)  # wall faces this way (-1/0/1)
+    nz: Mapped[int] = mapped_column(Integer)
+    w: Mapped[float] = mapped_column(Float)
+    h: Mapped[float] = mapped_column(Float)
+    size: Mapped[str] = mapped_column(String(8))
+    price: Mapped[int] = mapped_column(Integer)  # real naira
+    title: Mapped[str] = mapped_column(String(40))
+    email: Mapped[str] = mapped_column(String(254))
+    reference: Mapped[str] = mapped_column(String(64), unique=True)
+    # paystack: awaiting_payment -> review (paid) -> live ; or rejected / refunded
+    # vatar (LagosLife): review (unpaid) -> approved -> live (paid in LagosLife) ; or rejected
+    provider: Mapped[str] = mapped_column(String(12), default="paystack")
+    purchase_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="awaiting_payment")
+    image: Mapped[bytes] = mapped_column(LargeBinary)
+    image_type: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VatarMatch(Base):
+    """A LagosLife match (stakes held by LagosLife) played as one of our games."""
+
+    __tablename__ = "vatar_matches"
+    match_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(8))
+    nonce: Mapped[str] = mapped_column(String(128))
+    claimed_by: Mapped[str] = mapped_column(String(32))  # our player who creates the lobby
+    group_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    game_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    settled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -266,6 +328,8 @@ class Database:
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_home ON players (home_id) WHERE home_id IS NOT NULL",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_username ON players (lower(username))",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_email ON players (lower(email)) WHERE email IS NOT NULL",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_vatar ON players (vatar_id) WHERE vatar_id IS NOT NULL",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_ads_purchase ON ads (purchase_id) WHERE purchase_id IS NOT NULL",
             ):
                 await conn.execute(text(ddl))
 

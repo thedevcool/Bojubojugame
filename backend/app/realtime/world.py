@@ -9,7 +9,7 @@ import math
 import random
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -77,6 +77,11 @@ class World:
         self.explore: dict[str, ExploreRoom] = {}  # arena id -> open venue room for travellers
         self.furniture: dict[str, list[dict[str, Any]]] = {}
         self.furniture_boxes: dict[str, list[Box]] = {}
+        # LagosLife (mini version) players: their money lives in LagosLife, so rides are free
+        # and hunger doesn't stop them playing
+        self.mini: set[str] = set()
+        # called with (game_id, final_results) when a game ends (LagosLife match results)
+        self.game_over_hooks: list[Callable[[str, list[dict[str, Any]]], Awaitable[None]]] = []
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
@@ -499,7 +504,7 @@ class World:
             if stop is None or not in_rect(stop["rect"], s.x, s.z):
                 raise GroupError("Walk to the bus stop to board")
             seconds, price, mode = fare.ride_s, fare.price, fare.id
-        if price:
+        if price and s.pid not in self.mini:
             try:
                 await self.economy.post(s.pid, -price, "fare", f"trip:{s.pid}:{m.key}", ref=f"{here}>{m.to}")
             except InsufficientFunds:

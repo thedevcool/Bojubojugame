@@ -7,6 +7,21 @@ bought, sold, withdrawn or cashed out.
 
 > Read **[ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md)** before you change anything.
 
+## New in 2.5 — Boju Boju in LagosLife
+
+- A **mini version** at `/lagoslife` runs inside LagosLife's Games app. LagosLife signs players in and
+  keeps their money and homes; here they play hide & seek, start **LagosLife matches** with a 6-letter
+  code (optional stakes held by LagosLife), get onto the **LagosLife leaderboard**, and pay for wall ads
+  with LagosLife's pay sheet after approval. Setup and submission: [LAGOSLIFE.md](LAGOSLIFE.md).
+
+## New in 2.4 — wall ads (the only real money)
+
+- **Wall ads** (`backend/app/ads.py`, `frontend/src/game/Ads.tsx`, `frontend/src/ui/AdSheet.tsx`):
+  tap a kiosk, shop, billboard or arena wall → *📢 Place ad here* → pick a size that fits
+  (₦5,000 – ₦30,000 real naira, never covering another ad) → upload a poster → pay with Paystack.
+  Paid ads wait for approval at `/admin`; rejected ads are refunded. Never on players' houses.
+  Game naira stays virtual and separate. Setup: [DEPLOY.md](DEPLOY.md#wall-ads-real-money-paystack).
+
 ## New in 2.1 — real homes, cars & travel
 
 - **Room-and-parlour houses** (`backend/app/houses.py`): parlour + bedroom (duplex adds a kitchen),

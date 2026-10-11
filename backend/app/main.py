@@ -19,6 +19,7 @@ from starlette.responses import Response
 
 from app import auth
 from app.accounts import Me, make_router
+from app.ads import make_router as make_ads_router
 from app.content import get_config, get_maps
 from app.db import Database, Device, Game, LedgerEntry, Player, Report, RoundStat
 from app.life import make_router as make_life_router
@@ -28,6 +29,7 @@ from app.realtime.world import World
 from app.routes import get_route
 from app.safety import KeyedLimiter, TextRejected, clean_chat
 from app.settings import get_settings
+from app.vatar import make_router as make_vatar_router
 
 log = logging.getLogger("boju")
 STARTED = time.time()
@@ -111,7 +113,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.frontend_origin.split(",") if o.strip()],
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
         max_age=600,
     )
 
@@ -154,6 +156,8 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
 
     app.include_router(make_router(db, world, cfg))
     app.include_router(make_life_router(db, world, cfg))
+    app.include_router(make_ads_router(db, cfg, maps))
+    app.include_router(make_vatar_router(db, world, cfg))
 
     @app.get("/api/wallet")
     async def wallet(pid: Me) -> dict[str, Any]:
@@ -275,6 +279,8 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         if p is None:
             await ws.close(code=4001)
             return
+        if p.vatar_id:
+            world.mini.add(p.id)
         await ws.accept()
         queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=512)
 

@@ -498,5 +498,39 @@
       "speed": 11.0,
       "tagline": "Make Lagos know say you don arrive."
     }
-  ]
+  ],
+  "ads": {
+    "days": 7,
+    "currency_note": "Ads are paid in real naira through Paystack. Game naira can't buy ads and ad money never enters game wallets.",
+    "sizes": [
+      {
+        "id": "s",
+        "name": "Small poster",
+        "w": 1.0,
+        "h": 0.75,
+        "price": 5000
+      },
+      {
+        "id": "m",
+        "name": "Medium poster",
+        "w": 1.6,
+        "h": 1.2,
+        "price": 10000
+      },
+      {
+        "id": "l",
+        "name": "Large banner",
+        "w": 2.4,
+        "h": 1.6,
+        "price": 18000
+      },
+      {
+        "id": "xl",
+        "name": "Billboard",
+        "w": 3.2,
+        "h": 2.4,
+        "price": 30000
+      }
+    ]
+  }
 }

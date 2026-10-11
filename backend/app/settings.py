@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     mail_from: str = "Boju Boju <no-reply@example.com>"
+    # Ads (the only real money in the game: advertisers pay with Paystack; game naira is separate)
+    paystack_secret_key: str = ""
+    admin_token: str = ""  # protects /admin (approve / reject ads)
+    ads_fake_payments: bool = False  # dev/tests only: skip Paystack and treat payments as successful
+    # LagosLife mini version (Vatar Games SDK v1). Secrets come from the LagosLife developer dashboard.
+    vatar_api: str = "https://lagoslife.app/api/games/v1"
+    vatar_secret: str = ""  # vtr_test_… in the sandbox, vtr_live_… once approved
+    vatar_webhook_secret: str = ""  # vtr_whsec_…
+    vatar_results_secret: str = ""  # signs match results
 
     @property
     def async_database_url(self) -> str:
@@ -45,4 +54,6 @@ def get_settings() -> Settings:
     s = Settings()
     if s.env == "prod" and s.jwt_secret.startswith("dev-only"):
         raise RuntimeError("JWT_SECRET must be set in production")
+    if s.env == "prod" and s.ads_fake_payments:
+        raise RuntimeError("ADS_FAKE_PAYMENTS must never be on in production")
     return s

@@ -277,6 +277,7 @@ export function GameOverPanel() {
   const g = useGame((s) => s.group);
   const set = useGame((s) => s.set);
   const stayed = useGame((s) => s.stayed);
+  const mini = useGame((s) => !!s.mini);
   if (!over || g?.phase !== "over" || stayed) return null;
   const url = `${siteUrl()}/share/${over.gameId}`;
   const winner = over.results[0];
@@ -289,10 +290,17 @@ export function GameOverPanel() {
           <div key={s.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
             <span>{["🥇", "🥈", "🥉"][i] ?? `${i + 1}.`} {s.nick}</span>
             <span className="text-xs opacity-80">{s.finds} finds · {s.survived} hides</span>
-            <span className={s.earned >= 0 ? "text-green-400" : "text-red-400"}>{naira(s.earned)}</span>
+            <span className={s.earned >= 0 ? "text-green-400" : "text-red-400"}>{mini ? `${s.earned.toLocaleString("en-NG")} pts` : naira(s.earned)}</span>
           </div>
         ))}
       </div>
+      {mini ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🚌 Motor Park</button>
+          <button className="btn btn-ghost" onClick={() => set({ stayed: true })}>🚶🏾 Stay & explore</button>
+          <div className="col-span-2 text-center text-[11px] opacity-70">Your score is on the LagosLife leaderboard. Going home? Tap ← at the top.</div>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-2">
         <a className="btn btn-primary text-center" target="_blank" rel="noopener noreferrer"
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(url)}`}>Share on X</a>
@@ -300,6 +308,7 @@ export function GameOverPanel() {
         <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🏠 Go home</button>
         <button className="btn btn-ghost" onClick={() => { set({ stayed: true }); useGame.getState().toast("Waka around! The 🚏 bus stop takes you home when you're ready.", "good"); }}>🚶🏾 Stay & explore</button>
       </div>
+      )}
     </div></div>
   );
 }
@@ -449,6 +458,7 @@ export function SettingsPanel() {
   const quality = useGame((s) => s.quality);
   const [prefs, setPrefs] = useState({ ...sound.prefs });
   const [help, setHelp] = useState(false);
+  const mini = useGame((s) => !!s.mini);
   const flip = (k: "sound" | "music", v: boolean) => {
     const next = { ...prefs, [k]: v };
     setPrefs(next);
@@ -461,7 +471,7 @@ export function SettingsPanel() {
   };
   return (
     <div className="anim-fade">
-      <AccountCard />
+      {mini ? <p className="px-1 pb-1 text-[12px] opacity-70">Signed in with LagosLife. Your money, home and friends live there.</p> : <AccountCard />}
       <div className="ios-section-title">Controls</div>
       <ControlModePicker bare />
       <div className="ios-section-title">Sound</div>
@@ -475,7 +485,7 @@ export function SettingsPanel() {
       </div>
       <p className="px-1 pt-1 text-[11px] opacity-50">Low saves battery and data. High adds soft shadows.</p>
       <div className="ios-section-title">App</div>
-      <InstallApp className="mb-2" />
+      {!mini && <InstallApp className="mb-2" />}
       <div className="ios-group">
         <button className="ios-row" onClick={() => openApp("news")}><span className="ios-glyph bg-[#7b5cff]">✨</span><span className="text-[15px]">What&apos;s new</span><span className="ios-chevron">›</span></button>
         <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>

@@ -9,6 +9,27 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.5.0",
+    date: "2026-10-11",
+    title: "Boju Boju is coming to LagosLife 🎮",
+    items: [
+      { emoji: "🎮", title: "Play inside LagosLife", text: "A mini version of Boju Boju is on its way to LagosLife's Games app: same Lagos, same hide & seek, signed in with your LagosLife account." },
+      { emoji: "🤝", title: "Matches with LagosLife friends", text: "Share a 6-letter code and play together. LagosLife players and players here meet in the same games." },
+      { emoji: "🏡", title: "Full version stays here", text: "Houses, cars, shops and the whole city life stay on this site. Nothing changes for your account." },
+    ],
+  },
+  {
+    version: "2.4.0",
+    date: "2026-10-11",
+    title: "Your brand on Lagos walls 📢",
+    items: [
+      { emoji: "📢", title: "Wall ads", text: "Businesses can now put a poster on kiosks, shops, billboards and arena walls — right where people walk and hide. Never on anyone's house.", tryIt: "Tap a shop wall → 📢 Place ad here" },
+      { emoji: "📐", title: "Four sizes, no overlaps", text: "Small poster to full billboard. The size picker only offers what fits, and never covers someone else's ad." },
+      { emoji: "💳", title: "Paid with Paystack", text: "Ads are the only thing paid with real money, and they're kept apart from your game naira. Every poster is checked before it goes up; if we can't approve it you get a full refund." },
+      { emoji: "🙈", title: "Neater logo", text: "The peeking monkey now sits right in the middle of its badge." },
+    ],
+  },
+  {
     version: "2.3.0",
     date: "2026-10-11",
     title: "Our own map of Naija 🗺️",

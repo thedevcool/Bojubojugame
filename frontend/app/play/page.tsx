@@ -10,7 +10,8 @@ import { detectQuality, useGame, type Quality } from "@/lib/store";
 import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
 import { sound } from "@/game/sound";
-import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { MapScreen, MiniMapWidget } from "@/ui/MapView";
+import { ActionButtons, BlindOverlay, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 import { DecorateOverlay } from "@/ui/Decorate";
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
@@ -28,6 +29,7 @@ export default function PlayPage() {
   const me = useGame((s) => s.me);
   const map = useMap();
   const decor = useGame((s) => !!s.decor);
+  const onboarding = useGame((s) => s.onboard !== null);
   const [error, setError] = useState("");
   const [forceChange, setForceChange] = useState<{ acc: Account; username: string } | null>(null);
   const joined = useRef(false);
@@ -53,7 +55,7 @@ export default function PlayPage() {
         }
         set({
           content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area,
-          life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname },
+          life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname, carId: profile.car_id },
         });
         // first launch (or no phone/house yet): the welcome tour
         if (!onboardingDone() && (!profile.phone_id || !profile.home_id)) {
@@ -143,7 +145,7 @@ export default function PlayPage() {
             <PhaseBar />
             <ZonePanel />
             <SafeCompass />
-            <Minimap />
+            {!decor && !onboarding && <MiniMapWidget />}
             {!decor && <ActionButtons />}
             <DicePanel />
             <RoundResultPanel />
@@ -159,6 +161,7 @@ export default function PlayPage() {
             <WhatsNew />
           </div>
           <DecorateOverlay />
+          <MapScreen />
           <BlindOverlay />
           <RideMap />
           <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>

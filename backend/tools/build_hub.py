@@ -152,6 +152,14 @@ P("lot", 55, 23, 30, 22, 0.02)
 for x in (46, 52, 58):
     P("danfo", x, 27, 2.4, 6, 2.6)
 P("keke", 64, 24, 1.4, 2.4, 1.8)
+# Tokunbo Autos: a car lot beside the motor park
+P("sign", 66, 34.6, 6, 0.3, 4, text="TOKUNBO AUTOS")
+for x, c in ((61, "#c0392b"), (66, "#1d1a16"), (71, "#2f6db5")):
+    P("car", x, 39, 2, 4.2, 1.5, color=c)
+# Tokunbo Autos: a car lot beside the motor park
+P("sign", 66, 34.6, 6, 0.3, 4, text="TOKUNBO AUTOS")
+for x, c in ((61, "#c0392b"), (66, "#1d1a16"), (71, "#2f6db5")):
+    P("car", x, 39, 2, 4.2, 1.5, color=c)
 P("keke", 66, 28, 1.4, 2.4, 1.8)
 P("bus_shelter", 50, 14.5, 8, 2, 2.8, text="MOTOR PARK")
 P("sign", 62, 12.5, 4, 0.3, 3.4, text="OSHODI • CMS • OBALENDE")
@@ -220,6 +228,7 @@ hub = {
     "zones": [
         {"id": "bus_stop", "kind": "bus_stop", "name": "Motor Park", "rect": [44, 9, 56, 18]},
         {"id": "phone_shop", "kind": "phone_shop", "name": "Tini Tech", "rect": [6.8, 23.6, 9.9, 28.4]},
+        {"id": "car_shop", "kind": "car_shop", "name": "Tokunbo Autos", "rect": [58, 34, 74, 37]},
         {
             "id": "furniture_shop",
             "kind": "furniture_shop",

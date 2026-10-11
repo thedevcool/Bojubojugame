@@ -38,6 +38,7 @@ class Player(Base):
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     # Life sim: the phone you bought and the house you rent
     phone_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    car_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     home_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     rent_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

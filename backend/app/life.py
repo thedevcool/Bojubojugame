@@ -29,6 +29,11 @@ class BuyPhoneIn(BaseModel):
     key: str = Field(min_length=8, max_length=64)
 
 
+class BuyCarIn(BaseModel):
+    car_id: str = Field(max_length=20)
+    key: str = Field(min_length=8, max_length=64)
+
+
 class RentIn(BaseModel):
     home_id: str = Field(max_length=40)
     key: str = Field(min_length=8, max_length=64)
@@ -125,6 +130,38 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             p.phone_id = phone.id
         await push_wallet(pid)
         return {"ok": True, "phone_id": phone.id}
+
+    # ------------------------------------------------------------ cars
+    @r.post("/shop/car")
+    async def buy_car(body: BuyCarIn, pid: Me) -> dict[str, Any]:
+        car = cfg.car(body.car_id)
+        if car is None:
+            raise HTTPException(404, "Unknown car")
+        s = world.sessions.get(pid)
+        zone = hub.zones.get("car_shop")
+        if (
+            s is None
+            or s.room is None
+            or s.room.map.id != HUB_MAP_ID
+            or zone is None
+            or not in_rect(zone["rect"], s.x, s.z)
+        ):
+            raise HTTPException(409, "Walk into Tokunbo Autos to buy a car")
+        if s.car == car.id:
+            raise HTTPException(409, "You already own this car")
+        try:
+            await world.economy.post(pid, -car.price, "car", f"car:{pid}:{body.key}", ref=car.id)
+        except InsufficientFunds:
+            raise HTTPException(402, "Omo, your money no reach for this motor") from None
+        async with db.sessions() as ses, ses.begin():
+            p = await ses.get(Player, pid, with_for_update=True)
+            assert p is not None
+            p.car_id = car.id
+        s.car = car.id
+        if s.room is not None:
+            s.room.broadcast_roster()
+        await push_wallet(pid)
+        return {"ok": True, "car_id": car.id}
 
     # ------------------------------------------------------------ houses
     @r.get("/homes")

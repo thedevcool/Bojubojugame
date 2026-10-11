@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { local, cam } from "@/game/state";
+import { local } from "@/game/state";
 import { walkTo } from "@/game/nav";
 import { sound } from "@/game/sound";
 import {
@@ -49,9 +49,7 @@ export default function Phone() {
     if (!open || !app) return;
     if (app === "map") {
       close();
-      if (isSeeker && inGame) { useGame.getState().toast("Boju no fit use the map while seeking 😅", "error"); return; }
-      Object.assign(cam.aerial, { on: true, x: local.x, z: local.z, h: 40, tx: local.x, tz: local.z, th: 60, vx: 0, vz: 0, drag: false });
-      useGame.getState().set({ aerial: true });
+      useGame.getState().set({ mapOpen: true });
       sound.play("pop");
     } else if (app === "camera") {
       close();

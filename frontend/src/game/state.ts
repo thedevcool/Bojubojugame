@@ -13,6 +13,7 @@ export const local = {
   insideHome: null as string | null,
   sit: false,
   lie: false,
+  drive: false,
   seatY: 0,
   /** furniture you tapped: when you arrive, sit (or ask sleep/sit for a bed) */
   seatTarget: null as { x: number; z: number; bed: boolean } | null,

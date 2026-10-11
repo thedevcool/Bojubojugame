@@ -134,6 +134,15 @@ class Furniture(BaseModel):
     bed: bool = False  # you can sleep on it
 
 
+class Car(BaseModel):
+    id: str
+    name: str
+    price: int = Field(ge=0)
+    color: str
+    speed: float = Field(gt=0, le=16)
+    tagline: str = ""
+
+
 class Rent(BaseModel):
     days: int = Field(ge=1)
     prices: dict[str, int]
@@ -155,6 +164,7 @@ class GameConfig(BaseModel):
     cities: list[City]
     phones: list[Phone]
     furniture: list[Furniture]
+    cars: list[Car]
     rent: Rent
     home_coords: dict[str, tuple[float, float]]
 
@@ -164,6 +174,9 @@ class GameConfig(BaseModel):
     def fares_for(self, arena_id: str) -> list[Fare]:
         city = self.city_of(arena_id)
         return city.fares if city and city.fares else self.fares
+
+    def car(self, car_id: str | None) -> Car | None:
+        return next((c for c in self.cars if c.id == car_id), None)
 
     def furniture_by_id(self) -> dict[str, Furniture]:
         return {f.id: f for f in self.furniture}

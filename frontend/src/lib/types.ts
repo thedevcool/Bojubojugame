@@ -53,6 +53,7 @@ export interface Home {
 }
 
 export interface FurnitureSpec { id: string; name: string; price: number; w: number; d: number; h: number; category: string; solid: boolean; seat: number | null; bed: boolean }
+export interface CarModel { id: string; name: string; price: number; color: string; speed: number; tagline: string }
 export interface PlacedItem { id: number; item: string; lx: number; lz: number; rot: number }
 
 export interface Item { id: string; name: string; category: string; price: number; hunger: number; spot: string | null }
@@ -91,6 +92,7 @@ export interface GameConfig {
   home_coords: Record<string, [number, number]>;
   phones: PhoneModel[];
   furniture: FurnitureSpec[];
+  cars: CarModel[];
   rent: { days: number; prices: Record<string, number> };
 }
 
@@ -156,4 +158,4 @@ export interface GroupState {
 }
 
 export interface ChatMsg { ch: "group" | "near"; from: string; nick: string; text: string; ts: number }
-export interface RosterEntry { n: number; id: string; nick: string; av: number[]; bot?: boolean }
+export interface RosterEntry { n: number; id: string; nick: string; av: number[]; bot?: boolean; car?: string | null }

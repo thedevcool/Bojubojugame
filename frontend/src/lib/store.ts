@@ -36,7 +36,11 @@ interface GameStore {
   bend: boolean;
   phoneOpen: boolean;
   phoneApp: string | null;
-  life: { phoneId: string | null; homeId: string | null; rentUntil: string | null; username: string };
+  life: { phoneId: string | null; homeId: string | null; rentUntil: string | null; username: string; carId: string | null };
+  /** map pin: a spot in this area, or a place in Naija to travel to */
+  pin: { kind: "here"; map: string; x: number; z: number; label: string } | { kind: "trip"; to: string; label: string } | null;
+  mapOpen: boolean;
+  driving: boolean;
   dmUnread: number;
   friendReqs: number;
   /** last live direct message (Messages app listens to this) */
@@ -108,7 +112,10 @@ export const useGame = create<GameStore>((set, get) => ({
   bend: false,
   phoneOpen: false,
   phoneApp: null,
-  life: { phoneId: null, homeId: null, rentUntil: null, username: "" },
+  life: { phoneId: null, homeId: null, rentUntil: null, username: "", carId: null },
+  pin: null,
+  mapOpen: false,
+  driving: false,
   dmUnread: 0,
   friendReqs: 0,
   dmLive: null,

@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
-import { buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
+import { buyCar, buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
 import { ITEM_ICON } from "@/game/furniture";
 import { bedNear } from "@/game/seats";
 import { startDecorating } from "./Decorate";
-import { FurniturePreview } from "@/game/Previews";
+import { CarPreview, FurniturePreview } from "@/game/Previews";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { fmtTime, useMap, useRole, useSecondsLeft, useTicker, useWhere } from "./hooks";
@@ -119,6 +119,8 @@ export function ActionButtons() {
   const setBend = useGame((s) => s.setBend);
   const sitting = useGame((s) => s.sitting);
   const sleeping = useGame((s) => s.sleeping);
+  const driving = useGame((s) => s.driving);
+  const hasCar = useGame((s) => !!s.life.carId);
   const myHome = useGame((s) => s.home?.id);
   const [wheel, setWheel] = useState(false);
   useTicker(400);
@@ -160,6 +162,12 @@ export function ActionButtons() {
                 className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sleeping ? "btn-leaf" : "btn-ghost"}`}
                 onClick={() => (sleeping ? wake() : sleep())}
               >{sleeping ? "🌅" : "😴"}<br />{sleeping ? "Wake" : "Sleep"}</button>
+            )}
+            {!inGame && hasCar && !local.insideHome && !sleeping && (
+              <button aria-label="Drive"
+                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${driving ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play("pop"); }}
+              >{driving ? "🚶🏾" : "🚗"}<br />{driving ? "Walk" : "Drive"}</button>
             )}
             {!inGame && insideMine && !sleeping && (
               <button aria-label="Decorate" className="btn btn-ghost h-12 w-12 rounded-full text-[11px] leading-tight sm:h-14 sm:w-14" onClick={() => void startDecorating()}>
@@ -218,6 +226,7 @@ export function ZonePanel() {
   }
   if (zone.kind === "phone_shop") return <PhoneShop />;
   if (zone.kind === "furniture_shop") return <FurnitureShop />;
+  if (zone.kind === "car_shop") return <CarShop />;
   if (zone.kind === "bus_stop" && map?.kind === "arena") {
     return (
       <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
@@ -227,6 +236,8 @@ export function ZonePanel() {
             <button className="btn btn-primary mb-1 w-full" onClick={() => net.send({ t: "g_return" })}>🏠 Ride home</button>
             <div className="text-xs opacity-70">Free ride back to Lagos — your house{home ? ` (${home.name})` : " / the Motor Park"}.</div>
           </>
+        ) : !g ? (
+          <TravelOptions />
         ) : (
           <div className="text-xs opacity-80">Buses go home once the game is over. Play on! 🙈</div>
         )}
@@ -244,8 +255,10 @@ export function ZonePanel() {
               <span>Board {f.name}</span><span>{naira(f.price)}</span>
             </button>
           ))
-        ) : (
+        ) : g && g.phase !== "over" ? (
           <div className="text-xs opacity-80">Rides to the arena leave when your group starts a game.</div>
+        ) : (
+          <TravelOptions />
         )}
       </div></div>
     );
@@ -495,5 +508,91 @@ export function SeatAsk() {
         <button className="btn btn-ghost px-3" onClick={() => set({ seatAsk: false })}>✕</button>
       </div>
     </div>
+  );
+}
+
+/** Board to anywhere from a bus stop (your pinned place first). Fares depend on the city. */
+function TravelOptions() {
+  const cfg = useGame((s) => s.content?.config);
+  const maps = useGame((s) => s.content?.maps);
+  const mapId = useGame((s) => s.mapId);
+  const pin = useGame((s) => (s.pin?.kind === "trip" ? s.pin : null));
+  const balance = useGame((s) => s.balance);
+  const [to, setTo] = useState<string | null>(null);
+  if (!cfg || !maps) return null;
+  const here = mapId === "hub_plaza" ? "hub" : mapId;
+  const dests = [
+    ...(here !== "hub" ? [{ to: "hub", label: "🏠 Home (Lagos)" }] : []),
+    ...cfg.cities.flatMap((c) => c.arenas.filter((a) => a !== here).map((a) => ({ to: a, label: `${c.name} · ${maps[a]?.venue?.name ?? maps[a]?.name}` }))),
+  ];
+  const dest = to ?? pin?.to ?? dests[0]?.to;
+  const fares = cfg.cities.find((c) => c.arenas.includes(dest === "hub" ? (mapId ?? "") : (dest ?? "")))?.fares ?? cfg.fares;
+  return (
+    <div className="space-y-1.5">
+      <select value={dest ?? ""} onChange={(e) => setTo(e.target.value)} className="w-full rounded-lg bg-white/10 px-2 py-1.5 text-sm outline-none">
+        {dests.map((d) => <option key={d.to} value={d.to} className="text-black">{d.to === pin?.to ? "📌 " : ""}{d.label}</option>)}
+      </select>
+      {fares.map((f) => (
+        <button key={f.id} disabled={balance < f.price} className="btn btn-primary flex w-full justify-between py-1.5 text-sm"
+          onClick={() => dest && net.send({ t: "trip", to: dest, mode: f.id, key: crypto.randomUUID() })}>
+          <span>Board {f.name}</span><span>{naira(f.price)}</span>
+        </button>
+      ))}
+      <div className="text-[10px] opacity-60">Explore any city without a game. Pin places on the 🗺️ map.</div>
+    </div>
+  );
+}
+
+/** Tokunbo Autos: buy a car, then drive it around and to any city. */
+export function CarShop() {
+  const cars = useGame((s) => s.content?.config.cars ?? []);
+  const balance = useGame((s) => s.balance);
+  const mine = useGame((s) => s.life.carId);
+  const [pick, setPick] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const chosen = cars.find((c) => c.id === (pick ?? mine ?? cars[0]?.id));
+  if (!chosen) return null;
+  const buy = async () => {
+    const acc = loadAccount();
+    if (!acc) return;
+    setBusy(true);
+    try {
+      await buyCar(acc, chosen.id);
+      const st = useGame.getState();
+      st.set({ life: { ...st.life, carId: chosen.id } });
+      sound.play("coin");
+      st.toast(`🚗 ${chosen.name} is yours! Tap 🚗 Drive to enter it`, "good");
+    } catch (e) {
+      useGame.getState().toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pointer-events-auto absolute bottom-20 left-1/2 z-20 w-[min(23rem,95vw)] -translate-x-1/2"><div className="panel anim-sheet p-3">
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="font-black">🚗 Tokunbo Autos</div>
+        <div className="text-[10px] opacity-60">in-game naira only</div>
+      </div>
+      <div className="flex gap-3">
+        <CarPreview key={chosen.id} color={chosen.color} className="anim-pop h-28 w-32 shrink-0 overflow-hidden rounded-2xl bg-[#dfe7ef]" />
+        <div className="grid flex-1 gap-1">
+          {cars.map((c) => (
+            <button key={c.id} onClick={() => setPick(c.id)} data-on={c.id === chosen.id} className="choice flex items-center justify-between px-2 py-1 text-left text-xs">
+              <span className="truncate font-semibold"><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: c.color }} />{c.name}</span>
+              <span className="shrink-0 pl-1 text-[var(--accent)]">{nairaShort(c.price)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-2 text-[11px] opacity-75">{chosen.tagline} · top speed {Math.round(chosen.speed * 3.6)} km/h</div>
+      {mine === chosen.id ? (
+        <div className="mt-2 text-center text-sm font-bold text-green-400">✓ This is your car</div>
+      ) : (
+        <button className="btn btn-primary mt-2 w-full" disabled={busy || balance < chosen.price} onClick={buy}>
+          {balance < chosen.price ? "Your money no reach" : `${mine ? "Trade up to" : "Buy"} ${chosen.name} · ${naira(chosen.price)}`}
+        </button>
+      )}
+    </div></div>
   );
 }

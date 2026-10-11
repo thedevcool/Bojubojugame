@@ -313,6 +313,7 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             "daily_bonus": bonus,
             "topup": topup,
             "phone_id": p.phone_id,
+            "car_id": p.car_id,
             "home_id": p.home_id,
             "rent_until": _aware(p.rent_until).isoformat() if p.rent_until else None,  # type: ignore[union-attr]
         }

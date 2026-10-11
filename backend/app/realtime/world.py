@@ -24,7 +24,7 @@ from app.engine import rules
 from app.engine.geometry import Box, MoveCheck, collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
-from app.realtime.rooms import HubShard, Room, Sender, Session
+from app.realtime.rooms import ExploreRoom, HubShard, Room, Sender, Session
 from app.safety import TextRejected, clean_chat
 
 log = logging.getLogger("boju.world")
@@ -39,6 +39,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "buy": (2, 4),
     "g_invite": (0.5, 4),
     "knock": (0.3, 3),
+    "trip": (0.5, 3),
     "knock_answer": (2, 6),
     "default": (4, 10),
 }
@@ -71,6 +72,7 @@ class World:
         self.home_owners: dict[str, str] = {}
         self.guests: dict[str, set[str]] = {}
         # house id -> placed furniture (local coords) and the solid boxes it adds to the hub
+        self.explore: dict[str, ExploreRoom] = {}  # arena id -> open venue room for travellers
         self.furniture: dict[str, list[dict[str, Any]]] = {}
         self.furniture_boxes: dict[str, list[Box]] = {}
         self._net_ids = itertools.count(1)
@@ -78,7 +80,13 @@ class World:
 
     # ------------------------------------------------------------ connection lifecycle
     async def connect(
-        self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None, home_id: str | None = None
+        self,
+        pid: str,
+        nick: str,
+        sender: Sender,
+        avatar: list[int] | None = None,
+        home_id: str | None = None,
+        car: str | None = None,
     ) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
@@ -99,6 +107,7 @@ class World:
             )
             s.stamina = self.cfg.movement.stamina_max_s
             self.sessions[pid] = s
+        s.car = car
         s.send(
             {
                 "t": "hello",
@@ -376,6 +385,8 @@ class World:
                 await self.on_buy(s, msg)
             elif isinstance(msg, P.Invite):
                 self.on_invite(s, msg)
+            elif isinstance(msg, P.Trip):
+                await self.on_trip(s, msg)
             elif isinstance(msg, P.Knock):
                 self.on_knock(s, msg)
             elif isinstance(msg, P.KnockAnswer):
@@ -395,7 +406,13 @@ class World:
             return
         mv = self.cfg.movement
         dt = now - s.last_move_at
-        if m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
+        car = self.cfg.car(s.car) if m.dr and s.car else None
+        in_game = s.group is not None and s.group.phase not in ("lobby", "over") and s.room is s.group.arena
+        if car is not None and (in_game or not (room.map.kind == "hub" or isinstance(room, ExploreRoom))):
+            car = None  # no driving inside a running game
+        if car is not None:
+            cap = car.speed
+        elif m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
             cap = mv.crouch_speed
         elif m.r and s.stamina > -2.0:
             cap = mv.run_speed
@@ -421,7 +438,9 @@ class World:
         )
         if check.ok and room.map.id == HUB_MAP_ID:
             target = self.home_at(m.x, m.z)
-            if target is not None and not in_rect(target["rect"], s.x, s.z) and not self.may_enter(s, target["id"]):
+            if target is not None and car is not None and not in_rect(target["rect"], s.x, s.z):
+                check = MoveCheck(False, "car")  # no driving into houses
+            elif target is not None and not in_rect(target["rect"], s.x, s.z) and not self.may_enter(s, target["id"]):
                 check = MoveCheck(False, "locked")  # knock first: the owner must let you in
         if not check.ok:
             s.move_budget = budget
@@ -436,7 +455,67 @@ class World:
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
         s.x, s.z, s.ry, s.crouch, s.run, s.sit, s.lie = m.x, m.z, m.ry, m.c, m.r, m.st, m.ly
+        s.driving = bool(m.dr and s.car and not in_game)
         s.last_move_at = now
+
+    # ------------------------------------------------------------ travel without a game
+    def explore_room(self, arena_id: str) -> ExploreRoom:
+        r = self.explore.get(arena_id)
+        if r is None:
+            r = self.explore[arena_id] = ExploreRoom(f"explore:{arena_id}", self.maps[arena_id])
+        return r
+
+    async def on_trip(self, s: Session, m: P.Trip) -> None:
+        """Board at the bus stop (pay the fare) or drive your own car to a pinned place."""
+        g = s.group
+        if g is not None and g.phase != "over":
+            raise GroupError("Finish or leave your game first")
+        room = s.room
+        if room is None:
+            return
+        here = room.map.id
+        dest_map = self.maps.get(m.to) if m.to != "hub" else self.maps[HUB_MAP_ID]
+        if dest_map is None or (m.to != "hub" and dest_map.kind != "arena"):
+            raise GroupError("Unknown place")
+        if dest_map.id == here:
+            raise GroupError("You are already here")
+        city_arena = m.to if m.to != "hub" else here
+        if m.mode == "own_car":
+            car = self.cfg.car(s.car) if s.car else None
+            if car is None:
+                raise GroupError("Buy a car first — Tokunbo Autos is beside the motor park")
+            seconds, price, mode = max(4.0, min(f.ride_s for f in self.cfg.fares_for(city_arena)) * 0.7), 0, "own_car"
+        else:
+            fare = next((f for f in self.cfg.fares_for(city_arena) if f.id == m.mode), None)
+            if fare is None:
+                raise GroupError("Unknown ride")
+            stop = room.map.zones.get("bus_stop")
+            if stop is None or not in_rect(stop["rect"], s.x, s.z):
+                raise GroupError("Walk to the bus stop to board")
+            seconds, price, mode = fare.ride_s, fare.price, fare.id
+        if price:
+            try:
+                await self.economy.post(s.pid, -price, "fare", f"trip:{s.pid}:{m.key}", ref=f"{here}>{m.to}")
+            except InsufficientFunds:
+                raise GroupError("Your money no reach for this ride") from None
+            await self.push_wallet(s)
+        if g is not None:
+            self.leave_group(s, quiet=True)
+        s.crouch = s.sit = s.lie = s.driving = False
+        if m.to == "hub":
+            hub = self.maps[HUB_MAP_ID]
+            self.join_hub(s, at=self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point())
+            s.send({"t": "ride", "seconds": seconds, "mode": mode, "arena": here, "dir": "home"})
+        else:
+            dest = self.explore_room(m.to)
+            stop = dest_map.zones.get("bus_stop")
+            x, z = (
+                ((stop["rect"][0] + stop["rect"][2]) / 2, (stop["rect"][1] + stop["rect"][3]) / 2)
+                if stop
+                else dest_map.spawn
+            )
+            dest.add(s, x + self.rng.uniform(-1.5, 1.5), z + self.rng.uniform(-1, 1), self.now())
+            s.send({"t": "ride", "seconds": seconds, "mode": mode, "arena": m.to, "dir": "go"})
 
     def on_invite(self, s: Session, m: P.Invite) -> None:
         """Invite any online player you can see to your lobby (they get a Join prompt)."""
@@ -457,6 +536,8 @@ class World:
             s.send({"t": "corr", "x": round(s.x, 2), "z": round(s.z, 2), "s": seq})
 
     async def on_group(self, s: Session, msg: Any) -> None:
+        if isinstance(msg, (P.GroupCreate, P.GroupJoin)) and isinstance(s.room, ExploreRoom):
+            raise GroupError("Games start from Lagos — ride home from the 🚏 bus stop first")
         if isinstance(msg, P.GroupCreate):
             if s.group is not None and s.group.phase != "over":
                 raise GroupError("Leave your current group first")
@@ -714,7 +795,7 @@ class World:
             if self._group_expired(g, now):
                 self._drop_group(code, g)
         now_ms = int(now * 1000)
-        rooms: list[Room] = [*self.shards, *(g.arena for g in self.groups.values())]
+        rooms: list[Room] = [*self.shards, *(g.arena for g in self.groups.values()), *self.explore.values()]
         for room in rooms:
             room.snapshot(now_ms)
         # forget players who left without a group after a grace period
@@ -751,7 +832,8 @@ class World:
             elif s is not None and s.group is g:
                 s.group = None
                 if s.room is g.arena:
-                    self.join_hub(s, at=self.arrival_point())
+                    # still looking around the venue: keep exploring it, now as a traveller
+                    self.explore_room(g.settings["arena"]).add(s, s.x, s.z, self.now())
         log.info("group_closed game=%s", g.id)
 
     async def run(self) -> None:

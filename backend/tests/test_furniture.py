@@ -38,13 +38,19 @@ def test_renting_furnishes_the_house_and_furniture_is_solid(c):  # noqa: F811
     world = c.app.state.world
     assert world.furniture[home["id"]] and world.furniture_boxes[home["id"]]
     b = world.furniture_boxes[home["id"]][0]
-    assert collides((b.min_x + b.max_x) / 2, (b.min_z + b.max_z) / 2, 0.35, world.furniture_near(b.min_x, b.min_z, b.max_x, b.max_z))
+    assert collides(
+        (b.min_x + b.max_x) / 2, (b.min_z + b.max_z) / 2, 0.35, world.furniture_near(b.min_x, b.min_z, b.max_x, b.max_z)
+    )
 
     # decorate: move the sofa somewhere legal, then try an illegal spot (whole layout is rejected)
     sofa = next(i for i in items if i["item"] == "sofa")
-    ok = c.post("/api/home/layout", json={"items": [{**sofa, "lx": -4.7, "lz": 3.0, "rot": 1, "placed": True}]}, headers=h)
+    ok = c.post(
+        "/api/home/layout", json={"items": [{**sofa, "lx": -4.7, "lz": 3.0, "rot": 1, "placed": True}]}, headers=h
+    )
     assert ok.status_code == 200, ok.text
-    bad = c.post("/api/home/layout", json={"items": [{**sofa, "lx": 0.0, "lz": 3.9, "rot": 0, "placed": True}]}, headers=h)
+    bad = c.post(
+        "/api/home/layout", json={"items": [{**sofa, "lx": 0.0, "lz": 3.9, "rot": 0, "placed": True}]}, headers=h
+    )
     assert bad.status_code == 422 and "doorway" in bad.json()["detail"]
     stored = c.post("/api/home/layout", json={"items": [{**sofa, "placed": False}]}, headers=h).json()
     assert all(i["id"] != sofa["id"] for i in stored["items"])

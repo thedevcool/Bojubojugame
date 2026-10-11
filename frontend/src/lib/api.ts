@@ -94,7 +94,7 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null }
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null; car_id: string | null }
 
 export function logout(): void {
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
@@ -152,6 +152,9 @@ export const buyFurniture = (acc: Account, item: string) =>
   send<{ ok: boolean; item: OwnedItem }>(acc, "/api/shop/furniture", { item, key: crypto.randomUUID() });
 export const saveLayout = (acc: Account, items: OwnedItem[]) =>
   send<{ ok: boolean }>(acc, "/api/home/layout", { items: items.map(({ id, placed, lx, lz, rot }) => ({ id, placed, lx, lz, rot })) });
+
+export const buyCar = (acc: Account, carId: string) =>
+  send<{ ok: boolean; car_id: string }>(acc, "/api/shop/car", { car_id: carId, key: crypto.randomUUID() });
 
 export interface Friend { id: string; username: string; online: boolean; unread: number }
 export const getFriends = (acc: Account) => get<{ friends: Friend[]; incoming: Friend[]; outgoing: Friend[] }>(acc, "/api/friends");

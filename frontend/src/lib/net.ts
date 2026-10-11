@@ -82,9 +82,11 @@ class Net {
         cam.aerial.on = false;
         local.path = [];
         g.setBend(false); // never arrive somewhere still bent down
-        local.sit = local.lie = false;
+        local.sit = local.lie = local.drive = false;
         local.seatTarget = null;
-        g.set({ aerial: false, sitting: false, sleeping: false, seatAsk: false, decor: null, stayed: false });
+        g.set({ aerial: false, sitting: false, sleeping: false, seatAsk: false, decor: null, stayed: false, driving: false, mapOpen: false });
+        if (g.pin?.kind === "here" && g.pin.map !== (m.map as string)) g.set({ pin: null });
+        if (g.pin?.kind === "trip" && g.pin.to === (m.map === "hub_plaza" ? "hub" : (m.map as string))) g.set({ pin: null }); // arrived
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });

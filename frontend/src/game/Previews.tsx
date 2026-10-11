@@ -6,7 +6,7 @@ import * as THREE from "three";
 import type { FurnitureSpec, GameMap, Rect } from "@/lib/types";
 import { FurnitureMesh } from "./FurnitureMeshes";
 import Avatar, { type Motion } from "./Avatar";
-import { MapProps } from "./props";
+import { MapProps, Vehicle } from "./props";
 import { grass } from "./textures";
 
 /** Small, cheap canvases for menus: low DPR, no shadows, rendered only while open. */
@@ -122,6 +122,25 @@ export function FurniturePreview({ spec, className }: { spec: FurnitureSpec; cla
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
           <circleGeometry args={[size * 0.9, 40]} />
           <meshBasicMaterial color="#c9b48f" />
+        </mesh>
+      </Canvas>
+    </div>
+  );
+}
+
+/** Turning 3D preview of a car at Tokunbo Autos. */
+export function CarPreview({ color, className }: { color: string; className?: string }) {
+  return (
+    <div className={className}>
+      <Canvas dpr={[1, 1.5]} gl={GL} camera={{ fov: 30, position: [0, 3.2, 9] }} onCreated={({ camera }) => camera.lookAt(0, 0.6, 0)}>
+        <hemisphereLight args={["#eef4ff", "#4a4a4a", 1.3]} />
+        <directionalLight position={[3, 5, 4]} intensity={2.3} />
+        <Turntable speed={0.6}>
+          <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={color} />
+        </Turntable>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[3, 40]} />
+          <meshBasicMaterial color="#b9c3cc" />
         </mesh>
       </Canvas>
     </div>

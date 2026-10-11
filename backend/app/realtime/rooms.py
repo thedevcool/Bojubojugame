@@ -33,6 +33,8 @@ class Session:
     home_id: str | None = None
     sit: bool = False
     lie: bool = False
+    car: str | None = None  # car model the player owns
+    driving: bool = False
     room: Room | None = None
     group: GroupRoom | None = None
     x: float = 0.0
@@ -102,7 +104,8 @@ class Room:
 
     def broadcast_roster(self) -> None:
         roster = [
-            {"n": s.net_id, "id": s.pid, "nick": s.nick, "av": s.avatar, "bot": s.bot} for s in self.sessions.values()
+            {"n": s.net_id, "id": s.pid, "nick": s.nick, "av": s.avatar, "bot": s.bot, "car": s.car}
+            for s in self.sessions.values()
         ]
         self.broadcast({"t": "roster", "players": roster})
 
@@ -124,6 +127,7 @@ class Room:
                     | (8 if not o.connected else 0)
                     | (16 if o.sit else 0)
                     | (32 if o.lie else 0)
+                    | (64 if o.driving else 0)
                 )
                 players.append([o.net_id, round(o.x * 100), round(o.z * 100), round(o.ry * 100), flags])
             viewer.send({"t": "snap", "ts": now_ms, "p": players})
@@ -147,6 +151,10 @@ class HubShard(Room):
 
     def can_see(self, viewer: Session, other: Session) -> bool:
         return distance(viewer.x, viewer.z, other.x, other.z) <= self.interest_radius
+
+
+class ExploreRoom(Room):
+    """A city venue you travelled to on your own (no game): everyone there sees everyone."""
 
 
 class ArenaRoom(Room):

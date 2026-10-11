@@ -15,7 +15,7 @@ import { FurnitureLayer, FurnitureMesh } from "./FurnitureMeshes";
 import { navState, stopWalking, walkTo } from "./nav";
 import { inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
-import { MapProps } from "./props";
+import { MapProps, Vehicle } from "./props";
 import { sound } from "./sound";
 import { cam, fx, input, local, remotes, sample, sceneRefs } from "./state";
 import { grass, laterite } from "./textures";
@@ -61,6 +61,9 @@ function LocalPlayer({ map }: { map: GameMap }) {
   const last = useRef({ sent: 0, x: NaN, z: NaN, c: false, s: false });
   const seat = useRef<Seat | null>(null);
   const stuck = useRef({ t: 0, d: Infinity });
+  const avatarGroup = useRef<THREE.Group>(null);
+  const carGroup = useRef<THREE.Group>(null);
+  const carColor = useGame((s) => s.content?.config.cars.find((c) => c.id === s.life.carId)?.color);
   const cfg = useGame((s) => s.content?.config.movement);
   const me = useGame((s) => s.me);
   const av = useGame((s) => (s.me ? Object.values(s.roster).find((r) => r.id === s.me?.id)?.av : undefined));
@@ -121,11 +124,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
     else local.stamina = Math.min(cfg.stamina_max_s, local.stamina + cfg.stamina_regen_per_s * dt);
     local.moving = moving;
     let speed = 0;
+    const st0g = useGame.getState();
+    const myCar = local.drive ? st0g.content?.config.cars.find((c) => c.id === st0g.life.carId) : undefined;
+    if (local.drive && !myCar) local.drive = false;
     if (moving) {
-      speed = (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
+      speed = myCar ? myCar.speed * 0.97 * mag : (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
       const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
-      const locked = map.kind === "hub" && lockedHomeAt(map, nx, nz);
+      const locked = map.kind === "hub" && (lockedHomeAt(map, nx, nz) || (myCar && map.homes?.find((h) => inRect(h.rect, nx, nz))?.id));
       if (locked && !(map.homes?.find((h) => h.id === locked && inRect(h.rect, local.x, local.z)))) {
         // someone's house: knock first (the server would refuse the step anyway)
         if (local.path.length) stopWalking();
@@ -143,12 +149,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       if (seat.current.ry !== null) local.ry = seat.current.ry;
     } else if (!resting) seat.current = null;
     if (local.lie) local.stamina = Math.min(cfg.stamina_max_s, local.stamina + dt * 2); // a nap restores your breath
-    motion.current.speed = speed;
+    motion.current.speed = myCar ? 0 : speed;
     motion.current.crouch = local.crouch;
+    if (avatarGroup.current) avatarGroup.current.visible = !myCar;
+    if (carGroup.current) carGroup.current.visible = !!myCar;
     motion.current.sit = local.sit;
     motion.current.lie = local.lie;
     motion.current.seatY = seat.current?.y ?? 0;
-    sound.footsteps(speed, local.crouch);
+    sound.footsteps(myCar ? 0 : speed, local.crouch);
     local.insideHome = map.homes?.find((h) => inRect(h.rect, local.x, local.z))?.id ?? null;
     if (local.insideHome !== camState.current.home) {
       camState.current.home = local.insideHome;
@@ -211,8 +219,8 @@ function LocalPlayer({ map }: { map: GameMap }) {
       const inside = !!local.insideHome;
       if (onboarding) cam.yaw += dt * 0.22; // slow welcome orbit
       // indoors you can still look all around the room, just from a closer, higher camera
-      const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : cam.dist;
-      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : cam.pitch;
+      const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : local.drive ? cam.dist + 4 : cam.dist;
+      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : local.drive ? Math.max(cam.pitch, 0.5) : cam.pitch;
       c.dist = THREE.MathUtils.lerp(c.dist, wantDist, 1 - Math.exp(-dt * 5));
       c.pitch = THREE.MathUtils.lerp(c.pitch, wantPitch, 1 - Math.exp(-dt * 5));
       const ox = Math.sin(cam.yaw) * c.dist * Math.cos(c.pitch), oy = Math.sin(c.pitch) * c.dist, oz = Math.cos(cam.yaw) * c.dist * Math.cos(c.pitch);
@@ -259,13 +267,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       l.z = local.z;
       l.c = local.crouch;
       l.s = local.sit || local.lie;
-      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, st: local.sit, ly: local.lie, s: ++local.seq });
+      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, st: local.sit, ly: local.lie, dr: local.drive, s: ++local.seq });
     }
   });
 
   return (
     <group ref={group}>
-      <Avatar av={av ?? [0, 0, 0]} me={!!me} motion={motion} />
+      <group ref={avatarGroup}><Avatar av={av ?? [0, 0, 0]} me={!!me} motion={motion} /></group>
+      <group ref={carGroup} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]} visible={false}>
         <ringGeometry args={[1.2, 1.8, 32]} />
         <meshBasicMaterial color="#2f7cf6" transparent opacity={0.85} depthWrite={false} />
@@ -282,6 +291,9 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   const emote = useGame((s) => s.emotes.find((e) => e.n === r.n && e.until > Date.now()));
   // the name tag is DOM (not hidden with the 3D group), so mirror visibility in React state
   const [shown, setShown] = useState(false);
+  const avatarRef = useRef<THREE.Group>(null);
+  const carRef = useRef<THREE.Group>(null);
+  const carColor = useGame((s) => (r.car ? s.content?.config.cars.find((c) => c.id === r.car)?.color : undefined));
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
@@ -294,6 +306,9 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
     prev.current = { x: snap.x, z: snap.z };
     motion.current.speed = THREE.MathUtils.lerp(motion.current.speed, Math.min(sp, 7), 0.25);
     motion.current.crouch = (snap.f & 1) === 1;
+    const driving = (snap.f & 64) === 64 && !!carColor;
+    if (avatarRef.current) avatarRef.current.visible = !driving;
+    if (carRef.current) carRef.current.visible = driving;
     const lying = (snap.f & 32) === 32;
     const sitting = (snap.f & 16) === 16 && !lying;
     if ((sitting || lying) && (!seat.current || !!seat.current.lie !== lying)) seat.current = findSeat(map, snap.x, snap.z, lying);
@@ -307,7 +322,8 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   });
   return (
     <group ref={group} visible={false}>
-      <Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} />
+      <group ref={avatarRef}><Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} /></group>
+      <group ref={carRef} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
     </group>
   );
 }

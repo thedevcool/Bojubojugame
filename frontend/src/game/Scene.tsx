@@ -9,11 +9,12 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import type { GameMap, Home, RosterEntry } from "@/lib/types";
 import { adFaceAt, AdsLayer } from "./Ads";
+import { otherPlayers, roomAt, traffic } from "./traffic";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
 import { setCatalog, toWorld, worldRotY, furn, checkLayout, solidColliders } from "./furniture";
 import { FurnitureLayer, FurnitureMesh } from "./FurnitureMeshes";
-import { navState, stopWalking, walkTo } from "./nav";
+import { findPath, navState, stopWalking, walkTo } from "./nav";
 import { inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
 import { MapProps, Vehicle } from "./props";
@@ -62,6 +63,7 @@ function LocalPlayer({ map }: { map: GameMap }) {
   const last = useRef({ sent: 0, x: NaN, z: NaN, c: false, s: false });
   const seat = useRef<Seat | null>(null);
   const stuck = useRef({ t: 0, d: Infinity });
+  const lastHorn = useRef(0);
   const avatarGroup = useRef<THREE.Group>(null);
   const carGroup = useRef<THREE.Group>(null);
   const carColor = useGame((s) => s.content?.config.cars.find((c) => c.id === s.life.carId)?.color);
@@ -133,14 +135,25 @@ function LocalPlayer({ map }: { map: GameMap }) {
       const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
       const locked = map.kind === "hub" && (lockedHomeAt(map, nx, nz) || (myCar && map.homes?.find((h) => inRect(h.rect, nx, nz))?.id));
-      if (locked && !(map.homes?.find((h) => h.id === locked && inRect(h.rect, local.x, local.z)))) {
+      // cars and people are solid: you can't walk through a danfo, and your car stops for people and cars
+      const ry = Math.atan2(vx, vz), others = otherPlayers();
+      const room = roomAt(nx, nz, ry, !!myCar, others);
+      const blocked = room < 0 && room < roomAt(local.x, local.z, ry, !!myCar, others) - 1e-3;
+      if (blocked) {
+        local.ry = ry;
+        stuck.current.t = 0; // waiting for the road to clear isn't being stuck
+        if (myCar && performance.now() - lastHorn.current > 2200) {
+          lastHorn.current = performance.now();
+          sound.play("horn", 0.9);
+        }
+      } else if (locked && !(map.homes?.find((h) => h.id === locked && inRect(h.rect, local.x, local.z)))) {
         // someone's house: knock first (the server would refuse the step anyway)
         if (local.path.length) stopWalking();
       } else {
         local.x = nx;
         local.z = nz;
       }
-      local.ry = Math.atan2(vx, vz);
+      if (!blocked) local.ry = ry;
     }
     // sitting: snap to the nearest bed/bench, or sit on the floor
     const resting = local.sit || local.lie;
@@ -462,8 +475,11 @@ function TapMover() {
     ray.setFromCamera(ndc, camera);
     const map = navState.map;
     if (!map || !ray.ray.intersectPlane(groundPlane, hit)) return;
-    // tapped a wall, a car, furniture...? stop in front of it instead of walking to the floor behind it
-    let nearest = ray.ray.origin.distanceTo(hit);
+    // tapped a wall, a car, furniture...? stop in front of it instead of walking to the floor behind it.
+    // (From inside your house, aiming at the street outside: your own walls don't catch the tap.)
+    const here = local.insideHome ? map.homes?.find((h) => h.id === local.insideHome) : undefined;
+    const aimOut = !!here && !inRect(here.rect, hit.x, hit.z);
+    let nearest = aimOut ? 0 : ray.ray.origin.distanceTo(hit);
     for (const c of [...map.props.map((p) => p.collider), ...solidColliders()]) {
       if (!c || Math.max(Math.abs((c[0] + c[2]) / 2 - local.x), Math.abs((c[1] + c[3]) / 2 - local.z)) > 60) continue;
       box3.min.set(c[0], 0, c[1]);
@@ -481,8 +497,13 @@ function TapMover() {
     const insideId = local.insideHome;
     const inside = insideId ? map.homes?.find((h) => h.id === insideId) : undefined;
     if (inside && !inRect(inside.rect, hit.x, hit.z)) {
-      // indoors, taps stay indoors: you leave through the door like everyone else
-      if (gs.toasts.every((x) => !x.msg.includes("door"))) gs.toast("🚪 Walk out through the door to go outside");
+      // indoors, taps outside only work from your front door: then you step out and keep going
+      const atDoor = Math.hypot(local.x - inside.door[0], local.z - inside.door[1]) < 3.6;
+      if (atDoor) {
+        if (walkTo(hit.x, hit.z) || walkTo(inside.door[0], inside.door[1])) sound.play("pop");
+        return;
+      }
+      if (gs.toasts.every((x) => !x.msg.includes("door"))) gs.toast("🚪 Go to your front door to step outside — or use the 🗺️ map to pick where you're going");
       return;
     }
     if (!inside) {
@@ -710,7 +731,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

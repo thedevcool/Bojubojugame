@@ -9,7 +9,9 @@ import { local } from "./state";
 const CELL = 0.5;
 const RADIUS = 0.45;
 
-interface Grid { x0: number; z0: number; w: number; h: number; walk: Uint8Array; boxes: number[][] }
+interface Grid { x0: number; z0: number; w: number; h: number; walk: Uint8Array; road: Uint8Array; boxes: number[][] }
+/** driving: a cell off the road costs this much more, so cars keep to the streets */
+const OFF_ROAD = 8;
 const cache = new Map<string, Grid>();
 
 /** Rasterise every solid box (grown by the player radius) into a walkable bitmap. */
@@ -31,7 +33,15 @@ function build(map: GameMap): Grid {
         if ((x - cx) ** 2 + (z - cz) ** 2 < r * r) walk[i * h + j] = 0;
       }
   }
-  return { x0: bx0, z0: bz0, w, h, walk, boxes };
+  // roads (and car parks): where cars belong
+  const road = new Uint8Array(w * h);
+  for (const p of map.props) {
+    if (p.kind !== "road" && p.kind !== "lot") continue;
+    const i0 = Math.max(0, Math.floor((p.x - p.w / 2 - bx0) / CELL)), i1 = Math.min(w - 1, Math.floor((p.x + p.w / 2 - bx0) / CELL));
+    const j0 = Math.max(0, Math.floor((p.z - p.d / 2 - bz0) / CELL)), j1 = Math.min(h - 1, Math.floor((p.z + p.d / 2 - bz0) / CELL));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) road[i * h + j] = 1;
+  }
+  return { x0: bx0, z0: bz0, w, h, walk, road, boxes };
 }
 
 function grid(map: GameMap): Grid {
@@ -69,13 +79,30 @@ function clear(g: Grid, ax: number, az: number, bx: number, bz: number): boolean
   return true;
 }
 
-/** A* path from (sx,sz) to (tx,tz); returns smoothed waypoints (empty if unreachable). */
-export function findPath(map: GameMap, sx: number, sz: number, tx: number, tz: number): [number, number][] {
+const onRoad = (g: Grid, x: number, z: number) => {
+  const i = Math.floor((x - g.x0) / CELL), j = Math.floor((z - g.z0) / CELL);
+  return i >= 0 && j >= 0 && i < g.w && j < g.h && g.road[i * g.h + j] === 1;
+};
+
+/** Driving: a straight line is fine only if it stays on the road (except the first/last few metres: driveways). */
+function roadLine(g: Grid, ax: number, az: number, bx: number, bz: number): boolean {
+  const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / CELL);
+  for (let k = 1; k < n; k++) {
+    const d = (k / n) * L;
+    if (d < 3 || L - d < 3) continue;
+    if (!onRoad(g, ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n)) return false;
+  }
+  return true;
+}
+
+/** A* path from (sx,sz) to (tx,tz); returns smoothed waypoints (empty if unreachable). Cars keep to the roads. */
+export function findPath(map: GameMap, sx: number, sz: number, tx: number, tz: number, drive = false): [number, number][] {
   const g = grid(map);
+  const straight = (ax: number, az: number, bx: number, bz: number) => clear(g, ax, az, bx, bz) && (!drive || roadLine(g, ax, az, bx, bz));
   const s = nearest(g, Math.floor((sx - g.x0) / CELL), Math.floor((sz - g.z0) / CELL));
   const t = nearest(g, Math.floor((tx - g.x0) / CELL), Math.floor((tz - g.z0) / CELL));
   if (!s || !t) return [];
-  if (clear(g, sx, sz, tx, tz) && ok(g, ...t)) return [[tx, tz]];
+  if (straight(sx, sz, tx, tz) && ok(g, ...t)) return [[tx, tz]];
   const N = g.w * g.h, idx = (i: number, j: number) => i * g.h + j;
   const gScore = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
   const heap: [number, number][] = [];
@@ -104,7 +131,7 @@ export function findPath(map: GameMap, sx: number, sz: number, tx: number, tz: n
   gScore[start] = 0;
   push(0, start);
   let expanded = 0;
-  while (heap.length && expanded < 60000) {
+  while (heap.length && expanded < (drive ? N : 60000)) {
     const [, cur] = pop();
     if (cur === goal) break;
     if (closed[cur]) continue;
@@ -116,7 +143,8 @@ export function findPath(map: GameMap, sx: number, sz: number, tx: number, tz: n
         if (!di && !dj) continue;
         const ni = ci + di, nj = cj + dj;
         if (!ok(g, ni, nj) || (di && dj && !(ok(g, ci + di, cj) && ok(g, ci, cj + dj)))) continue;
-        const n = idx(ni, nj), cost = gScore[cur] + (di && dj ? 1.4142 : 1);
+        const n = idx(ni, nj), step = di && dj ? 1.4142 : 1;
+        const cost = gScore[cur] + (drive && !g.road[n] ? step * OFF_ROAD : step);
         if (cost < gScore[n]) {
           gScore[n] = cost;
           came[n] = cur;
@@ -135,7 +163,7 @@ export function findPath(map: GameMap, sx: number, sz: number, tx: number, tz: n
   let ax = sx, az = sz, i = 0;
   while (i < pts.length) {
     let j = i;
-    while (j + 1 < pts.length && clear(g, ax, az, pts[j + 1][0], pts[j + 1][1])) j++;
+    while (j + 1 < pts.length && straight(ax, az, pts[j + 1][0], pts[j + 1][1])) j++;
     out.push(pts[j]);
     [ax, az] = pts[j];
     i = j + 1;
@@ -150,7 +178,7 @@ export const navState = { map: null as GameMap | null, target: null as [number, 
 export function walkTo(x: number, z: number): boolean {
   const map = navState.map;
   if (!map) return false;
-  const path = findPath(map, local.x, local.z, x, z);
+  const path = findPath(map, local.x, local.z, x, z, local.drive);
   local.path = path;
   navState.target = path.length ? path[path.length - 1] : null;
   return path.length > 0;

@@ -13,7 +13,7 @@ import { useGame } from "@/lib/store";
 import { ChatContent, GroupPanel, LeadersPanel, SettingsPanel, WalletPanel, screenshot } from "./Panels";
 import { ChangelogContent } from "./WhatsNew";
 import { startDecorating } from "./Decorate";
-import { useMap, useRole, useTicker } from "./hooks";
+import { useMap, useTicker } from "./hooks";
 
 interface App { id: string; name: string; icon: string; bg: string; needsPhone?: boolean }
 
@@ -34,6 +34,12 @@ const TITLES: Record<string, string> = Object.fromEntries(APPS.map((a) => [a.id,
 /** usernames for open DM threads (dm:<id>) */
 const names = new Map<string, string>();
 
+const shade = (hex: string, k: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (c: number) => Math.max(0, Math.min(255, Math.round(k > 0 ? c + (255 - c) * k : c * (1 + k))));
+  return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
+};
+
 export default function Phone() {
   const open = useGame((s) => s.phoneOpen);
   const app = useGame((s) => s.phoneApp);
@@ -42,7 +48,6 @@ export default function Phone() {
   const model = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
   const hasPhone = !!model;
   const inGroup = useGame((s) => !!s.group);
-  const { isSeeker, inGame } = useRole();
 
   // launching "action" apps closes the phone and does the thing in the world
   useEffect(() => {
@@ -62,111 +67,180 @@ export default function Phone() {
         setTimeout(() => f.remove(), 600);
       }, 350);
     }
-  }, [open, app, close, isSeeker, inGame]);
+  }, [open, app, close]);
 
   if (!open) return null;
   const inApp = app && app !== "map" && app !== "camera";
   const title = app?.startsWith("dm:") ? names.get(app.slice(3)) ?? "Chat" : app ? TITLES[app] : "";
+  const backLabel = app?.startsWith("dm:") ? "Messages" : "Home";
   const back = () => (app?.startsWith("dm:") ? openApp("messages") : openApp(null));
+  const metal = model?.color ?? "#3a4150";
+  const chat = app === "messages" || app?.startsWith("dm:");
   return (
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-[3px] sm:items-center"
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[4px] sm:items-center"
       onPointerDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] flex h-[min(46rem,90dvh)] w-[min(23rem,94vw)] flex-col overflow-hidden rounded-[3rem] border-[9px] bg-[#0a1324] shadow-2xl"
-        style={{ borderColor: model?.color ?? "#1c2433" }}>
-        <StatusBar />
-        <div className="relative min-h-0 flex-1">
-          {inApp ? (
-            <div key={app} className="anim-app absolute inset-0 flex flex-col bg-[#0d1830]">
-              <div className="flex items-center gap-2 px-3 pb-2 pt-1">
-                <button className="rounded-full px-2 py-1 text-sm font-semibold text-[var(--accent)] active:opacity-60" onClick={back}>‹ Back</button>
-                <div className="min-w-0 flex-1 truncate text-center text-[15px] font-bold">{title}</div>
-                <span className="w-14" />
-              </div>
-              <div className={`touch-scroll min-h-0 flex-1 px-3 pb-4 ${app === "messages" || app?.startsWith("dm:") ? "flex flex-col" : ""}`}>
-                {!hasPhone && APPS.find((a) => a.id === app)?.needsPhone && !(app === "boju" && inGroup) ? <NoPhone /> : <AppBody app={app} />}
-              </div>
+      {/* device: metal band (phone colour) -> black bezel -> screen */}
+      <div className="anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
+        style={{ background: `linear-gradient(145deg, ${shade(metal, 0.45)}, ${metal} 35%, ${shade(metal, -0.35)} 70%, ${shade(metal, 0.2)})` }}>
+        {[["left", "18%", "2.2rem"], ["left", "27%", "3.4rem"], ["left", "37%", "3.4rem"], ["right", "30%", "5rem"]].map(([side, top, h]) => (
+          <span key={`${side}${top}`} className="absolute w-[3px] rounded-full" style={{ [side]: "-3px", top, height: h, background: shade(metal, -0.2) } as React.CSSProperties} />
+        ))}
+        <div className="h-full w-full rounded-[3.1rem] bg-black p-[7px]">
+          <div className="phone-screen relative flex h-full w-full flex-col overflow-hidden rounded-[2.65rem] bg-[var(--sys-bg)]">
+            {!inApp && <Wallpaper color={model?.color} />}
+            <StatusBar dark={!inApp} />
+            <div className="relative min-h-0 flex-1">
+              {inApp ? (
+                <div key={app} className="anim-app absolute inset-0 flex flex-col">
+                  <div className="relative z-10 flex h-11 shrink-0 items-center px-2 backdrop-blur-xl" style={{ background: "rgba(11,17,32,.78)", boxShadow: "inset 0 -0.5px 0 rgba(255,255,255,.1)" }}>
+                    <button className="flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[15px] text-[var(--accent)] active:opacity-50" onClick={back}>
+                      <span className="text-2xl leading-none">‹</span>{backLabel}
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-[15px] font-semibold">{title}</div>
+                  </div>
+                  <div className={`touch-scroll min-h-0 flex-1 px-3 pb-6 ${chat ? "flex flex-col" : ""}`}>
+                    {!app?.startsWith("dm:") && <div className="ios-large-title anim-rise">{title}</div>}
+                    {!hasPhone && APPS.find((a) => a.id === app)?.needsPhone && !(app === "boju" && inGroup) ? <NoPhone /> : <AppBody app={app} />}
+                  </div>
+                </div>
+              ) : (
+                <HomeScreen hasPhone={hasPhone} />
+              )}
             </div>
-          ) : (
-            <HomeScreen hasPhone={hasPhone} />
-          )}
+            <button aria-label="Home" className="absolute bottom-1.5 left-1/2 z-20 h-[5px] w-[7.5rem] -translate-x-1/2 rounded-full bg-white/80 active:bg-white" onClick={() => (inApp ? openApp(null) : close())} />
+            {/* glass glare */}
+            <span className="pointer-events-none absolute inset-0 rounded-[2.65rem] bg-[linear-gradient(115deg,rgba(255,255,255,.07)_0%,rgba(255,255,255,0)_38%)]" />
+          </div>
         </div>
-        <button aria-label="Home" className="mx-auto mb-2 mt-1 h-1.5 w-32 shrink-0 rounded-full bg-white/70 active:bg-white" onClick={() => (inApp ? openApp(null) : close())} />
       </div>
     </div>
   );
 }
 
-function StatusBar() {
+function Wallpaper({ color }: { color?: string }) {
+  const c = color ?? "#2f7cf6";
+  return (
+    <div className="absolute inset-0" style={{
+      background: `radial-gradient(90% 55% at 15% 8%, ${shade(c, 0.25)}cc 0%, transparent 60%),
+        radial-gradient(80% 60% at 95% 45%, #7b5cff99 0%, transparent 55%),
+        radial-gradient(90% 70% at 20% 100%, #0fb5a088 0%, transparent 60%),
+        linear-gradient(180deg, #13244d 0%, #0a1324 100%)`,
+    }}>
+      <span className="absolute -right-6 top-1/3 select-none text-[11rem] opacity-[0.06]">🙈</span>
+    </div>
+  );
+}
+
+function StatusBar({ dark }: { dark: boolean }) {
   useTicker(10000);
   const hunger = useGame((s) => s.hunger);
   const connected = useGame((s) => s.connected);
   const now = new Date();
+  const level = Math.max(0.06, Math.min(1, hunger / 100));
   return (
-    <div className="relative flex h-9 shrink-0 items-center justify-between px-6 text-[13px] font-semibold">
-      <span className="tabular-nums">{now.getHours()}:{String(now.getMinutes()).padStart(2, "0")}</span>
-      <span className="absolute left-1/2 top-1.5 h-6 w-24 -translate-x-1/2 rounded-full bg-black" />
-      <span className="flex items-center gap-1.5 text-[11px]">
-        <span>{connected ? "📶" : "⚠️"}</span>
-        <span className="flex items-center gap-0.5" title="Battery = your belle">
-          <span className="relative h-2.5 w-5 rounded-[3px] border border-white/70">
-            <span className={`absolute inset-y-px left-px rounded-[1px] ${hunger < 25 ? "bg-red-400" : "bg-white"}`} style={{ width: `${Math.max(6, hunger) * 0.16}px` }} />
+    <div className={`relative z-20 flex h-11 shrink-0 items-center justify-between px-7 pt-1 text-[14px] font-semibold ${dark ? "" : "bg-[rgba(11,17,32,.72)]"}`}>
+      <span className="tabular-nums tracking-tight">{now.getHours()}:{String(now.getMinutes()).padStart(2, "0")}</span>
+      <span className="absolute left-1/2 top-2 flex h-[1.65rem] w-[6.6rem] -translate-x-1/2 items-center justify-end rounded-full bg-black pr-2.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-[#141a2a] ring-1 ring-[#24304a]" />
+      </span>
+      <span className="flex items-center gap-1.5">
+        <svg width="17" height="11" viewBox="0 0 17 11" aria-label={connected ? "Online" : "Offline"}>
+          {[0, 1, 2, 3].map((i) => <rect key={i} x={i * 4.5} y={8 - i * 2.6} width="3" height={3 + i * 2.6} rx="0.8" fill={connected || i === 0 ? "white" : "rgba(255,255,255,.3)"} />)}
+        </svg>
+        <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 2.2c2.4 0 4.6.9 6.2 2.5l1.1-1.1A10.3 10.3 0 0 0 7.5.6 10.3 10.3 0 0 0 .2 3.6l1.1 1.1A8.8 8.8 0 0 1 7.5 2.2Zm0 3.2c1.5 0 2.9.6 3.9 1.6l1.1-1.1a7 7 0 0 0-10 0L3.6 7c1-1 2.4-1.6 3.9-1.6Zm0 3.2c-.6 0-1.2.3-1.6.7l1.6 1.6 1.6-1.6c-.4-.4-1-.7-1.6-.7Z" fill={connected ? "white" : "rgba(255,255,255,.3)"} /></svg>
+        <span className="flex items-center" title="Battery = your belle">
+          <span className="relative h-[11px] w-[22px] rounded-[3.5px] border border-white/45 p-[1.5px]">
+            <span className={`block h-full rounded-[2px] ${hunger < 25 ? "bg-[#ff453a]" : "bg-white"}`} style={{ width: `${level * 100}%` }} />
           </span>
+          <span className="ml-[1px] h-1 w-[1.5px] rounded-r bg-white/45" />
         </span>
       </span>
     </div>
   );
 }
 
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? "Ẹ káàrọ̀ ☀️" : h < 16 ? "Ẹ káàsán 🌤️" : "Ẹ kú alẹ́ 🌙";
+};
+
 function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
   const openApp = useGame((s) => s.openApp);
   const balance = useGame((s) => s.balance);
   const username = useGame((s) => s.life.username || s.me?.nick || "");
   const home = useGame((s) => s.home);
+  const group = useGame((s) => s.group);
   const badges: Record<string, number> = {
     messages: useGame((s) => s.unread + s.dmUnread + s.friendReqs),
-    boju: useGame((s) => (s.group ? 1 : 0)),
+    boju: group ? 1 : 0,
   };
   useTicker(30000);
   const now = new Date();
   const icon = (a: App, i: number, dock = false) => {
     const locked = a.needsPhone && !hasPhone;
     return (
-      <button key={a.id} aria-label={a.name} className="anim-pop flex flex-col items-center gap-1 active:scale-90" style={{ animationDelay: `${60 + i * 25}ms`, transition: "transform .2s var(--ease-spring)" }}
+      <button key={a.id} aria-label={a.name} className="anim-pop flex flex-col items-center gap-1.5" style={{ animationDelay: `${80 + i * 22}ms` }}
         onClick={() => { sound.play("click"); openApp(a.id); }}>
-        <span className={`relative grid h-[3.4rem] w-[3.4rem] place-items-center rounded-[1.05rem] bg-gradient-to-b text-[1.7rem] font-black shadow-md ${a.bg} ${locked ? "opacity-40 grayscale" : ""}`}>
-          {a.icon}
-          {(badges[a.id] ?? 0) > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-[20px] rounded-full bg-red-500 px-1 text-[11px] font-bold">{a.id === "boju" ? "●" : badges[a.id]}</span>}
+        <span className={`app-icon bg-gradient-to-b ${a.bg} ${locked ? "opacity-45 grayscale" : ""}`}>
+          <span className="glyph">{a.icon}</span>
+          {(badges[a.id] ?? 0) > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white shadow ring-2 ring-black/10">
+              {a.id === "boju" ? "1" : badges[a.id]}
+            </span>
+          )}
         </span>
-        {!dock && <span className="max-w-[4.4rem] truncate text-[11px] text-white/90">{a.name}</span>}
+        {!dock && <span className="app-label max-w-[4.6rem] truncate">{a.name}</span>}
       </button>
     );
   };
   return (
-    <div className="absolute inset-0 flex flex-col bg-[radial-gradient(120%_80%_at_20%_0%,#3d82ff_0%,#1a3f8f_45%,#0a1324_100%)] px-4">
-      <div className="anim-rise mt-3 text-center">
-        <div className="text-5xl font-thin tabular-nums tracking-tight">{now.getHours()}:{String(now.getMinutes()).padStart(2, "0")}</div>
-        <div className="text-xs opacity-80">{now.toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long" })}</div>
-      </div>
-      <div className="anim-rise mt-4 grid grid-cols-2 gap-2 text-left" style={{ animationDelay: "60ms" }}>
-        <button className="rounded-2xl bg-white/12 p-2.5 backdrop-blur" onClick={() => openApp("wallet")}>
-          <div className="text-[10px] uppercase opacity-70">Wallet</div>
-          <div className="text-lg font-black">{nairaShort(balance)}</div>
-          <div className="text-[9px] opacity-60">not real money</div>
+    <div className="absolute inset-0 flex flex-col px-5 pb-6">
+      {/* widgets */}
+      <div className="anim-rise mt-2 grid grid-cols-2 gap-3" style={{ animationDelay: "40ms" }}>
+        <div className="glass col-span-2 flex items-center justify-between rounded-[1.4rem] px-4 py-3">
+          <div>
+            <div className="text-[13px] font-semibold opacity-85">{greeting()}</div>
+            <div className="text-[22px] font-bold leading-tight">@{username}</div>
+            <div className="text-[12px] opacity-70">{now.toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long" })}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[34px] font-extralight tabular-nums leading-none">{now.getHours()}:{String(now.getMinutes()).padStart(2, "0")}</div>
+            <div className="text-[11px] opacity-70">Lagos</div>
+          </div>
+        </div>
+        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp("wallet")}>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#1d5fd6] text-[11px]">₦</span>Wallet</div>
+          <div className="mt-1 text-[22px] font-bold tracking-tight">{nairaShort(balance)}</div>
+          <div className="text-[10px] opacity-60">in-game · not real money</div>
         </button>
-        <button className="rounded-2xl bg-white/12 p-2.5 backdrop-blur" onClick={() => openApp("houses")}>
-          <div className="text-[10px] uppercase opacity-70">Home</div>
-          <div className="truncate text-sm font-bold">{home ? home.name : "No house yet"}</div>
-          <div className="truncate text-[10px] opacity-70">@{username}</div>
+        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp(group ? "boju" : "houses")}>
+          {group ? (
+            <>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#2f7cf6] text-[11px]">🙈</span>Boju Boju</div>
+              <div className="mt-1 font-mono text-[20px] font-bold tracking-widest">{group.code}</div>
+              <div className="truncate text-[10px] capitalize opacity-60">{group.phase} · {group.members.filter((m) => !m.left).length} players</div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#e8731a] text-[11px]">🏠</span>Home</div>
+              <div className="mt-1 truncate text-[15px] font-bold leading-tight">{home ? home.name : "No house yet"}</div>
+              <div className="text-[10px] opacity-60">{home ? "tap to manage" : "rent one in Houses"}</div>
+            </>
+          )}
         </button>
       </div>
       {!hasPhone && (
-        <div className="anim-rise mt-3 rounded-2xl bg-black/35 p-3 text-xs">
-          <b>🎒 This is your pocket.</b> Buy a phone at the 📱 phone shop to unlock Boju Boju, Messages, Houses and more.
-          <button className="btn btn-primary mt-2 w-full py-1.5 text-xs" onClick={() => { goToShop(); useGame.getState().closePhone(); }}>🧭 Walk me to the phone shop</button>
+        <div className="glass anim-rise mt-3 rounded-[1.2rem] p-3 text-[12px]">
+          <b>🎒 This is your pocket.</b> Buy a phone at Tini Tech to unlock Boju Boju, Messages, Houses and more.
+          <button className="btn btn-primary mt-2 w-full py-1.5 text-xs" onClick={() => { goToShop(); useGame.getState().closePhone(); }}>🧭 Walk me to Tini Tech</button>
         </div>
       )}
-      <div className="mt-5 grid grid-cols-4 gap-x-2 gap-y-4">{APPS.filter((a) => !DOCK.includes(a.id)).map((a, i) => icon(a, i))}</div>
-      <div className="mt-auto mb-2 grid grid-cols-4 gap-2 rounded-[1.6rem] bg-white/15 p-2.5 backdrop-blur-md">
+      <div className="mt-5 grid grid-cols-4 gap-x-1 gap-y-5">{APPS.filter((a) => !DOCK.includes(a.id)).map((a, i) => icon(a, i))}</div>
+      <div className="mt-auto flex justify-center gap-1.5 pb-2.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+        <span className="h-1.5 w-1.5 rounded-full bg-white/35" />
+      </div>
+      <div className="glass grid grid-cols-4 gap-2 rounded-[1.9rem] px-3 py-2.5">
         {DOCK.map((id, i) => icon(APPS.find((a) => a.id === id)!, i + 8, true))}
       </div>
     </div>
@@ -272,19 +346,23 @@ function FriendsList() {
         </div>
       ))}
       {data === null ? <div className="text-sm opacity-60">Loading…</div> : data.friends.length === 0 && data.incoming.length === 0 ? (
-        <div className="py-6 text-center text-sm opacity-70">No friends yet. Add your padi by their username — then chat and invite them to your games. 🙈</div>
+        <div className="anim-pop flex flex-col items-center px-4 py-8 text-center">
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-b from-[#5be27a] to-[#1fa847] text-3xl shadow-lg">💬</span>
+          <div className="mt-3 text-[17px] font-semibold">No friends yet</div>
+          <div className="mt-1 text-[13px] opacity-60">Add your padi by their username — or tap someone in the street to see their card. Then chat and invite them to your games.</div>
+        </div>
       ) : (
-        <div className="divide-y divide-white/10 overflow-hidden rounded-2xl bg-white/5">
+        <div className="ios-group">
           {data.friends.map((f) => (
-            <button key={f.id} className="flex w-full items-center gap-3 px-3 py-2.5 text-left active:bg-white/10"
+            <button key={f.id} className="ios-row"
               onClick={() => { names.set(f.id, f.username); openApp(`dm:${f.id}`); }}>
-              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-gradient-to-b from-[#4f95ff] to-[#1d5fd6] font-bold uppercase">
+              <span className="relative grid h-10 w-10 place-items-center rounded-full font-bold uppercase shadow-inner" style={{ background: avatarGrad(f.username) }}>
                 {f.username[0]}
                 <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#0d1830] ${f.online ? "bg-green-400" : "bg-gray-500"}`} />
               </span>
               <span className="flex-1"><span className="block font-semibold">@{f.username}</span><span className="text-xs opacity-60">{f.online ? "Online" : "Offline"}</span></span>
               {f.unread > 0 && <span className="rounded-full bg-[var(--accent)] px-2 text-xs font-bold">{f.unread}</span>}
-              <span className="opacity-40">›</span>
+              <span className="ios-chevron">›</span>
             </button>
           ))}
         </div>
@@ -292,6 +370,13 @@ function FriendsList() {
       {!!data?.outgoing.length && <div className="text-xs opacity-60">Waiting for: {data.outgoing.map((f) => `@${f.username}`).join(", ")}</div>}
     </div>
   );
+}
+
+/** A stable, friendly gradient per username (like iOS contact avatars). */
+export function avatarGrad(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `linear-gradient(180deg, hsl(${h} 70% 62%), hsl(${(h + 25) % 360} 65% 42%))`;
 }
 
 const JOIN_RE = /Join my Boju Boju game: ([A-Z0-9]{4,6})/;
@@ -339,7 +424,7 @@ function DmThread({ id }: { id: string }) {
           const join = m.text.match(JOIN_RE)?.[1];
           return (
             <div key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-[1.1rem] px-3 py-1.5 text-sm ${m.mine ? "rounded-br-md bg-[var(--accent)]" : "rounded-bl-md bg-white/12"}`}>
+              <div className={`bubble anim-pop ${m.mine ? "me" : "them"}`}>
                 <span className="break-words">{m.text}</span>
                 {join && !m.mine && join !== myGroup && (
                   <button className="btn btn-leaf mt-1.5 block w-full py-1 text-xs" disabled={!!group}
@@ -363,7 +448,7 @@ function DmThread({ id }: { id: string }) {
         <div className="flex gap-2">
           <input value={text} maxLength={300} onChange={(e) => setText(e.target.value)} placeholder="Message"
             onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") void send(text); }}
-            className="w-full rounded-full bg-white/10 px-4 py-2 text-sm outline-none" />
+            className="w-full rounded-full border border-white/10 bg-[#161f33] px-4 py-2 text-[15px] outline-none focus:border-[var(--accent)]" />
           <button aria-label="Send" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--accent)] font-bold" onClick={() => send(text)}>↑</button>
         </div>
       </div>

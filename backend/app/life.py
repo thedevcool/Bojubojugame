@@ -11,11 +11,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 
 from app.accounts import Me
 from app.content import HUB_MAP_ID, GameConfig
-from app.db import Database, DirectMessage, Friendship, Player
+from app.db import Database, DirectMessage, Friendship, Player, RoundStat
 from app.economy import InsufficientFunds
 from app.engine.geometry import in_rect
 from app.realtime.world import World
@@ -252,6 +252,51 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             if row is not None:
                 await ses.delete(row)
         return {"ok": True}
+
+    # ------------------------------------------------------------ player card (tap a player in the world)
+    @r.get("/players/{other_id}/card")
+    async def card(other_id: str, pid: Me) -> dict[str, Any]:
+        if len(other_id) > 32:
+            raise HTTPException(404, "Unknown player")
+        async with db.sessions() as ses:
+            p = await ses.get(Player, other_id)
+            if p is None:
+                raise HTTPException(404, "Unknown player")
+            finds, escapes, rounds, games = (
+                await ses.execute(
+                    select(
+                        func.coalesce(func.sum(RoundStat.finds), 0),
+                        func.coalesce(func.sum(case((RoundStat.not_found, 1), else_=0)), 0),
+                        func.count(RoundStat.id),
+                        func.count(func.distinct(RoundStat.game_id)),
+                    ).where(RoundStat.player_id == other_id)
+                )
+            ).one()
+            a, b = _pair(pid, other_id)
+            fr = await ses.scalar(select(Friendship).where(Friendship.a_id == a, Friendship.b_id == b))
+        if other_id == pid:
+            rel = "self"
+        elif fr is None:
+            rel = "none"
+        elif fr.status == "accepted":
+            rel = "friends"
+        else:
+            rel = "requested" if fr.requested_by == pid else "incoming"
+        s = world.sessions.get(other_id)
+        return {
+            "id": p.id,
+            "username": p.username or p.nickname,
+            "home_area": p.home_area,
+            "avatar": p.avatar,
+            # Boju points: 10 per hider found as Boju, 10 per round survived unseen
+            "points": int(finds) * 10 + int(escapes) * 10,
+            "finds": int(finds),
+            "escapes": int(escapes),
+            "rounds": int(rounds),
+            "games": int(games),
+            "online": bool(s and s.connected),
+            "relation": rel,
+        }
 
     # ------------------------------------------------------------ direct messages (friends only)
     async def ensure_friends(ses: Any, pid: str, other: str) -> None:

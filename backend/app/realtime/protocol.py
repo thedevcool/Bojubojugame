@@ -57,6 +57,11 @@ class RemoveBot(_In):
     id: str = Field(max_length=40)
 
 
+class Invite(_In):
+    t: Literal["g_invite"]
+    to: str = Field(max_length=40)
+
+
 class Board(_In):
     t: Literal["g_board"]
     fare: str = Field(max_length=20)
@@ -97,6 +102,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_return": Bare,
     "g_remove_bot": RemoveBot,
     "g_board": Board,
+    "g_invite": Invite,
     "g_pick": Pick,
     "emote": Emote,
     "chat": Chat,

@@ -41,3 +41,29 @@ async def test_speed_hack_still_rejected(db):
         await send(world, s, t="mv", x=round(x, 2), z=-40.0, ry=0, c=False, r=True, st=False, s=i + 1)
     assert c.last("corr") is not None
     assert s.x < 10
+
+
+async def test_newcomers_do_not_spawn_inside_each_other(db):
+    clock = Clock()
+    world = World(get_config(), get_maps(), db.sessions, clock=clock, rng=random.Random(1))
+    spots = []
+    for i in range(6):
+        pid = await make_player(db, f"new{i}")
+        s = await world.connect(pid, f"new{i}", Client())
+        spots.append((s.x, s.z))
+    for i, (x, z) in enumerate(spots):
+        for ox, oz in spots[i + 1 :]:
+            assert ((x - ox) ** 2 + (z - oz) ** 2) ** 0.5 > 0.85
+
+
+async def test_invite_any_online_player_to_lobby(db):
+    world, clock, s, c = await setup(db)
+    pid2 = await make_player(db, "guest")
+    c2 = Client()
+    await world.connect(pid2, "guest", c2)
+    await send(world, s, t="g_invite", to=pid2)
+    assert c.last("err")  # no lobby yet
+    await send(world, s, t="g_create", arena="arena_park", hide=30, search=180, safe="", bots=0)
+    await send(world, s, t="g_invite", to=pid2)
+    inv = c2.last("invite")
+    assert inv and inv["code"] == s.group.code and inv["nick"] == "walker"

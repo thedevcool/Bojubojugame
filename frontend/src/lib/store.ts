@@ -47,6 +47,12 @@ interface GameStore {
   /** player chose "Stay & explore" after the final whistle */
   stayed: boolean;
   sitting: boolean;
+  /** player card open for this player id (tap a person in the world) */
+  card: string | null;
+  /** live invite to someone's lobby */
+  invite: { from: string; nick: string; code: string; at: number } | null;
+  /** invite this player as soon as our new lobby exists */
+  pendingInvite: string | null;
   /** onboarding guide target in the world (arrow + "walk me there") */
   guide: { x: number; z: number; label: string } | null;
   homeArea: string | null;
@@ -101,6 +107,9 @@ export const useGame = create<GameStore>((set, get) => ({
   onboard: null,
   stayed: false,
   sitting: false,
+  card: null,
+  invite: null,
+  pendingInvite: null,
   guide: null,
   homeArea: null,
   dice: null,

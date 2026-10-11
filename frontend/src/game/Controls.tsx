@@ -206,8 +206,9 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
       if (cam.aerial.on) {
         cam.aerial.drag = false;
         if (performance.now() - l.lt > 80) cam.aerial.vx = cam.aerial.vz = 0; // finger rested before lifting: no flick
-      } else if (mode === "tap" && e.type === "pointerup" && l.moved < 10 && performance.now() - l.t0 < 350) {
-        input.tap = { x: e.clientX, y: e.clientY }; // a quick tap = walk there
+      } else if (e.type === "pointerup" && l.moved < 10 && performance.now() - l.t0 < 350) {
+        // a quick tap: open a player's card if you tapped a person, else (tap-to-go) walk there
+        input.tap = { x: e.clientX, y: e.clientY, walk: mode === "tap" };
       }
     }
     fingers.current.delete(e.pointerId);

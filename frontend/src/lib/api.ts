@@ -152,6 +152,12 @@ export const requestFriend = (acc: Account, username: string) => send<{ ok: bool
 export const respondFriend = (acc: Account, playerId: string, accept: boolean) => send<{ ok: boolean }>(acc, "/api/friends/respond", { player_id: playerId, accept });
 export const removeFriend = (acc: Account, playerId: string) => send<{ ok: boolean }>(acc, "/api/friends/remove", { player_id: playerId });
 
+export interface PlayerCard {
+  id: string; username: string; home_area: string; avatar: number[]; points: number; finds: number; escapes: number;
+  rounds: number; games: number; online: boolean; relation: "self" | "none" | "requested" | "incoming" | "friends";
+}
+export const getCard = (acc: Account, id: string) => get<PlayerCard>(acc, `/api/players/${encodeURIComponent(id)}/card`);
+
 export interface Dm { id: number; mine: boolean; text: string; ts: number }
 export const getDms = (acc: Account, other: string) => get<{ messages: Dm[] }>(acc, `/api/dm/${encodeURIComponent(other)}`);
 export const sendDm = (acc: Account, other: string, text: string) => send<Dm>(acc, `/api/dm/${encodeURIComponent(other)}`, { text });

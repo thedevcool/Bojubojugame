@@ -99,6 +99,10 @@ class Net {
         g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
         break;
       }
+      case "invite":
+        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
+        sound.play("pop");
+        break;
       case "dm":
         g.set({ dmLive: { from: m.from as string, username: m.username as string, text: m.text as string, id: m.id as number, ts: m.ts as number } });
         if (!(g.phoneOpen && g.phoneApp === `dm:${m.from as string}`)) {
@@ -134,6 +138,10 @@ class Net {
         const gs = m as unknown as GroupState;
         const prev = g.group;
         g.set({ group: gs });
+        if (g.pendingInvite && gs.phase === "lobby" && gs.creator === g.me?.id) {
+          this.send({ t: "g_invite", to: g.pendingInvite });
+          g.set({ pendingInvite: null });
+        }
         const me = g.me?.id;
         if (gs.round && me) local.frozen = gs.round.seeker === me && gs.phase === "hide";
         else local.frozen = false;

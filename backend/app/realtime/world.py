@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
+import math
 import random
 import secrets
 import time
@@ -19,7 +20,7 @@ from app.content import HUB_MAP_ID, GameConfig, MapData
 from app.db import ChatMessage, Game, RoundStat
 from app.economy import Economy, InsufficientFunds
 from app.engine import rules
-from app.engine.geometry import distance, in_rect, validate_move
+from app.engine.geometry import collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
 from app.realtime.rooms import HubShard, Room, Sender, Session
@@ -35,6 +36,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "emote": (1, 3),
     "g_tag": (2, 3),
     "buy": (2, 4),
+    "g_invite": (0.5, 4),
     "default": (4, 10),
 }
 
@@ -117,7 +119,30 @@ class World:
         """Inside your rented home; brand-new players start beside the phone shop."""
         hub = self.maps[HUB_MAP_ID]
         home = hub.home_by_id(s.home_id)
-        return (home["spawn"][0], home["spawn"][1]) if home else hub.newcomer
+        base = (home["spawn"][0], home["spawn"][1]) if home else hub.newcomer
+        return self.free_spot(base, exclude=s.pid)
+
+    def free_spot(self, base: tuple[float, float], exclude: str | None = None) -> tuple[float, float]:
+        """Nearest standable point to ``base`` that isn't inside a prop or another player.
+
+        Everyone without a house shares the newcomer spawn (and housemates share a
+        bed-side spawn), so without this players appeared inside each other.
+        """
+        hub = self.maps[HUB_MAP_ID]
+        r = self.cfg.movement.player_radius
+        others = [
+            (o.x, o.z)
+            for o in self.sessions.values()
+            if o.pid != exclude and o.room is not None and o.room.map.id == HUB_MAP_ID
+        ]
+        for i in range(48):
+            ang, rad = i * 2.399963, 0.0 if i == 0 else 0.7 + 0.45 * math.sqrt(i)
+            x, z = base[0] + math.cos(ang) * rad, base[1] + math.sin(ang) * rad
+            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, hub.near(x, z, x, z)):
+                continue
+            if all(math.hypot(x - ox, z - oz) > 0.9 for ox, oz in others):
+                return round(x, 2), round(z, 2)
+        return base
 
     def set_home(self, pid: str, home_id: str | None) -> None:
         s = self.sessions.get(pid)
@@ -169,7 +194,7 @@ class World:
 
     def arrival_point(self) -> tuple[float, float]:
         ax, az = self.maps[HUB_MAP_ID].arrival
-        return ax + self.rng.uniform(-2, 2), az + self.rng.uniform(-1, 1)
+        return self.free_spot((ax + self.rng.uniform(-1, 1), az + self.rng.uniform(-0.5, 0.5)))
 
     # ------------------------------------------------------------ NPC players
     def create_bot(self, name: str) -> Session:
@@ -211,6 +236,8 @@ class World:
                 self.on_emote(s, msg)
             elif isinstance(msg, P.Buy):
                 await self.on_buy(s, msg)
+            elif isinstance(msg, P.Invite):
+                self.on_invite(s, msg)
             else:
                 await self.on_group(s, msg)
         except GroupError as e:
@@ -263,6 +290,19 @@ class World:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
         s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st
         s.last_move_at = now
+
+    def on_invite(self, s: Session, m: P.Invite) -> None:
+        """Invite any online player you can see to your lobby (they get a Join prompt)."""
+        g = s.group
+        if g is None or g.phase != "lobby":
+            raise GroupError("Create a game first, then invite people")
+        t = self.sessions.get(m.to)
+        if t is None or t.bot or not t.connected or t.pid == s.pid:
+            raise GroupError("That player is not online")
+        if t.pid in g.members and t.pid not in g.left:
+            raise GroupError(f"{t.nick} is already in your game")
+        t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": g.code})
+        s.send({"t": "toast", "msg": f"Invite sent to {t.nick} 📨"})
 
     def _correct(self, s: Session, seq: int, now: float) -> None:
         if now - s.last_corr_at > 0.2:

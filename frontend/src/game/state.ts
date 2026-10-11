@@ -24,7 +24,7 @@ export const input = {
   runHeld: false,
   crouchToggle: false,
   /** pending screen tap (tap-to-move), consumed by the scene */
-  tap: null as { x: number; y: number } | null,
+  tap: null as { x: number; y: number; walk: boolean } | null,
 };
 
 export const cam = {

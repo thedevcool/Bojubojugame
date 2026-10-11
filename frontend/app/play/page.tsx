@@ -14,6 +14,7 @@ import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, Toasts, To
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
+import { InviteBanner, PlayerCard } from "@/ui/PlayerCard";
 import Onboarding, { onboardingDone } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -147,6 +148,8 @@ export default function PlayPage() {
             <Toasts />
             <Onboarding />
             <Phone />
+            <PlayerCard />
+            <InviteBanner />
             <WhatsNew />
           </div>
           <BlindOverlay />

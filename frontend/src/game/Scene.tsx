@@ -3,7 +3,7 @@
 import { Html, Sky } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, N8AO, Vignette } from "@react-three/postprocessing";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
@@ -15,7 +15,7 @@ import { inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
 import { MapProps } from "./props";
 import { sound } from "./sound";
-import { cam, fx, input, local, sample } from "./state";
+import { cam, fx, input, local, remotes, sample } from "./state";
 import { grass, laterite } from "./textures";
 
 const SEND_HZ = 12;
@@ -228,11 +228,15 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   const seat = useRef<Seat | null>(null);
   const prev = useRef({ x: 0, z: 0 });
   const emote = useGame((s) => s.emotes.find((e) => e.n === r.n && e.until > Date.now()));
+  // the name tag is DOM (not hidden with the 3D group), so mirror visibility in React state
+  const [shown, setShown] = useState(false);
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
     const snap = sample(r.n);
-    if (!snap) { g.visible = false; return; }
+    const vis = !!snap && (snap.f & 8) === 0; // out of range or disconnected: no ghost bodies/tags
+    if (vis !== shown) setShown(vis);
+    if (!snap || !vis) { g.visible = false; return; }
     g.visible = true;
     const sp = dt > 0 ? Math.hypot(snap.x - prev.current.x, snap.z - prev.current.z) / dt : 0;
     prev.current = { x: snap.x, z: snap.z };
@@ -249,9 +253,16 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   });
   return (
     <group ref={group} visible={false}>
-      <Avatar av={r.av} motion={motion} label={emote ? `${r.nick}: ${emote.text}` : r.nick} tag={r.bot ? "NPC" : undefined} />
+      <Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} />
     </group>
   );
+}
+
+function DebugHook() {
+  const { scene, camera } = useThree();
+  const w = window as unknown as { __boju?: Record<string, unknown> };
+  if (w.__boju) Object.assign(w.__boju, { scene, camera });
+  return null;
 }
 
 function Remotes({ map }: { map: GameMap }) {
@@ -268,12 +279,29 @@ function TapMover() {
   const ray = useMemo(() => new THREE.Raycaster(), []);
   const hit = useMemo(() => new THREE.Vector3(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
+  const pv = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const t = input.tap;
     if (!t) return;
     input.tap = null;
-    if (cam.aerial.on || local.frozen) return;
+    if (cam.aerial.on) return;
     const r = gl.domElement.getBoundingClientRect();
+    // did you tap a real person? (bodies are ~1.8 m tall: test a few points up the body)
+    const st = useGame.getState();
+    let best: string | null = null, bestD = 46;
+    for (const p of Object.values(st.roster)) {
+      if (p.id === st.me?.id || p.bot) continue;
+      const s = sample(p.n);
+      if (!s || (s.f & 8)) continue;
+      for (const y of [0.5, 1.1, 1.7]) {
+        pv.set(s.x, y, s.z).project(camera);
+        if (pv.z > 1) continue;
+        const d = Math.hypot(((pv.x + 1) / 2) * r.width + r.left - t.x, ((1 - pv.y) / 2) * r.height + r.top - t.y);
+        if (d < bestD) { bestD = d; best = p.id; }
+      }
+    }
+    if (best) { st.set({ card: best }); sound.play("pop"); return; }
+    if (!t.walk || local.frozen) return;
     ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (!ray.ray.intersectPlane(groundPlane, hit)) return;
@@ -447,6 +475,7 @@ function World({ map }: { map: GameMap }) {
       <LocalPlayer map={map} />
       <Remotes map={map} />
       <TapMover />
+      <DebugHook />
       <DestMarker />
       <GuideMarker />
       {quality === "high" && (
@@ -461,7 +490,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

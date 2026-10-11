@@ -94,3 +94,15 @@ def test_friends_and_direct_messages(c):
     assert c.post("/api/friends/request", json={"username": "Bayo"}, headers=he).json()["status"] == "accepted"
     c.post("/api/friends/remove", json={"player_id": a["player_id"]}, headers=hb)
     assert c.post("/api/dm/" + b["player_id"], json={"text": "hello?"}, headers=ha).status_code == 403
+
+
+def test_player_card_shows_points_and_relation(c):
+    (a, ha), (b, hb) = reg(c, "card_a"), reg(c, "card_b")
+    r = c.get(f"/api/players/{b['player_id']}/card", headers=ha)
+    assert r.status_code == 200
+    card = r.json()
+    assert card["username"] == "card_b" and card["points"] == 0 and card["relation"] == "none"
+    c.post("/api/friends/request", json={"username": "card_b"}, headers=ha)
+    assert c.get(f"/api/players/{b['player_id']}/card", headers=ha).json()["relation"] == "requested"
+    assert c.get(f"/api/players/{a['player_id']}/card", headers=hb).json()["relation"] == "incoming"
+    assert c.get("/api/players/nope/card", headers=ha).status_code == 404

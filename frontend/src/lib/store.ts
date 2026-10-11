@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { input, local } from "@/game/state";
-import type { ChatMsg, Content, GroupState, Home, RosterEntry, Standing } from "./types";
+import type { ChatMsg, Content, GroupState, HiddenSpot, Home, RosterEntry, Standing } from "./types";
 
 export type Quality = "low" | "medium" | "high";
 
@@ -65,6 +65,8 @@ interface GameStore {
   /** live invite to someone's lobby */
   invite: { from: string; nick: string; code: string; at: number } | null;
   /** Play again: someone asked me for a rematch, or I'm waiting for answers */
+  /** after a round: the camera tours where the unfound hiders were hiding */
+  reveal: { spots: HiddenSpot[]; start: number; round: number } | null;
   /** "How to play" cards open */
   howTo: boolean;
   rematch: { kind: "asked"; from: string; nick: string; until: number } | { kind: "waiting"; n: number; until: number } | null;
@@ -147,6 +149,7 @@ export const useGame = create<GameStore>((set, get) => ({
   invite: null,
   rematch: null,
   howTo: false,
+  reveal: null,
   pendingInvite: null,
   doorOwners: {},
   openDoors: [],

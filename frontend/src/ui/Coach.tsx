@@ -111,7 +111,9 @@ export function useTip(): Tip | null {
       if (r.safe.includes(me)) return { key: "seek-safe", icon: "🟢", text: "You're safe in the safe house", sub: "Only for 20s in total — leave before it runs out" };
       return { key: "seek", icon: "🤫", text: "Boju is looking — stay hidden!", sub: `If ${nick(r.seeker)} comes close, move away and break their line of sight` };
     case "result":
-      return { key: "result", icon: "📣", text: "Round over", sub: g.pending_seeker ? `Next Boju: ${nick(g.pending_seeker)}` : "The dice will pick the next Boju" };
+      return g.last_result?.game_over
+        ? { key: "result-final", icon: "🏁", text: "That was the final round!", sub: "Final results coming…" }
+        : { key: "result", icon: "📣", text: "Round over", sub: g.pending_seeker ? `Next Boju: ${nick(g.pending_seeker)}` : "The dice will pick the next Boju" };
     default:
       return null;
   }

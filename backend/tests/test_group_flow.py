@@ -167,6 +167,11 @@ async def test_full_game(db):
     sc = get_config().scoring
     assert deltas[seeker.pid] == sc.seeker_find_one and deltas[hiders[0].pid] == 0
     assert deltas[hiders[1].pid] == sc.hider_not_found
+    # the reveal tour: where the unfound hider was, and how close Boju came (seeker ~33 m away at (-3,-30))
+    spots = g.last_result["hidden_at"]
+    assert [x["id"] for x in spots] == [hiders[1].pid] and (spots[0]["x"], spots[0]["z"]) == (hiders[1].x, hiders[1].z)
+    assert spots[0]["closest"] is not None and spots[0]["closest"] > 30
+    assert g.phase_end - clock.t > get_config().game.result_s  # the result phase makes room for the tour
     assert seeker.pid in g.retired
 
     # Final round between the remaining two; first found seeks next.

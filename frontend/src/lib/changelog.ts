@@ -9,6 +9,16 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.9.0",
+    date: "2026-10-11",
+    title: "Oh no, I passed there! 👀",
+    items: [
+      { emoji: "👀", title: "Where were they hiding?", text: "When time runs out, the camera flies to every hider Boju never found — and shows how close Boju came. \"You passed just 2 m away!\"" },
+      { emoji: "🎤", title: "Sing along", text: "The words of the Boju Boju song appear while Boju counts: Boju Boju o! · Ṣé kí n ṣí?" },
+      { emoji: "🏆", title: "A proper finish", text: "A new game-over screen with the winner crowned, a podium, your stats, awards for sharpest eyes and master hider, and one tap to Play again." },
+    ],
+  },
+  {
     version: "2.8.1",
     date: "2026-10-11",
     title: "Boju Boju, the song 🎤",

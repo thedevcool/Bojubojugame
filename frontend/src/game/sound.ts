@@ -20,7 +20,7 @@ class SoundEngine {
   private musicBus!: ToneNS.Gain;
   private ambBus!: ToneNS.Gain;
   private songBus!: ToneNS.Gain;
-  private song: { url: string; player: ToneNS.Player } | null = null;
+  private song: { url: string; player: ToneNS.Player; at?: number } | null = null;
   private songWanted: string | null = null;
   private s: Record<string, ToneNS.ToneAudioNode & { triggerAttackRelease?: unknown }> = {};
   private ambience: ToneNS.Noise | null = null;
@@ -125,6 +125,15 @@ class SoundEngine {
     if (this.songWanted !== url || this.song?.player !== player) { player.dispose(); return; } // phase already moved on
     this.musicBus.gain.rampTo(this.prefs.music ? 0.06 : 0, 0.4);
     player.start();
+    this.song.at = T.now();
+  }
+
+  /** Seconds into the current loop of the song (for the lyric captions), or null when it isn't playing. */
+  songTime(): { url: string; t: number } | null {
+    const s = this.song, T = this.T;
+    if (!s || s.at === undefined || !T || !s.player.loaded) return null;
+    const len = s.player.buffer.duration || 1;
+    return { url: s.url, t: (T.now() - s.at) % len };
   }
 
   private trig(name: string, note: string | number | string[], dur: ToneNS.Unit.Time, time?: number, vel = 1): void {

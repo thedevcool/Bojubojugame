@@ -1,82 +1,80 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMe, loadAccount, logout, setPin } from "@/lib/api";
+import { getMe, loadAccount, logout, setEmail } from "@/lib/api";
 import { useGame } from "@/lib/store";
+import { NewPasswordForm, PasswordInput } from "./AuthForms";
 
-/** Settings → Your account: Boju ID, PIN for logging in on other phones, log out. */
+/** Settings → Your account: username, optional reset email, change password, log out. */
 export default function AccountCard() {
   const toast = useGame((s) => s.toast);
-  const [bid, setBid] = useState<string | null>(null);
-  const [hasPin, setHasPin] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [pin, setPinValue] = useState("");
-  const [current, setCurrent] = useState("");
+  const [username, setUsername] = useState<string | null>(null);
+  const [email, setEmailValue] = useState<string | null>(null);
+  const [mode, setMode] = useState<"view" | "password" | "email">("view");
+  const [newEmail, setNewEmail] = useState("");
+  const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
+  const acc = loadAccount();
 
   useEffect(() => {
-    const acc = loadAccount();
-    if (acc) getMe(acc).then((m) => { setBid(m.boju_id); setHasPin(m.has_pin); }).catch(() => undefined);
+    const a = loadAccount();
+    if (a) getMe(a).then((m) => { setUsername(m.username); setEmailValue(m.email); setNewEmail(m.email ?? ""); }).catch(() => undefined);
   }, []);
 
-  const copy = async () => {
-    if (!bid) return;
-    try { await navigator.clipboard.writeText(bid); toast("Boju ID copied", "good"); } catch { /* clipboard blocked */ }
-  };
-  const save = async () => {
-    const acc = loadAccount();
+  const saveEmail = async () => {
     if (!acc) return;
     setBusy(true);
     try {
-      const r = await setPin(acc, pin, hasPin ? current : undefined);
-      setBid(r.boju_id);
-      setHasPin(true);
-      setEditing(false);
-      setPinValue("");
-      setCurrent("");
-      toast("PIN saved — you can now log in on any phone", "good");
+      const r = await setEmail(acc, newEmail.trim() || null, pw);
+      setEmailValue(r.email);
+      setMode("view");
+      setPw("");
+      toast(r.email ? "Email saved — you can now reset your password" : "Email removed", "good");
     } catch (e) {
       toast((e as Error).message, "error");
     }
     setBusy(false);
   };
   const signOut = () => {
-    const warn = hasPin
-      ? "Log out of this phone? You can log back in with your Boju ID and PIN."
-      : "You haven't set a PIN — if you log out you can't get this account back. Log out anyway?";
-    if (!window.confirm(warn)) return;
+    if (!window.confirm("Log out of this phone? Log back in any time with your username and password.")) return;
     logout();
     window.location.href = "/";
   };
-  const digits = (v: string) => v.replace(/\D/g, "").slice(0, 6);
-  const input = "w-full rounded-lg bg-white/10 px-3 py-2 text-center text-lg tracking-[0.4em] outline-none";
 
   return (
     <div className="mb-4 rounded-2xl bg-white/5 p-3">
       <div className="mb-2 text-sm font-bold">👤 Your account</div>
-      <div className="flex items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2">
-        <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-wide opacity-60">Boju ID</span>
-          <span className="block truncate font-mono text-base font-bold">{bid ?? "…"}</span>
-        </span>
-        <button className="btn btn-ghost px-3 py-1 text-xs" onClick={copy} disabled={!bid}>Copy</button>
+      <div className="rounded-xl bg-black/20 px-3 py-2">
+        <span className="block text-[10px] uppercase tracking-wide opacity-60">Username</span>
+        <span className="block truncate text-base font-bold">{username ?? "…"}</span>
+        <span className="mt-1 block text-[10px] uppercase tracking-wide opacity-60">Reset email</span>
+        <span className="block truncate text-sm">{email ?? <span className="opacity-60">not set</span>}</span>
       </div>
-      {!hasPin && !editing && (
-        <p className="mt-2 text-xs text-[var(--danfo)]">⚠️ Set a PIN so you can log in on another phone — otherwise this account lives only here.</p>
+      {!email && mode === "view" && (
+        <p className="mt-2 text-xs text-[var(--danfo)]">Tip: add an email so you can reset your password if you forget it. It&apos;s never shown to other players.</p>
       )}
-      {editing ? (
+      {mode === "password" && acc && (
+        <div className="anim-rise mt-3">
+          <NewPasswordForm acc={acc} username={username ?? ""} onDone={() => { setMode("view"); toast("Password changed", "good"); }} />
+          <button className="btn btn-ghost mt-2 w-full" onClick={() => setMode("view")}>Cancel</button>
+        </div>
+      )}
+      {mode === "email" && (
         <div className="anim-rise mt-3 space-y-2">
-          {hasPin && <input className={input} type="password" inputMode="numeric" placeholder="current PIN" value={current} onChange={(e) => setCurrent(digits(e.target.value))} />}
-          <input className={input} type="password" inputMode="numeric" placeholder="new 6-digit PIN" value={pin} onChange={(e) => setPinValue(digits(e.target.value))} />
+          <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" inputMode="email" placeholder="you@example.com (leave empty to remove)"
+            className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none" />
+          <label className="block text-xs font-bold">Confirm with your password<PasswordInput value={pw} onChange={setPw} /></label>
           <div className="flex gap-2">
-            <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn btn-primary flex-1" disabled={busy || pin.length !== 6 || (hasPin && current.length !== 6)} onClick={save}>{busy ? "Saving…" : "Save PIN"}</button>
+            <button className="btn btn-ghost" onClick={() => setMode("view")}>Cancel</button>
+            <button className="btn btn-primary flex-1" disabled={busy || !pw} onClick={saveEmail}>{busy ? "Saving…" : "Save email"}</button>
           </div>
         </div>
-      ) : (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button className="btn btn-primary text-sm" onClick={() => setEditing(true)}>{hasPin ? "Change PIN" : "🔐 Set PIN"}</button>
-          <button className="btn btn-ghost text-sm" onClick={signOut}>Log out</button>
+      )}
+      {mode === "view" && (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button className="btn btn-primary px-2 text-xs" onClick={() => setMode("password")}>🔑 Password</button>
+          <button className="btn btn-ghost px-2 text-xs" onClick={() => setMode("email")}>✉️ {email ? "Email" : "Add email"}</button>
+          <button className="btn btn-ghost px-2 text-xs" onClick={signOut}>Log out</button>
         </div>
       )}
     </div>

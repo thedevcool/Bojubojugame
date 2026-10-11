@@ -510,6 +510,15 @@
    "color": "#a0663f"
   },
   {
+   "kind": "bus_shelter",
+   "x": -5,
+   "z": 43.2,
+   "w": 6,
+   "d": 1.6,
+   "h": 2.8,
+   "text": "BUS STOP"
+  },
+  {
    "kind": "fence",
    "x": 0,
    "z": -45.6,
@@ -630,5 +639,17 @@
    ]
   }
  ],
- "zones": []
+ "zones": [
+  {
+   "id": "bus_stop",
+   "kind": "bus_stop",
+   "name": "Bus Stop",
+   "rect": [
+    -9,
+    38.5,
+    -1,
+    43.5
+   ]
+  }
+ ]
 }

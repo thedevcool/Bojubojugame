@@ -17,6 +17,10 @@
   50,
   17
  ],
+ "newcomer": [
+  8.4,
+  20.5
+ ],
  "props": [
   {
    "kind": "road",
@@ -1170,6 +1174,71 @@
    "text": "EVENTS — coming soon"
   },
   {
+   "kind": "home",
+   "x": 70,
+   "z": 51,
+   "w": 9,
+   "d": 8,
+   "h": 3.2,
+   "door": "w",
+   "id": "bode_1",
+   "name": "No. 1 Bode Close",
+   "color": "#f7e08a",
+   "roof": "#7a3b2a"
+  },
+  {
+   "kind": "home",
+   "x": 70,
+   "z": 62,
+   "w": 9,
+   "d": 8,
+   "h": 3.2,
+   "door": "w",
+   "id": "bode_2",
+   "name": "No. 2 Bode Close",
+   "color": "#cfe8b8",
+   "roof": "#5b6670"
+  },
+  {
+   "kind": "home",
+   "x": 70,
+   "z": 73,
+   "w": 9,
+   "d": 8,
+   "h": 3.2,
+   "door": "w",
+   "id": "bode_3",
+   "name": "No. 3 Bode Close",
+   "color": "#f4b183",
+   "roof": "#8a4b2f"
+  },
+  {
+   "kind": "home",
+   "x": 22,
+   "z": 62,
+   "w": 9,
+   "d": 8,
+   "h": 3.2,
+   "door": "e",
+   "id": "bode_4",
+   "name": "No. 4 Bode Close",
+   "color": "#a9d3f5",
+   "roof": "#6d6d6d"
+  },
+  {
+   "kind": "home",
+   "x": 22,
+   "z": 73,
+   "w": 9,
+   "d": 8,
+   "h": 3.2,
+   "door": "e",
+   "id": "bode_5",
+   "name": "No. 5 Bode Close",
+   "color": "#f3c6c6",
+   "roof": "#7a3b2a"
+  },
+  {
    "kind": "kiosk",
    "x": 24,
    "z": 24,
@@ -1366,7 +1435,7 @@
   },
   {
    "id": "events",
-   "name": "Events Ground",
+   "name": "Events Ground & Bode Close",
    "rect": [
     8,
     40,
@@ -1406,6 +1475,17 @@
     9,
     56,
     18
+   ]
+  },
+  {
+   "id": "phone_shop",
+   "kind": "phone_shop",
+   "name": "Oga Phone",
+   "rect": [
+    6.8,
+    23.6,
+    9.9,
+    28.4
    ]
   },
   {

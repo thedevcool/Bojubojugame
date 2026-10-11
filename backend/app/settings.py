@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     public_frontend_url: str = "http://localhost:3000"
     log_level: str = "INFO"
+    # Password-reset email (optional). Any SMTP works, e.g. Brevo free (300/day) or a Gmail app password.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    mail_from: str = "Boju Boju <no-reply@example.com>"
 
     @property
     def async_database_url(self) -> str:

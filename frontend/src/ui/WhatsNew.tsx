@@ -48,16 +48,21 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
+export function markSeen(): void {
+  try { localStorage.setItem(KEY, LATEST.version); } catch { /* storage blocked */ }
+}
+
 /** Pops up once per new release (see lib/changelog.ts). */
 export function WhatsNew() {
   const [open, setOpen] = useState(false);
-  const set = useGame((s) => s.set);
+  const openApp = useGame((s) => s.openApp);
+  const onboarding = useGame((s) => s.onboard !== null);
   useEffect(() => {
     let seen: string | null = null;
     try { seen = localStorage.getItem(KEY); } catch { /* storage blocked */ }
     if (seen !== LATEST.version) setOpen(true);
   }, []);
-  if (!open) return null;
+  if (!open || onboarding) return null;
   const close = () => {
     try { localStorage.setItem(KEY, LATEST.version); } catch { /* ignore */ }
     setOpen(false);
@@ -67,22 +72,13 @@ export function WhatsNew() {
       <ReleaseCard r={LATEST} big />
       <div className="mt-5 grid gap-2">
         <button className="btn btn-primary text-lg" onClick={close}>Oya, let&apos;s go!</button>
-        <button className="btn btn-ghost" onClick={() => { close(); set({ panel: "changelog" }); }}>See all updates</button>
+        <button className="btn btn-ghost" onClick={() => { close(); openApp("news"); }}>See all updates</button>
       </div>
     </Sheet>
   );
 }
 
-/** Full changelog (Settings → What's new). */
-export function ChangelogPanel() {
-  const set = useGame((s) => s.set);
-  return (
-    <Sheet onClose={() => set({ panel: null })}>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-black">✨ All updates</h2>
-        <button className="btn btn-ghost px-3 py-1" onClick={() => set({ panel: null })}>✕</button>
-      </div>
-      <div className="space-y-6">{CHANGELOG.map((r) => <ReleaseCard key={r.version} r={r} />)}</div>
-    </Sheet>
-  );
+/** Full changelog (phone → What's new). */
+export function ChangelogContent() {
+  return <div className="space-y-6">{CHANGELOG.map((r) => <ReleaseCard key={r.version} r={r} />)}</div>;
 }

@@ -79,7 +79,10 @@ class Net {
       case "zone":
         remotes.clear();
         cam.aerial.on = false;
-        g.set({ aerial: false });
+        local.path = [];
+        g.setBend(false); // never arrive somewhere still bent down
+        local.sit = false;
+        g.set({ aerial: false, sitting: false, stayed: false });
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
@@ -87,6 +90,44 @@ class Net {
       case "tp":
         local.x = m.x as number;
         local.z = m.z as number;
+        local.path = [];
+        local.sit = false;
+        g.set({ sitting: false });
+        break;
+      case "home": {
+        const home = (m.home as Home | null) ?? null;
+        g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
+        break;
+      }
+      case "doors":
+        g.set({ doorOwners: m.owners as Record<string, string> });
+        break;
+      case "door": {
+        const h = m.home as string;
+        g.set({ openDoors: m.open ? [...g.openDoors.filter((x) => x !== h), h] : g.openDoors.filter((x) => x !== h) });
+        break;
+      }
+      case "knock":
+        g.set({ knock: { from: m.from as string, nick: m.nick as string, home: m.home as string, at: Date.now() } });
+        sound.play("door");
+        break;
+      case "invite":
+        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
+        sound.play("pop");
+        break;
+      case "dm":
+        g.set({ dmLive: { from: m.from as string, username: m.username as string, text: m.text as string, id: m.id as number, ts: m.ts as number } });
+        if (!(g.phoneOpen && g.phoneApp === `dm:${m.from as string}`)) {
+          g.set({ dmUnread: g.dmUnread + 1 });
+          const code = (m.text as string).match(/Join my Boju Boju game: ([A-Z0-9]{4,6})/)?.[1];
+          g.toast(code ? `🙈 @${m.username as string} invited you to game ${code} — 📱 Messages to join` : `💬 ${m.username as string}: ${m.text as string}`, code ? "good" : "info");
+          sound.play("pop");
+        }
+        break;
+      case "friend":
+        g.set({ friendsVersion: g.friendsVersion + 1, ...(m.event === "pending" ? { friendReqs: g.friendReqs + 1 } : {}) });
+        if (m.event === "pending") g.toast(`👋 ${(m.username as string) ?? "Someone"} wants to be your friend — open 📱 Messages`, "good");
+        else if (m.event === "accepted") g.toast(`🤝 ${(m.username as string) ?? "Your friend"} is now your friend!`, "good");
         break;
       case "corr":
         local.x = m.x as number;
@@ -109,6 +150,10 @@ class Net {
         const gs = m as unknown as GroupState;
         const prev = g.group;
         g.set({ group: gs });
+        if (g.pendingInvite && gs.phase === "lobby" && gs.creator === g.me?.id) {
+          this.send({ t: "g_invite", to: g.pendingInvite });
+          g.set({ pendingInvite: null });
+        }
         const me = g.me?.id;
         if (gs.round && me) local.frozen = gs.round.seeker === me && gs.phase === "hide";
         else local.frozen = false;
@@ -116,7 +161,7 @@ class Net {
         break;
       }
       case "g_left":
-        g.set({ group: null, over: null, dice: null });
+        g.set({ group: null, over: null, dice: null, stayed: false });
         local.frozen = false;
         break;
       case "g_dice":
@@ -141,7 +186,13 @@ class Net {
       case "g_event":
         break;
       case "ride":
-        g.set({ ride: { until: Date.now() + (m.seconds as number) * 1000, seconds: m.seconds as number, mode: (m.mode as string) ?? "danfo", arena: (m.arena as string) ?? "" } });
+        g.setBend(false);
+        local.sit = false;
+        g.set({
+          sitting: false,
+          over: m.dir === "home" ? null : g.over,
+          ride: { until: Date.now() + (m.seconds as number) * 1000, seconds: m.seconds as number, mode: (m.mode as string) ?? "danfo", arena: (m.arena as string) ?? "", dir: m.dir === "home" ? "home" : "go" },
+        });
         sound.play("horn");
         break;
       case "chat":

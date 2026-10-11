@@ -9,13 +9,27 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
-    version: "1.3.1",
+    version: "2.0.0",
     date: "2026-10-11",
-    title: "Log in on any phone 🔐",
+    title: "Boju Boju v1: your life in Lagos 📱🏠",
     items: [
-      { emoji: "🪪", title: "Your Boju ID", text: "Everyone now has a Boju ID like Tolu#4821 — find it in ⚙️ Settings → Your account.", tryIt: "Open ⚙️ Settings" },
-      { emoji: "🔐", title: "Set a PIN", text: "Add a 6-digit PIN and log in on a new phone with your Boju ID. Your naira, home and scores come with you." },
-      { emoji: "📱", title: "Smoother on phones", text: "Menus scroll properly, Next is always on screen, and the top bar is tidy." },
+      { emoji: "📱", title: "Your own phone", text: "Buy any phone at the shop beside the park. Everything lives in it now: games, chats, houses, wallet, settings.", tryIt: "Tap the 📱 at the top right" },
+      { emoji: "🏠", title: "Rent a house & move in", text: "Pick a free house on the street map — one family per house, 17 to choose from. Pay the rent and it's yours for 7 days. Visitors knock — you decide who comes in.", tryIt: "📱 → Houses" },
+      { emoji: "💬", title: "Friends & messages", text: "Add friends by username, chat privately and invite them to your game in one tap.", tryIt: "📱 → Messages" },
+      { emoji: "👆🏾", title: "Tap to go + real map view", text: "Choose joystick or tap-to-go. Pinch with two fingers to zoom; the aerial map glides like a real map app." },
+      { emoji: "🪑", title: "Sit, look around, go home", text: "Sit on beds and benches, look all around your room, and after a match ride home or stay to explore." },
+    ],
+  },
+  {
+    version: "1.4.0",
+    date: "2026-10-11",
+    title: "Proper accounts + install the app 📲",
+    items: [
+      { emoji: "🔑", title: "Username & password", text: "Log in on any phone with your username (or email) and password.", tryIt: "⚙️ Settings → Your account" },
+      { emoji: "✉️", title: "Forgot password? No wahala", text: "Add an email (optional) and reset your password any time. We never show it to other players." },
+      { emoji: "📲", title: "Install Boju Boju", text: "Add the game to your home screen — it opens full-screen like a real app.", tryIt: "⚙️ Settings → Install app" },
+      { emoji: "🕹️", title: "Joystick fixed on iPhone", text: "The stick no longer gets stuck when you lift your thumb." },
+      { emoji: "💰", title: "₦100M to start", text: "Everybody gets ₦100,000,000 in-game naira while we test — go and fly to Abuja!" },
     ],
   },
   {

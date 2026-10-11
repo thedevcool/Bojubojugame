@@ -148,6 +148,21 @@ for z, txt, c in (
 ):
     P("shop", 12, z, 4, 5, 3.2, color=c, text=txt, face="w")
 P("venue", 42, 62, 18, 12, 7, color="#6b3fa0", text="EVENTS — coming soon")
+# Bode Close: more homes beside the events ground (each house has one tenant; add streets as players grow)
+for i, (x, z, door) in enumerate(((70, 51, "w"), (70, 62, "w"), (70, 73, "w"), (22, 62, "e"), (22, 73, "e"))):
+    P(
+        "home",
+        x,
+        z,
+        9,
+        8,
+        3.2,
+        door=door,
+        id=f"bode_{i + 1}",
+        name=f"No. {i + 1} Bode Close",
+        color=["#f7e08a", "#cfe8b8", "#f4b183", "#a9d3f5", "#f3c6c6"][i],
+        roof=roofs[i % 4],
+    )
 P("kiosk", 24, 24, 2.4, 2.4, 2.6, color="#f7c500", text="RECHARGE")
 P("tree", 30, 38, 3, 3, 6.5)
 P("tree", 66, 44, 3, 3, 6.5)
@@ -175,18 +190,20 @@ hub = {
     "ground": "#a8734a",
     "spawn": [8, 10],
     "arrival": [50, 17],
+    "newcomer": [8.4, 20.5],  # brand-new players start here, right beside the phone shop
     "props": props,
     "sections": [
         {"id": "adeniji", "name": "Adeniji Street", "rect": [-80, 14, -8, 66]},
         {"id": "estate", "name": "Palm View Estate", "rect": [-76, -76, -12, -14]},
         {"id": "market", "name": "Market & Motor Park", "rect": [8, 8, 80, 40]},
-        {"id": "events", "name": "Events Ground", "rect": [8, 40, 80, 80]},
+        {"id": "events", "name": "Events Ground & Bode Close", "rect": [8, 40, 80, 80]},
         {"id": "pitch", "name": "Football Pitch", "rect": [8, -80, 80, -8]},
         {"id": "junction", "name": "Ojuelegba-style Junction", "rect": [-8, -8, 8, 8]},
     ],
     "safe_houses": [],
     "zones": [
         {"id": "bus_stop", "kind": "bus_stop", "name": "Motor Park", "rect": [44, 9, 56, 18]},
+        {"id": "phone_shop", "kind": "phone_shop", "name": "Oga Phone", "rect": [6.8, 23.6, 9.9, 28.4]},
         {"id": "suya", "kind": "food", "name": "Suya Spot", "rect": [11, 8.5, 19, 15]},
         {"id": "corn", "kind": "food", "name": "Roasted Corn", "rect": [19, 8.5, 24, 15]},
         {"id": "mama_put", "kind": "food", "name": "Mama Put", "rect": [26.8, 12.4, 33.2, 17.6]},

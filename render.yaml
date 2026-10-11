@@ -20,3 +20,14 @@ services:
         sync: false            # paste the Neon connection string when prompted
       - key: FRONTEND_ORIGIN
         sync: false            # e.g. https://boju-boju.vercel.app
+      - key: PUBLIC_FRONTEND_URL
+        sync: false            # same as FRONTEND_ORIGIN; used in password-reset links
+      # Optional: password-reset emails (any SMTP, e.g. Brevo free 300/day)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false

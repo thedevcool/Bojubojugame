@@ -1,33 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadAccount, naira, reportPlayer, getLeaderboard, getWallet, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { getFriends, loadAccount, naira, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
 import { sound } from "@/game/sound";
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
 import AccountCard from "./AccountCard";
+import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { useRole, useSecondsLeft } from "./hooks";
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="panel anim-sheet touch-scroll max-h-[88dvh] w-full max-w-md rounded-b-none p-4 pb-0 sm:rounded-b-[20px]">
-        <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-white/25 sm:hidden" />
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-black">{title}</h2>
-          <button className="btn btn-ghost px-3 py-1" onClick={onClose}>✕</button>
-        </div>
-        {children}
-        <div className="h-4" />
-      </div>
-    </div>
-  );
+/** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
+function Modal({ children }: { children: React.ReactNode }) {
+  return <div className="anim-fade">{children}</div>;
 }
 
 export function GroupPanel() {
-  const set = useGame((s) => s.set);
   const g = useGame((s) => s.group);
   const me = useGame((s) => s.me?.id);
   const cfg = useGame((s) => s.content?.config);
@@ -40,15 +29,15 @@ export function GroupPanel() {
   const search = cfg?.game.default_search_time ?? 180;
   const arenaMap = maps?.[g?.settings.arena ?? arena];
   const safe = maps?.[arena]?.safe_houses[0]?.id ?? "";
-  const close = () => set({ panel: null });
+  const close = useGame((s) => s.closePhone);
   if (!cfg) return null;
 
   if (!g || g.phase === "over") {
     return (
-      <Modal title="Play Boju Boju" onClose={close}>
+      <Modal>
         <div className="space-y-3">
           <button className="choice anim-rise flex w-full items-center gap-3 p-3 text-left" data-on="false"
-            onClick={() => net.send({ t: "g_create", arena, hide, search, safe, bots: 3 })}>
+            onClick={() => { net.send({ t: "g_create", arena, hide, search, safe, bots: 3 }); }}>
             <span className="text-3xl">⚡</span>
             <span><span className="block font-bold">Quick game vs 3 NPCs</span><span className="text-xs opacity-70">Jump straight in — default settings</span></span>
           </button>
@@ -79,11 +68,19 @@ export function GroupPanel() {
   };
   const active = g.members.filter((m) => !m.left);
   return (
-    <Modal title={`Group ${g.code}`} onClose={close}>
-      <div className="mb-3 flex gap-2">
-        <button className="btn btn-primary flex-1" onClick={share}>📨 Invite friends</button>
-        <button className="btn btn-ghost" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+    <Modal>
+      <div className="anim-pop mb-3 rounded-2xl bg-gradient-to-br from-[#2f7cf6] to-[#1d4fb0] p-3 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">Your game code</div>
+        <button className="my-1 font-mono text-4xl font-black tracking-[0.3em]" title="Tap to copy" onClick={async () => {
+          try { await navigator.clipboard.writeText(g.code); useGame.getState().toast(`Code ${g.code} copied`, "good"); } catch { /* clipboard blocked */ }
+        }}>{g.code}</button>
+        <div className="text-[11px] opacity-80">Friends type this in Boju Boju → Join with a code. Tap it to copy.</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button className="btn bg-white/20 py-1.5 text-sm" onClick={share}>📨 Share link</button>
+          <button className="btn bg-white/10 py-1.5 text-sm" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+        </div>
       </div>
+      {g.phase === "lobby" && <InviteFriends code={g.code} memberIds={active.map((m) => m.id)} />}
       <div className="mb-3 space-y-1">
         {active.map((m) => (
           <div key={m.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
@@ -118,6 +115,49 @@ export function GroupPanel() {
         <p className="text-sm opacity-80">Game in progress — phase: {g.phase}</p>
       )}
     </Modal>
+  );
+}
+
+/** One tap per friend: sends them a DM invite with a Join button (and a toast if they're online). */
+function InviteFriends({ code, memberIds }: { code: string; memberIds: string[] }) {
+  const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const acc = loadAccount();
+    if (acc) getFriends(acc).then((d) => setFriends(d.friends)).catch(() => setFriends([]));
+  }, []);
+  const invite = async (f: Friend) => {
+    const acc = loadAccount();
+    if (!acc) return;
+    try {
+      await sendDm(acc, f.id, `Join my Boju Boju game: ${code}`);
+      setSent((s) => ({ ...s, [f.id]: true }));
+      useGame.getState().toast(`Invite sent to @${f.username} 📨`, "good");
+    } catch (e) { useGame.getState().toast((e as Error).message, "error"); }
+  };
+  if (friends === null) return null;
+  const list = friends.filter((f) => !memberIds.includes(f.id));
+  return (
+    <div className="mb-3">
+      <div className="mb-1 text-sm font-bold">Invite friends</div>
+      {list.length === 0 ? (
+        <div className="rounded-xl bg-white/5 p-2.5 text-xs opacity-75">
+          {friends.length ? "All your friends are already here 🙌🏾" : "No friends yet — add them by username in 📱 Messages, or share the code above."}
+        </div>
+      ) : (
+        <div className="divide-y divide-white/10 overflow-hidden rounded-xl bg-white/5">
+          {list.map((f) => (
+            <div key={f.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <span className={`h-2.5 w-2.5 rounded-full ${f.online ? "bg-green-400" : "bg-gray-500"}`} />
+              <span className="flex-1 truncate">@{f.username}</span>
+              <button className={`btn px-3 py-1 text-xs ${sent[f.id] ? "btn-ghost" : "btn-primary"}`} disabled={sent[f.id]} onClick={() => invite(f)}>
+                {sent[f.id] ? "Sent ✓" : "Invite"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -216,7 +256,8 @@ export function GameOverPanel() {
   const over = useGame((s) => s.over);
   const g = useGame((s) => s.group);
   const set = useGame((s) => s.set);
-  if (!over || g?.phase !== "over") return null;
+  const stayed = useGame((s) => s.stayed);
+  if (!over || g?.phase !== "over" || stayed) return null;
   const url = `${siteUrl()}/share/${over.gameId}`;
   const winner = over.results[0];
   const tweet = `I just played Boju Boju in Lagos! ${winner ? `${winner.nick} won ${naira(winner.earned)} 🏆` : ""} Come play:`;
@@ -236,7 +277,8 @@ export function GameOverPanel() {
         <a className="btn btn-primary text-center" target="_blank" rel="noopener noreferrer"
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(url)}`}>Share on X</a>
         <button className="btn btn-ghost" onClick={() => screenshot()}>📸 Screenshot</button>
-        <button className="btn btn-leaf col-span-2" onClick={() => { net.send({ t: "g_leave" }); set({ over: null }); }}>Back to the hub</button>
+        <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🏠 Go home</button>
+        <button className="btn btn-ghost" onClick={() => { set({ stayed: true }); useGame.getState().toast("Waka around! The 🚏 bus stop takes you home when you're ready.", "good"); }}>🚶🏾 Stay & explore</button>
       </div>
     </div></div>
   );
@@ -251,8 +293,7 @@ export function screenshot(): void {
   a.click();
 }
 
-export function ChatDrawer() {
-  const open = useGame((s) => s.chatOpen);
+export function ChatContent() {
   const chat = useGame((s) => s.chat);
   const g = useGame((s) => s.group);
   const set = useGame((s) => s.set);
@@ -263,8 +304,7 @@ export function ChatDrawer() {
   const [text, setText] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView(); }, [chat.length, open]);
-  if (!open) return null;
+  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); set({ unread: 0 }); }, [chat.length, set]);
   const locked = inGame && !!g;
   const send = () => {
     if (!text.trim()) return;
@@ -281,12 +321,10 @@ export function ChatDrawer() {
     setMenu(null);
   };
   return (
-    <div className="panel anim-sheet pointer-events-auto absolute bottom-2 left-2 right-2 z-40 flex h-[45vh] flex-col p-2 sm:left-auto sm:w-96">
-      <div className="mb-1 flex items-center justify-between px-1">
-        <span className="text-sm font-bold">{g ? `Group chat · ${g.code}` : "Nearby chat"}</span>
-        <button className="btn btn-ghost px-2 py-0.5" onClick={() => set({ chatOpen: false, unread: 0 })}>✕</button>
-      </div>
-      <div className="touch-scroll flex-1 space-y-1 px-1 text-sm">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-1 px-1 text-xs font-bold opacity-70">{g ? `Group chat · ${g.code}` : "Nearby — people around you"}</div>
+      <div className="touch-scroll min-h-0 flex-1 space-y-1 px-1 text-sm">
+        {chat.length === 0 && <div className="py-6 text-center text-xs opacity-60">No messages yet. Say hi! 👋🏾</div>}
         {chat.map((m, i) => (
           <div key={i}>
             <button className="font-bold text-[var(--accent)]" onClick={() => m.from !== me && setMenu(menu === `${i}` ? null : `${i}`)}>{m.nick}</button>
@@ -318,16 +356,15 @@ export function ChatDrawer() {
 }
 
 export function WalletPanel() {
-  const set = useGame((s) => s.set);
   const hunger = useGame((s) => s.hunger);
   const [data, setData] = useState<{ balance: number; disclaimer: string; entries: WalletEntry[] } | null>(null);
   useEffect(() => {
     const acc = loadAccount();
     if (acc) getWallet(acc).then(setData).catch(() => setData(null));
   }, []);
-  const reasons: Record<string, string> = { starting_balance: "Welcome money", daily_bonus: "Daily bonus", round: "Round reward", fare: "Transport fare", food: "Food" };
+  const reasons: Record<string, string> = { starting_balance: "Welcome money", daily_bonus: "Daily bonus", round: "Round reward", fare: "Transport fare", food: "Food", phone: "Phone", rent: "House rent", topup: "Test-phase bonus" };
   return (
-    <Modal title="Wallet" onClose={() => set({ panel: null })}>
+    <Modal>
       <div className="rounded-xl bg-[var(--accent)] p-4 text-[var(--ink)]">
         <div className="text-xs font-bold uppercase">Balance</div>
         <div className="text-3xl font-black">{naira(data?.balance ?? useGame.getState().balance)}</div>
@@ -348,14 +385,17 @@ export function WalletPanel() {
 
 export function SettingsPanel() {
   const set = useGame((s) => s.set);
+  const openApp = useGame((s) => s.openApp);
   const quality = useGame((s) => s.quality);
   const choose = (q: Quality) => {
     set({ quality: q });
     try { localStorage.setItem("boju.quality", q); } catch { /* ignore */ }
   };
   return (
-    <Modal title="Settings" onClose={() => set({ panel: null })}>
+    <div className="anim-fade">
       <AccountCard />
+      <InstallApp className="mb-4" />
+      <ControlModePicker />
       <SoundToggles />
       <div className="mb-1 text-sm font-bold">Graphics quality</div>
       <div className="mb-4 grid grid-cols-3 gap-2">
@@ -363,18 +403,45 @@ export function SettingsPanel() {
           <button key={q} className={`btn capitalize ${quality === q ? "btn-primary" : "btn-ghost"}`} onClick={() => choose(q)}>{q}</button>
         ))}
       </div>
-      <div className="text-sm font-bold">Controls</div>
+      <div className="text-sm font-bold">How to play</div>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs opacity-85">
-        <li>Phone: left thumb = joystick, right thumb = drag to look.</li>
-        <li>Desktop: WASD / arrows to move, drag mouse to look, Shift to run, C to bend down, scroll to zoom. On phones, push the stick all the way to run.</li>
-        <li>Bend down behind hedges and low walls — Boju can&apos;t see you from far.</li>
+        <li>Joystick: left thumb moves, right thumb drags to look. Tap-to-go: tap the ground and your person walks there.</li>
+        <li>Two fingers pinch to zoom (also in 🛰️ aerial view). Desktop: WASD, mouse drag, Shift run, C bend, wheel zoom.</li>
+        <li>Bend down behind hedges and low walls — Boju can&apos;t see you from far. 🪑 Sit on beds and benches.</li>
         <li>🛰️ Aerial view lets hiders scan the whole map (Boju can&apos;t use it while seeking).</li>
         <li>Boju! tags the nearest hider within 3 m that you can see.</li>
       </ul>
-      <button className="btn btn-ghost mt-4 w-full" onClick={screenshot}>📸 Take screenshot</button>
-      <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "changelog" })}>✨ What&apos;s new</button>
-      <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "leaders" })}>🏆 Leaderboards</button>
-    </Modal>
+      <button className="btn btn-ghost mt-4 w-full" onClick={() => openApp("news")}>✨ What&apos;s new</button>
+    </div>
+  );
+}
+
+/** Joystick or tap-to-go — chosen on first launch, changeable here. */
+export function ControlModePicker({ onPick }: { onPick?: () => void }) {
+  const mode = useGame((s) => s.controlMode);
+  const set = useGame((s) => s.set);
+  const pick = (m: "joystick" | "tap") => {
+    set({ controlMode: m });
+    try { localStorage.setItem("boju.controls", m); } catch { /* ignore */ }
+    onPick?.();
+  };
+  const opts = [
+    { id: "joystick" as const, icon: "🕹️", name: "Joystick", text: "Thumb stick on the left, drag right side to look" },
+    { id: "tap" as const, icon: "👆🏾", name: "Tap to go", text: "Tap anywhere on the ground — you walk there" },
+  ];
+  return (
+    <div className="mb-4">
+      <div className="mb-1 text-sm font-bold">Controls</div>
+      <div className="grid grid-cols-2 gap-2">
+        {opts.map((o) => (
+          <button key={o.id} className="choice flex flex-col items-start gap-0.5 p-3 text-left" data-on={mode === o.id} onClick={() => pick(o.id)}>
+            <span className="text-2xl">{o.icon}</span>
+            <span className="text-sm font-bold">{o.name}</span>
+            <span className="text-[11px] leading-snug opacity-75">{o.text}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -395,7 +462,6 @@ function SoundToggles() {
 }
 
 export function LeadersPanel() {
-  const set = useGame((s) => s.set);
   const g = useGame((s) => s.group);
   const [kind, setKind] = useState<"seeker" | "hider">("seeker");
   const [period, setPeriod] = useState<"weekly" | "all">("weekly");
@@ -407,7 +473,7 @@ export function LeadersPanel() {
   }, [kind, period, scope, g?.id]);
   const tab = (on: boolean) => `btn flex-1 py-1 text-xs ${on ? "btn-primary" : "btn-ghost"}`;
   return (
-    <Modal title="Leaderboards" onClose={() => set({ panel: null })}>
+    <Modal>
       <div className="mb-2 flex gap-1"><button className={tab(kind === "seeker")} onClick={() => setKind("seeker")}>Top Seeker</button><button className={tab(kind === "hider")} onClick={() => setKind("hider")}>Top Hider</button></div>
       <div className="mb-3 flex gap-1">
         <button className={tab(period === "weekly")} onClick={() => setPeriod("weekly")}>This week</button>

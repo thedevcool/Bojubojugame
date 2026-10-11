@@ -30,6 +30,8 @@ class Session:
     sender: Sender | None = None
     avatar: list[int] = field(default_factory=lambda: [0, 0, 0])
     bot: bool = False
+    home_id: str | None = None
+    sit: bool = False
     room: Room | None = None
     group: GroupRoom | None = None
     x: float = 0.0
@@ -41,6 +43,8 @@ class Session:
     spectator: bool = False
     stamina: float = 5.0
     last_move_at: float = 0.0
+    # distance the player may still cover (token bucket): absorbs network jitter / bunched packets
+    move_budget: float = 0.0
     last_corr_at: float = 0.0
     disconnected_at: float | None = None
     limits: dict[str, TokenBucket] = field(default_factory=dict)
@@ -64,6 +68,7 @@ class Session:
 
     def place(self, x: float, z: float, now: float, *, notify: bool = True) -> None:
         self.x, self.z, self.last_move_at = x, z, now
+        self.move_budget = 0.0
         if notify:
             self.send({"t": "tp", "x": round(x, 2), "z": round(z, 2)})
 
@@ -116,6 +121,7 @@ class Room:
                     | (2 if o.run else 0)
                     | (4 if o.spectator else 0)
                     | (8 if not o.connected else 0)
+                    | (16 if o.sit else 0)
                 )
                 players.append([o.net_id, round(o.x * 100), round(o.z * 100), round(o.ry * 100), flags])
             viewer.send({"t": "snap", "ts": now_ms, "p": players})

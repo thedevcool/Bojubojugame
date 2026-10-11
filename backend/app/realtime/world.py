@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
+import math
 import random
 import secrets
 import time
@@ -16,10 +17,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.content import HUB_MAP_ID, GameConfig, MapData
-from app.db import ChatMessage, Game, RoundStat
+from app.db import ChatMessage, Game, Player, RoundStat
 from app.economy import Economy, InsufficientFunds
 from app.engine import rules
-from app.engine.geometry import distance, in_rect, validate_move
+from app.engine.geometry import MoveCheck, collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
 from app.realtime.rooms import HubShard, Room, Sender, Session
@@ -35,6 +36,9 @@ LIMITS: dict[str, tuple[float, float]] = {
     "emote": (1, 3),
     "g_tag": (2, 3),
     "buy": (2, 4),
+    "g_invite": (0.5, 4),
+    "knock": (0.3, 3),
+    "knock_answer": (2, 6),
     "default": (4, 10),
 }
 
@@ -58,11 +62,16 @@ class World:
         self.sessions: dict[str, Session] = {}
         self.shards: list[HubShard] = []
         self.groups: dict[str, GroupRoom] = {}  # by code
+        # house id -> tenant id (one per house); house id -> visitors the tenant let in
+        self.home_owners: dict[str, str] = {}
+        self.guests: dict[str, set[str]] = {}
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
     # ------------------------------------------------------------ connection lifecycle
-    async def connect(self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None) -> Session:
+    async def connect(
+        self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None, home_id: str | None = None
+    ) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
         if s is not None:
@@ -72,6 +81,7 @@ class World:
             s.disconnected_at = None
         else:
             s = Session(
+                home_id=home_id,
                 pid=pid,
                 nick=nick,
                 net_id=next(self._net_ids),
@@ -85,13 +95,13 @@ class World:
             {
                 "t": "hello",
                 "me": {"id": pid, "nick": s.nick, "n": s.net_id},
-                "home": self.maps[HUB_MAP_ID].home_for(pid),
+                "home": self.maps[HUB_MAP_ID].home_by_id(s.home_id),
                 "server_time": int(now * 1000),
             }
         )
+        s.send(self.doors_msg())
         if s.room is None:
-            home = self.maps[HUB_MAP_ID].home_for(pid)
-            self.join_hub(s, at=(home["spawn"][0], home["spawn"][1]) if home else None)
+            self.join_hub(s, at=self.home_spawn(s))
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
         if s.group is not None:
@@ -105,12 +115,140 @@ class World:
             return  # an older socket closing after a reconnect
         s.sender = None
         s.disconnected_at = self.now()
+        # the owner must be online for visitors; a leaving visitor loses their invite
+        for h, owner in self.home_owners.items():
+            if owner == s.pid:
+                self.close_doors(h)
+        for guests in self.guests.values():
+            guests.discard(s.pid)
         if s.room is not None:
             s.room.broadcast_roster()
         if s.group is not None:
             s.group.broadcast_state("player_offline")
 
     # ------------------------------------------------------------ hub
+    def home_spawn(self, s: Session) -> tuple[float, float]:
+        """Inside your rented home; brand-new players start beside the phone shop."""
+        hub = self.maps[HUB_MAP_ID]
+        home = hub.home_by_id(s.home_id)
+        base = (home["spawn"][0], home["spawn"][1]) if home else hub.newcomer
+        return self.free_spot(base, exclude=s.pid)
+
+    def free_spot(self, base: tuple[float, float], exclude: str | None = None) -> tuple[float, float]:
+        """Nearest standable point to ``base`` that isn't inside a prop or another player.
+
+        Everyone without a house shares the newcomer spawn (and housemates share a
+        bed-side spawn), so without this players appeared inside each other.
+        """
+        hub = self.maps[HUB_MAP_ID]
+        r = self.cfg.movement.player_radius
+        others = [
+            (o.x, o.z)
+            for o in self.sessions.values()
+            if o.pid != exclude and o.room is not None and o.room.map.id == HUB_MAP_ID
+        ]
+        for i in range(48):
+            ang, rad = i * 2.399963, 0.0 if i == 0 else 0.7 + 0.45 * math.sqrt(i)
+            x, z = base[0] + math.cos(ang) * rad, base[1] + math.sin(ang) * rad
+            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, hub.near(x, z, x, z)):
+                continue
+            if all(math.hypot(x - ox, z - oz) > 0.9 for ox, oz in others):
+                return round(x, 2), round(z, 2)
+        return base
+
+    def set_home(self, pid: str, home_id: str | None) -> None:
+        for h, owner in list(self.home_owners.items()):
+            if owner == pid and h != home_id:
+                del self.home_owners[h]
+                self.close_doors(h)
+        if home_id is not None:
+            if self.home_owners.get(home_id) not in (None, pid):
+                self.close_doors(home_id)
+            self.home_owners[home_id] = pid
+        self.broadcast_doors()
+        s = self.sessions.get(pid)
+        if s is None:
+            return
+        s.home_id = home_id
+        s.send({"t": "home", "home": self.maps[HUB_MAP_ID].home_by_id(home_id)})
+
+    # ------------------------------------------------------------ house visits (knock, owner answers)
+    async def load_home_owners(self) -> None:
+        async with self.db() as ses:
+            rows = (await ses.execute(select(Player.id, Player.home_id).where(Player.home_id.is_not(None)))).all()
+        self.home_owners = {home: pid for pid, home in rows}
+
+    def doors_msg(self) -> dict[str, Any]:
+        return {"t": "doors", "owners": dict(self.home_owners)}
+
+    def broadcast_doors(self) -> None:
+        msg = self.doors_msg()
+        for sh in self.shards:
+            sh.broadcast(msg)
+
+    def home_at(self, x: float, z: float) -> dict[str, Any] | None:
+        return next((h for h in self.maps[HUB_MAP_ID].homes if in_rect(h["rect"], x, z)), None)
+
+    def may_enter(self, s: Session, home_id: str) -> bool:
+        owner = self.home_owners.get(home_id)
+        return owner is None or owner == s.pid or s.pid in self.guests.get(home_id, set())
+
+    def close_doors(self, home_id: str) -> None:
+        """Owner left (or the house changed hands): visitors are walked back out to the door."""
+        hub = self.maps[HUB_MAP_ID]
+        home = hub.home_by_id(home_id)
+        for gid in self.guests.pop(home_id, set()):
+            g = self.sessions.get(gid)
+            if g is None:
+                continue
+            g.send({"t": "door", "home": home_id, "open": False})
+            if home and g.room is not None and g.room.map.id == HUB_MAP_ID and in_rect(home["rect"], g.x, g.z):
+                x, z = self.free_spot((home["door"][0], home["door"][1]), exclude=gid)
+                g.place(x, z, self.now())
+                g.send({"t": "toast", "msg": "The owner left, so you stepped back outside 🚪"})
+
+    def on_knock(self, s: Session, m: P.Knock) -> None:
+        home = self.maps[HUB_MAP_ID].home_by_id(m.home)
+        owner_id = self.home_owners.get(m.home)
+        if home is None or owner_id is None or owner_id == s.pid:
+            raise GroupError("Nobody lives here — the door is open")
+        if s.room is None or s.room.map.id != HUB_MAP_ID or distance(s.x, s.z, *home["door"]) > 5:
+            raise GroupError("Walk up to the door to knock")
+        owner = self.sessions.get(owner_id)
+        if owner is None or not owner.connected:
+            raise GroupError(f"Nobody answered — {home['name']}'s owner is not online")
+        if s.pid in self.guests.get(m.home, set()):
+            s.send({"t": "door", "home": m.home, "open": True, "by": owner.nick})
+            return
+        owner.send({"t": "knock", "from": s.pid, "nick": s.nick, "home": m.home})
+        s.send({"t": "toast", "msg": f"🚪 Knock knock… waiting for {owner.nick} to answer"})
+
+    def on_knock_answer(self, s: Session, m: P.KnockAnswer) -> None:
+        home_id = next((h for h, o in self.home_owners.items() if o == s.pid), None)
+        v = self.sessions.get(m.to)
+        if home_id is None or v is None:
+            return
+        if m.ok:
+            self.guests.setdefault(home_id, set()).add(v.pid)
+            v.send({"t": "door", "home": home_id, "open": True, "by": s.nick})
+            v.send({"t": "toast", "msg": f"🚪 {s.nick} opened the door — come in!"})
+        else:
+            v.send({"t": "toast", "msg": f"{s.nick} can't take visitors right now"})
+
+    def go_home(self, s: Session) -> None:
+        """Ride from the arena back to your house (or the motor park if you have none)."""
+        g = s.group
+        arena = g.settings["arena"] if g else None
+        if g is not None:
+            self.leave_group(s, quiet=True)
+        hub = self.maps[HUB_MAP_ID]
+        at = self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point()
+        self.join_hub(s, at=at)
+        s.crouch = s.sit = False
+        if arena:
+            fare = min(self.cfg.fares_for(arena), key=lambda f: f.price)
+            s.send({"t": "ride", "seconds": fare.ride_s, "mode": fare.id, "arena": arena, "dir": "home"})
+
     def join_hub(self, s: Session, prefer: HubShard | None = None, at: tuple[float, float] | None = None) -> None:
         shard = prefer if prefer is not None and not prefer.full else None
         if shard is None and s.group is not None:
@@ -140,7 +278,7 @@ class World:
 
     def arrival_point(self) -> tuple[float, float]:
         ax, az = self.maps[HUB_MAP_ID].arrival
-        return ax + self.rng.uniform(-2, 2), az + self.rng.uniform(-1, 1)
+        return self.free_spot((ax + self.rng.uniform(-1, 1), az + self.rng.uniform(-0.5, 0.5)))
 
     # ------------------------------------------------------------ NPC players
     def create_bot(self, name: str) -> Session:
@@ -182,6 +320,12 @@ class World:
                 self.on_emote(s, msg)
             elif isinstance(msg, P.Buy):
                 await self.on_buy(s, msg)
+            elif isinstance(msg, P.Invite):
+                self.on_invite(s, msg)
+            elif isinstance(msg, P.Knock):
+                self.on_knock(s, msg)
+            elif isinstance(msg, P.KnockAnswer):
+                self.on_knock_answer(s, msg)
             else:
                 await self.on_group(s, msg)
         except GroupError as e:
@@ -197,12 +341,16 @@ class World:
             return
         mv = self.cfg.movement
         dt = now - s.last_move_at
-        if m.c:
+        if m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
             cap = mv.crouch_speed
-        elif m.r and s.stamina > -1.0:
+        elif m.r and s.stamina > -2.0:
             cap = mv.run_speed
         else:
             cap = mv.walk_speed
+        # Speed check against a budget that refills over real time, not per packet: mobile
+        # networks deliver moves in bursts, and a per-packet dt made honest players snap back.
+        burst = cap * mv.speed_tolerance * 0.6 + 0.3
+        budget = min(s.move_budget + cap * mv.speed_tolerance * max(0.0, min(dt, 1.0)), burst)
         check = validate_move(
             from_x=s.x,
             from_z=s.z,
@@ -214,18 +362,39 @@ class World:
             radius=mv.player_radius,
             bounds=room.map.bounds,
             boxes=room.map.near(s.x, s.z, m.x, m.z),
+            max_step=budget + 0.05,
         )
+        if check.ok and room.map.id == HUB_MAP_ID:
+            target = self.home_at(m.x, m.z)
+            if target is not None and not in_rect(target["rect"], s.x, s.z) and not self.may_enter(s, target["id"]):
+                check = MoveCheck(False, "locked")  # knock first: the owner must let you in
         if not check.ok:
+            s.move_budget = budget
+            s.last_move_at = now
             self._correct(s, m.s, now)
             return
         step = distance(s.x, s.z, m.x, m.z)
+        s.move_budget = max(0.0, budget - step)
         span = max(dt, 0.05)
-        if step / span > mv.walk_speed * 1.1:
-            s.stamina -= span
+        if m.r and step > 0:
+            s.stamina -= step / mv.run_speed  # time spent running, independent of packet timing
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
-        s.x, s.z, s.ry, s.crouch, s.run = m.x, m.z, m.ry, m.c, m.r
+        s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st
         s.last_move_at = now
+
+    def on_invite(self, s: Session, m: P.Invite) -> None:
+        """Invite any online player you can see to your lobby (they get a Join prompt)."""
+        g = s.group
+        if g is None or g.phase != "lobby":
+            raise GroupError("Create a game first, then invite people")
+        t = self.sessions.get(m.to)
+        if t is None or t.bot or not t.connected or t.pid == s.pid:
+            raise GroupError("That player is not online")
+        if t.pid in g.members and t.pid not in g.left:
+            raise GroupError(f"{t.nick} is already in your game")
+        t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": g.code})
+        s.send({"t": "toast", "msg": f"Invite sent to {t.nick} 📨"})
 
     def _correct(self, s: Session, seq: int, now: float) -> None:
         if now - s.last_corr_at > 0.2:
@@ -275,6 +444,10 @@ class World:
                 g.remove_bot(s, msg.id)
             elif msg.t == "g_leave":
                 self.leave_group(s)
+            elif msg.t == "g_return":
+                if g.phase != "over":
+                    raise GroupError("Finish the game first")
+                self.go_home(s)
 
     def validate_settings(self, raw: dict[str, Any]) -> dict[str, Any]:
         arena = self.maps.get(str(raw.get("arena")))
@@ -310,12 +483,12 @@ class World:
         log.info("group_created game=%s code=%s by=%s", game_id, code, s.pid)
         return g
 
-    def leave_group(self, s: Session) -> None:
+    def leave_group(self, s: Session, quiet: bool = False) -> None:
         g = s.group
         if g is None:
             return
         g.leave(s)
-        if not isinstance(s.room, HubShard):
+        if not quiet and not isinstance(s.room, HubShard):
             self.join_hub(s, at=self.arrival_point())
         s.send({"t": "g_left"})
 
@@ -500,7 +673,9 @@ class World:
     def _group_expired(self, g: GroupRoom, now: float) -> bool:
         online = [p for p in g.members if p not in g.left and (s := self.sessions.get(p)) and s.connected and not s.bot]
         if g.phase == "over":
-            return not online or now - g.phase_end > 600
+            # players may stay and explore the venue; close it once no human is left there
+            exploring = [p for p in online if (s := self.sessions.get(p)) and s.room is g.arena]
+            return not exploring or now - g.phase_end > 2700
         if g.phase == "lobby":
             return not g.members or (not online and now - g.last_activity > self.cfg.game.lobby_idle_expiry_s)
         return (

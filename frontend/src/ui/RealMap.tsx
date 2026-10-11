@@ -108,21 +108,23 @@ export function RideMap() {
         return;
       }
       if (!alive || !box.current || !route.coords?.length) return;
-      const { map: m, ml } = await createMap(box.current, route.coords[0], 11);
+      const home = ride.dir === "home";
+      const coords = home ? [...route.coords].reverse() : route.coords; // going home: same road, other way
+      const { map: m, ml } = await createMap(box.current, coords[0], 11);
       if (!alive) { m.remove(); return; }
       map = m;
-      const coords = route.coords;
       const cum = [0];
       for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
       const km = cum[cum.length - 1];
-      setInfo({ km, from: route.from.name, to: maps?.[ride.arena]?.venue?.name ?? route.to.name });
+      const venue = maps?.[ride.arena]?.venue?.name ?? route.to.name;
+      setInfo(home ? { km, from: venue, to: route.from.name } : { km, from: route.from.name, to: venue });
       m.addSource("route", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } } });
       m.addSource("done", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [coords[0]] } } });
       m.addLayer({ id: "route-casing", type: "line", source: "route", paint: { "line-color": "#ffffff", "line-width": 9 }, layout: { "line-cap": "round", "line-join": "round" } });
       m.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#9cc3ff", "line-width": 5, ...(ride.mode === "flight" ? { "line-dasharray": [1.5, 1.5] } : {}) }, layout: { "line-cap": "round", "line-join": "round" } });
       m.addLayer({ id: "done", type: "line", source: "done", paint: { "line-color": "#2f7cf6", "line-width": 6 }, layout: { "line-cap": "round", "line-join": "round" } });
-      new ml.Marker({ element: pinEl("🏠", "grid h-8 w-8 place-items-center rounded-full bg-white text-lg shadow-lg") }).setLngLat(coords[0]).addTo(m);
-      new ml.Marker({ element: pinEl("🌳", "grid h-9 w-9 place-items-center rounded-full bg-[#22b573] text-lg shadow-lg ring-4 ring-white") }).setLngLat(coords[coords.length - 1]).addTo(m);
+      new ml.Marker({ element: pinEl("🏠", "grid h-8 w-8 place-items-center rounded-full bg-white text-lg shadow-lg") }).setLngLat(home ? coords[coords.length - 1] : coords[0]).addTo(m);
+      new ml.Marker({ element: pinEl("🌳", "grid h-9 w-9 place-items-center rounded-full bg-[#22b573] text-lg shadow-lg ring-4 ring-white") }).setLngLat(home ? coords[0] : coords[coords.length - 1]).addTo(m);
       const vehicle: Marker = new ml.Marker({ element: pinEl(MODE_ICON[ride.mode] ?? "🚌", "grid h-11 w-11 place-items-center rounded-full bg-[#2f7cf6] text-2xl shadow-xl ring-4 ring-white") })
         .setLngLat(coords[0]).addTo(m);
       const bounds = coords.reduce((b, c) => b.extend(c), new ml.LngLatBounds(coords[0], coords[0]));
@@ -174,7 +176,7 @@ export function RideMap() {
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
           <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${progress * 100}%` }} />
         </div>
-        <div className="mt-1 text-[11px] opacity-70">{progress >= 1 ? "We don reach! Enter the arena 🙌🏾" : ride.mode === "flight" ? "Fasten your seatbelt — Abuja here we come!" : "Conductor: “Enter with your change o!”"}</div>
+        <div className="mt-1 text-[11px] opacity-70">{progress >= 1 ? (ride.dir === "home" ? "Home sweet home 🏠" : "We don reach! Enter the arena 🙌🏾") : ride.dir === "home" ? "Heading back home — good game! 🙌🏾" : ride.mode === "flight" ? "Fasten your seatbelt — Abuja here we come!" : "Conductor: “Enter with your change o!”"}</div>
       </div>
     </div>
   );

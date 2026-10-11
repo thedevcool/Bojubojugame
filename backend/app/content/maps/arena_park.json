@@ -438,6 +438,15 @@
    "w": 8,
    "d": 1,
    "h": 1.1
+  },
+  {
+   "kind": "bus_shelter",
+   "x": -5,
+   "z": 43.2,
+   "w": 6,
+   "d": 1.6,
+   "h": 2.8,
+   "text": "BUS STOP"
   }
  ],
  "sections": [
@@ -524,7 +533,19 @@
    ]
   }
  ],
- "zones": [],
+ "zones": [
+  {
+   "id": "bus_stop",
+   "kind": "bus_stop",
+   "name": "Bus Stop",
+   "rect": [
+    -9,
+    38.5,
+    -1,
+    43.5
+   ]
+  }
+ ],
  "city": "lagos",
  "venue": {
   "name": "Freedom Park, Lagos Island",

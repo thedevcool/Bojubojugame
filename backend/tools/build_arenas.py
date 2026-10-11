@@ -59,9 +59,10 @@ def build(cfg):
         room, sh = safe_room(x, z, door, sid, name, cfg["room_color"])
         props.append(room)
         safes.append(sh)
-    keep = [(0, 12, 7), (30, 25, 5), (24.5, -30, 5), (-24.5, 30, 5)]  # spawn + safe-house doorways
+    keep = [(0, 12, 7), (30, 25, 5), (24.5, -30, 5), (-24.5, 30, 5), (-5, 41, 6)]  # spawn, doors, bus stop
     for region in ((-45, -45, 0, 0), (0, -45, 45, 0), (-45, 0, 0, 45), (0, 0, 45, 45)):
         scatter(rng, props, cfg["pool"], cfg["per_quadrant"], region, keep)
+    props.append(P("bus_shelter", -5, 43.2, 6, 1.6, 2.8, text="BUS STOP"))
     # perimeter dressing (visual fence just outside the play bounds)
     for side in (-1, 1):
         props.append(P("fence", 0, side * (B + 0.6), 2 * B + 2, 0.3, 2.2, color=cfg["fence"]))
@@ -86,7 +87,7 @@ def build(cfg):
             {"id": "se", "name": s[4], "rect": [0, 0, 45, 45]},
         ],
         "safe_houses": safes,
-        "zones": [],
+        "zones": [{"id": "bus_stop", "kind": "bus_stop", "name": "Bus Stop", "rect": [-9, 38.5, -1, 43.5]}],
     }
 
 

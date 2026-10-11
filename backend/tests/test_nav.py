@@ -49,4 +49,5 @@ def test_hub_homes_and_zones_are_reachable():
     for z in m.zones.values():
         x0, z0, x1, z1 = z["rect"]
         assert m.nav.find_path(*m.arrival, (x0 + x1) / 2, (z0 + z1) / 2, max_nodes=40000), z["id"]
-    assert m.home_for("abc") == m.home_for("abc")
+    assert m.home_by_id(m.homes[0]["id"]) == m.homes[0] and m.home_by_id(None) is None
+    assert not collides(*m.newcomer, 0.35, m.boxes)

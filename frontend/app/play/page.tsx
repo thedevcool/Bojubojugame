@@ -3,15 +3,20 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { getContent, getMe, loadAccount, naira, refreshToken } from "@/lib/api";
+import { getContent, getFriends, getMe, loadAccount, naira, refreshToken, type Account } from "@/lib/api";
+import { NewPasswordForm } from "@/ui/AuthForms";
 import { net } from "@/lib/net";
 import { detectQuality, useGame, type Quality } from "@/lib/store";
 import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
 import { sound } from "@/game/sound";
 import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
-import { ChangelogPanel, WhatsNew } from "@/ui/WhatsNew";
-import { ChatDrawer, DicePanel, GameOverPanel, GroupPanel, LeadersPanel, RoundResultPanel, SettingsPanel, WalletPanel } from "@/ui/Panels";
+import { WhatsNew, markSeen } from "@/ui/WhatsNew";
+import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
+import Phone from "@/ui/Phone";
+import { InviteBanner, PlayerCard } from "@/ui/PlayerCard";
+import { DoorPanel, KnockPrompt } from "@/ui/Doors";
+import Onboarding, { onboardingDone } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
 const RideMap = dynamic(() => import("@/ui/RealMap").then((m) => m.RideMap), { ssr: false });
@@ -20,9 +25,9 @@ export default function PlayPage() {
   const router = useRouter();
   const set = useGame((s) => s.set);
   const me = useGame((s) => s.me);
-  const panel = useGame((s) => s.panel);
   const map = useMap();
   const [error, setError] = useState("");
+  const [forceChange, setForceChange] = useState<{ acc: Account; username: string } | null>(null);
   const joined = useRef(false);
 
   useEffect(() => {
@@ -39,10 +44,24 @@ export default function PlayPage() {
       try {
         const fresh = await refreshToken(acc);
         const [content, profile] = await Promise.all([getContent(), getMe(fresh)]);
-        set({ content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area });
+        if (profile.must_change_password) {
+          // Legacy account on the temporary password: no game until a real password is chosen.
+          setForceChange({ acc: fresh, username: profile.username ?? profile.nickname });
+          return;
+        }
+        set({
+          content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area,
+          life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname },
+        });
+        // first launch (or no phone/house yet): the welcome tour
+        if (!onboardingDone() && (!profile.phone_id || !profile.home_id)) {
+          set({ onboard: profile.phone_id ? "launch" : "welcome" });
+          markSeen(); // the tour is the "what's new" for them — don't stack a second sheet on top
+        }
+        getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});
         if (profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
         if (profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
-        if (!profile.has_pin) setTimeout(() => useGame.getState().toast("🔐 Set a PIN in ⚙️ Settings so you can log in on any phone"), 6000);
+        if (!profile.email) setTimeout(() => useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"), 60000);
         net.start(fresh);
       } catch (e) {
         setError((e as Error).message || "Can't connect");
@@ -78,10 +97,28 @@ export default function PlayPage() {
     if (me && join && !joined.current) {
       joined.current = true;
       net.send({ t: "g_join", code: join });
-      set({ panel: "group" });
+      set({ phoneOpen: true, phoneApp: "boju", onboard: null });
       window.history.replaceState(null, "", "/play");
     }
   }, [me, set]);
+
+  if (forceChange) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-4 py-8">
+        <div className="panel anim-pop p-5">
+          <div className="mb-3 text-center text-5xl">🔐</div>
+          <h1 className="text-center text-2xl font-black">Choose your new password</h1>
+          <p className="mt-2 text-center text-sm opacity-85">
+            Boju Boju now uses proper accounts. Your username is <b>{forceChange.username}</b> and your temporary password
+            is <b>123456</b>. Pick your own password to keep playing — your naira and house are safe.
+          </p>
+          <div className="mt-4">
+            <NewPasswordForm acc={forceChange.acc} username={forceChange.username} temporary="123456" onDone={() => window.location.reload()} />
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (error) {
     return (
@@ -110,12 +147,12 @@ export default function PlayPage() {
             <RoundResultPanel />
             <GameOverPanel />
             <Toasts />
-            <ChatDrawer />
-            {panel === "group" && <GroupPanel />}
-            {panel === "wallet" && <WalletPanel />}
-            {panel === "settings" && <SettingsPanel />}
-            {panel === "leaders" && <LeadersPanel />}
-            {panel === "changelog" && <ChangelogPanel />}
+            <Onboarding />
+            <Phone />
+            <PlayerCard />
+            <InviteBanner />
+            <DoorPanel />
+            <KnockPrompt />
             <WhatsNew />
           </div>
           <BlindOverlay />

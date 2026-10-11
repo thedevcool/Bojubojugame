@@ -14,8 +14,10 @@ cheats, crashes, or player harm. When a rule here conflicts with convenience, th
 2. **Naira is virtual.** No real money, payments, withdrawals, bank names, account-number
    fields, card fields, or payment-style UI. Every wallet surface shows
    *"In-game naira — not real money"*.
-3. **No personal data.** No email, phone, precise location, or real names. "Home" is an
-   area name from a fixed list.
+3. **Minimal personal data.** Accounts are username + password. Email is **optional** and used
+   only for password resets — never shown to other players or used for marketing. No phone,
+   precise location or real names. "Home" is an area name from a fixed list.
+   Every account must have a password: there is no passwordless sign-up path.
 4. **Config over code.** Every tunable number (scoring, prices, timers, speeds, hunger,
    limits) lives in `backend/app/content/game_config.json`. Items, maps and places are
    data, not code. Adding an item or a prop must not require a code change.

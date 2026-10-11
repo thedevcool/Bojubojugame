@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
-import { naira, nairaShort } from "@/lib/api";
+import { buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { fmtTime, useMap, useRole, useSecondsLeft, useTicker, useWhere } from "./hooks";
@@ -12,15 +12,18 @@ export function TopBar() {
   const balance = useGame((s) => s.balance);
   const hunger = useGame((s) => s.hunger);
   const connected = useGame((s) => s.connected);
-  const set = useGame((s) => s.set);
-  const unread = useGame((s) => s.unread);
+  const openApp = useGame((s) => s.openApp);
+  const badge = useGame((s) => s.unread + s.dmUnread + s.friendReqs);
   const group = useGame((s) => s.group);
+  const phoneId = useGame((s) => s.life.phoneId);
+  const onboard = useGame((s) => s.onboard);
+  const phone = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
   useTicker(200);
   const stamina = local.stamina / 5;
   return (
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
       <div className="panel flex min-w-0 items-center gap-2.5 px-3 py-2">
-        <button onClick={() => set({ panel: "wallet" })} className="text-left">
+        <button onClick={() => openApp("wallet")} className="text-left">
           <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg" title={naira(balance)}>{nairaShort(balance)}</div>
           <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
         </button>
@@ -32,14 +35,16 @@ export function TopBar() {
         <span title={connected ? "Online" : "Reconnecting"} className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-400" : "animate-pulse bg-red-500"}`} />
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <button className="btn btn-primary relative h-10 px-3 text-sm sm:px-4" onClick={() => set({ panel: "group" })}>
-          {group ? `🙈 ${group.code}` : "Play Boju"}
+        {group && (
+          <button className="btn btn-primary h-10 px-3 text-sm" onClick={() => openApp("boju")}>🙈 {group.code}</button>
+        )}
+        <button aria-label="Phone" onClick={() => openApp(null)}
+          className={`relative grid h-12 w-9 place-items-center rounded-[10px] border-2 bg-[#0a1324] text-lg shadow-lg transition active:scale-90 ${onboard === "launch" ? "phone-nudge" : ""}`}
+          style={{ borderColor: phone?.color ?? "rgba(255,255,255,.35)" }}>
+          <span className="absolute top-1 h-1 w-3 rounded-full bg-white/30" />
+          {phoneId ? "📱" : "🎒"}
+          {badge > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-red-500 px-1 text-[10px] font-bold">{badge}</span>}
         </button>
-        <button aria-label="Chat" className="btn btn-ghost relative grid h-10 w-10 place-items-center p-0" onClick={() => set({ chatOpen: true, unread: 0 })}>
-          💬{unread > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 text-[10px]">{unread}</span>}
-        </button>
-        <button aria-label="Leaderboards" className="btn btn-ghost grid h-10 w-10 place-items-center p-0 max-sm:hidden" onClick={() => set({ panel: "leaders" })}>🏆</button>
-        <button aria-label="Settings" className="btn btn-ghost grid h-10 w-10 place-items-center p-0" onClick={() => set({ panel: "settings" })}>⚙️</button>
       </div>
     </div>
   );
@@ -60,6 +65,11 @@ export function PhaseBar() {
   }, [left, g]);
   const map = useMap();
   const myHome = useGame((s) => s.home);
+  const onboarding = useGame((s) => s.onboard !== null);
+  if (g?.phase === "over" && map?.kind === "arena") {
+    return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · free to explore — 🚌 the bus stop takes you home</div>;
+  }
+  if (!g && onboarding) return null; // the tour banner sits here
   if (!g || g.phase === "lobby") {
     const inside = local.insideHome;
     const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
@@ -96,7 +106,9 @@ export function ActionButtons() {
   const { isSeeker, inGame, myState } = useRole();
   const g = useGame((s) => s.group);
   const emotes = useGame((s) => s.content?.config.emotes ?? []);
-  const [crouch, setCrouch] = useState(false);
+  const crouch = useGame((s) => s.bend);
+  const setBend = useGame((s) => s.setBend);
+  const sitting = useGame((s) => s.sitting);
   const [wheel, setWheel] = useState(false);
   const canTag = isSeeker && g?.phase === "seek";
   const canTaunt = !isSeeker && (!inGame || (g?.phase === "seek" && myState === "hiding"));
@@ -108,7 +120,7 @@ export function ActionButtons() {
   const toggleAerial = () => {
     const on = !cam.aerial.on;
     cam.aerial.on = on;
-    if (on) Object.assign(cam.aerial, { x: local.x, z: local.z, h: 55 });
+    if (on) Object.assign(cam.aerial, { x: local.x, z: local.z, h: 40, tx: local.x, tz: local.z, th: 55, vx: 0, vz: 0, drag: false });
     set({ aerial: on });
     sound.play("pop");
   };
@@ -130,9 +142,20 @@ export function ActionButtons() {
         )}
         {!aerial && (
           <>
+            {!inGame && (
+              <button aria-label="Sit"
+                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sitting ? "btn-leaf" : "btn-ghost"}`}
+                onClick={() => {
+                  const on = !sitting;
+                  if (on) { setBend(false); local.path = []; }
+                  local.sit = on;
+                  set({ sitting: on });
+                }}
+              >🪑<br />{sitting ? "Stand" : "Sit"}</button>
+            )}
             <button
               className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
-              onClick={() => { input.crouchToggle = !crouch; setCrouch(!crouch); }}
+              onClick={() => { setBend(!crouch); if (!crouch) set({ sitting: false }); }}
             >🧎<br />{crouch ? "Stand" : "Bend"}</button>
             <button
               className="btn btn-ghost h-14 w-14 rounded-full text-[11px] leading-tight"
@@ -157,6 +180,8 @@ export function ZonePanel() {
   const g = useGame((s) => s.group);
   const balance = useGame((s) => s.balance);
   const me = useGame((s) => s.me?.id);
+  const home = useGame((s) => s.home);
+  const map = useMap();
   if (!zone || !cfg) return null;
   if (zone.kind === "food") {
     const items = cfg.items.filter((i) => i.spot === zone.id);
@@ -169,6 +194,22 @@ export function ZonePanel() {
             <span>{i.name} <span className="opacity-60">+{i.hunger}% belle</span></span><span className="text-[var(--accent)]">{naira(i.price)}</span>
           </button>
         ))}
+      </div></div>
+    );
+  }
+  if (zone.kind === "phone_shop") return <PhoneShop />;
+  if (zone.kind === "bus_stop" && map?.kind === "arena") {
+    return (
+      <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
+        <div className="mb-1 font-bold">🚏 Bus stop</div>
+        {g?.phase === "over" ? (
+          <>
+            <button className="btn btn-primary mb-1 w-full" onClick={() => net.send({ t: "g_return" })}>🏠 Ride home</button>
+            <div className="text-xs opacity-70">Free ride back to Lagos — your house{home ? ` (${home.name})` : " / the Motor Park"}.</div>
+          </>
+        ) : (
+          <div className="text-xs opacity-80">Buses go home once the game is over. Play on! 🙈</div>
+        )}
       </div></div>
     );
   }
@@ -292,5 +333,61 @@ export function SafeCompass() {
         <span className="opacity-75">{inside ? "Time is ticking…" : `${Math.round(dist)} m away`}</span>
       </span>
     </div>
+  );
+}
+
+/** The phone shop beside the newcomer spawn: pick any phone (in-game naira). */
+export function PhoneShop() {
+  const phones = useGame((s) => s.content?.config.phones ?? []);
+  const balance = useGame((s) => s.balance);
+  const mine = useGame((s) => s.life.phoneId);
+  const [pick, setPick] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const chosen = phones.find((p) => p.id === (pick ?? mine ?? phones[0]?.id));
+  const buy = async () => {
+    const acc = loadAccount();
+    if (!acc || !chosen) return;
+    setBusy(true);
+    try {
+      await buyPhone(acc, chosen.id);
+      const st = useGame.getState();
+      st.set({ life: { ...st.life, phoneId: chosen.id }, ...(st.onboard === "phone" ? { onboard: "launch", guide: null } : {}) });
+      st.toast(`📱 ${chosen.name} is yours! Tap the phone (top right) to launch it.`, "good");
+      sound.play("coin");
+    } catch (e) {
+      useGame.getState().toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!chosen) return null;
+  return (
+    <div className="pointer-events-auto absolute bottom-24 left-1/2 z-20 w-[min(22rem,94vw)] -translate-x-1/2"><div className="panel anim-sheet p-3">
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="font-black">📱 Mama Chidi Phones</div>
+        <div className="text-[10px] opacity-60">in-game naira only</div>
+      </div>
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        {phones.map((p, i) => (
+          <button key={p.id} onClick={() => setPick(p.id)} data-on={chosen.id === p.id}
+            className="choice anim-rise flex w-24 shrink-0 flex-col items-center gap-1 p-2" style={{ animationDelay: `${i * 50}ms` }}>
+            <span className="relative grid h-16 w-9 place-items-center rounded-[9px] border-[3px] bg-gradient-to-b from-[#2f7cf6] to-[#0a1324] text-xs transition-transform"
+              style={{ borderColor: p.color, transform: chosen.id === p.id ? "translateY(-4px) rotate(-6deg)" : undefined }}>
+              <span className="absolute top-1 h-1 w-3 rounded-full bg-black/60" />🙈
+            </span>
+            <span className="text-xs font-bold leading-tight">{p.name}</span>
+            <span className="text-[11px] text-[var(--accent)]">{nairaShort(p.price)}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mb-2 text-xs opacity-80">{chosen.tagline}</div>
+      {mine === chosen.id ? (
+        <div className="text-center text-sm font-bold text-green-400">✓ You own this phone</div>
+      ) : (
+        <button className="btn btn-primary w-full" disabled={busy || balance < chosen.price} onClick={buy}>
+          {balance < chosen.price ? "Your money no reach" : `${mine ? "Upgrade to" : "Buy"} ${chosen.name} · ${naira(chosen.price)}`}
+        </button>
+      )}
+    </div></div>
   );
 }

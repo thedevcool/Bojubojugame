@@ -93,7 +93,7 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
       {label && (
         <Html position={[0, 2.3, 0]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-            {label}{tag && <span className="ml-1 rounded bg-[var(--danfo)] px-1 text-[9px] text-black">{tag}</span>}
+            {label}{tag && <span className="ml-1 rounded bg-[var(--accent)] px-1 text-[9px] text-black">{tag}</span>}
           </div>
         </Html>
       )}

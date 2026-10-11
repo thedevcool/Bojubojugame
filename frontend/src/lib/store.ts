@@ -35,7 +35,7 @@ interface GameStore {
   emotes: { n: number; text: string; until: number }[];
   quality: Quality;
   muted: string[];
-  panel: null | "wallet" | "settings" | "group" | "leaders";
+  panel: null | "wallet" | "settings" | "group" | "leaders" | "changelog";
   set: (p: Partial<GameStore>) => void;
   toast: (msg: string, kind?: Toast["kind"]) => void;
   addChat: (m: ChatMsg) => void;

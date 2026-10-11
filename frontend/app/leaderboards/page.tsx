@@ -12,10 +12,10 @@ export default function LeaderboardsPage() {
     setRows(null);
     getLeaderboard(kind, period).then((r) => setRows(r.rows)).catch(() => setRows([]));
   }, [kind, period]);
-  const tab = (on: boolean) => `btn flex-1 ${on ? "btn-danfo" : "btn-ghost"}`;
+  const tab = (on: boolean) => `btn flex-1 ${on ? "btn-primary" : "btn-ghost"}`;
   return (
     <main className="mx-auto max-w-md px-4 py-8">
-      <h1 className="text-3xl font-black text-[var(--danfo)]">Leaderboards</h1>
+      <h1 className="text-3xl font-black text-[var(--accent)]">Leaderboards</h1>
       <div className="mt-4 flex gap-2"><button className={tab(kind === "seeker")} onClick={() => setKind("seeker")}>Top Seeker</button><button className={tab(kind === "hider")} onClick={() => setKind("hider")}>Top Hider</button></div>
       <div className="mt-2 flex gap-2"><button className={tab(period === "weekly")} onClick={() => setPeriod("weekly")}>This week</button><button className={tab(period === "all")} onClick={() => setPeriod("all")}>All time</button></div>
       <ol className="mt-4 space-y-1">

@@ -150,7 +150,23 @@ exactly one copy of every number and every map.
 - Lagos‑inspired, not replicas: no real brand logos, real people, or exact buildings.
 - Places and props are assembled from the modular kit defined by map JSON.
 
-## 12. Definition of done (per feature)
+## 12. Player-facing changelog
+
+- Every release that players can notice adds an entry at the **top** of
+  `frontend/src/lib/changelog.ts` (new `version`, a short title, 2–5 items with emoji,
+  and an optional "Try it" hint). The "What's new" sheet then appears once for each
+  player, and the full list stays under Settings → What's new.
+- Write in the game's playful voice; no internal jargon.
+
+## 13. UI look & motion
+
+- UI theme is **Boju blue** (`--accent` tokens in `app/globals.css`). The 3D world keeps
+  real Lagos colours (yellow danfos, laterite, zinc); don't recolour the scene to match the UI.
+- Motion follows iOS feel: sheets slide up with `--ease-ios`, cards pop with `--ease-spring`,
+  buttons compress on press. Use the `anim-*` classes; honour `prefers-reduced-motion`.
+- Every choice a player makes should show a preview (3D, animation or live summary).
+
+## 14. Definition of done (per feature)
 
 A feature is done when: it follows these standards, its rules are config‑driven, it has
 tests, CI is green, it works on a phone‑sized viewport, and the README is updated if setup

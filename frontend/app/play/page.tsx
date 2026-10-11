@@ -8,7 +8,8 @@ import { net } from "@/lib/net";
 import { detectQuality, useGame, type Quality } from "@/lib/store";
 import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
-import { ActionButtons, BlindOverlay, Minimap, PhaseBar, RideOverlay, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { ActionButtons, BlindOverlay, Minimap, PhaseBar, RideOverlay, SafeCompass, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { ChangelogPanel, WhatsNew } from "@/ui/WhatsNew";
 import { ChatDrawer, DicePanel, GameOverPanel, GroupPanel, LeadersPanel, RoundResultPanel, SettingsPanel, WalletPanel } from "@/ui/Panels";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -62,7 +63,7 @@ export default function PlayPage() {
       <main className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <div className="text-xl font-bold">Omo, network wahala 😩</div>
         <div className="text-sm opacity-80">{error}</div>
-        <button className="btn btn-danfo" onClick={() => window.location.reload()}>Try again</button>
+        <button className="btn btn-primary" onClick={() => window.location.reload()}>Try again</button>
       </main>
     );
   }
@@ -77,6 +78,7 @@ export default function PlayPage() {
             <TopBar />
             <PhaseBar />
             <ZonePanel />
+            <SafeCompass />
             <Minimap />
             <ActionButtons />
             <DicePanel />
@@ -88,6 +90,8 @@ export default function PlayPage() {
             {panel === "wallet" && <WalletPanel />}
             {panel === "settings" && <SettingsPanel />}
             {panel === "leaders" && <LeadersPanel />}
+            {panel === "changelog" && <ChangelogPanel />}
+            <WhatsNew />
           </div>
           <BlindOverlay />
           <RideOverlay />

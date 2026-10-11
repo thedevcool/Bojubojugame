@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { input, local, remotes, sample } from "@/game/state";
+import { cam, input, local, remotes, sample } from "@/game/state";
 import { naira } from "@/lib/api";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
@@ -20,7 +20,7 @@ export function TopBar() {
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
       <div className="panel flex items-center gap-3 px-3 py-2">
         <button onClick={() => set({ panel: "wallet" })} className="text-left">
-          <div className="text-lg font-black leading-none text-[var(--danfo)]">{naira(balance)}</div>
+          <div className="text-lg font-black leading-none text-[var(--accent)]">{naira(balance)}</div>
           <div className="text-[10px] opacity-70">in-game naira · not real money</div>
         </button>
         <div className="w-20">
@@ -31,7 +31,7 @@ export function TopBar() {
         <span title={connected ? "Online" : "Reconnecting"} className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-400" : "animate-pulse bg-red-500"}`} />
       </div>
       <div className="flex flex-wrap justify-end gap-1.5">
-        <button className="btn btn-danfo relative" onClick={() => set({ panel: "group" })}>
+        <button className="btn btn-primary relative" onClick={() => set({ panel: "group" })}>
           {group ? `Group ${group.code}` : "Play Boju"}
         </button>
         <button className="btn btn-ghost relative" onClick={() => set({ chatOpen: true, unread: 0 })}>
@@ -69,7 +69,7 @@ export function PhaseBar() {
   return (
     <div className="panel absolute left-1/2 top-16 z-10 -translate-x-1/2 px-4 py-1.5 text-center">
       <div className="text-sm font-bold">
-        {labels[g.phase]} {g.phase !== "over" && <span className="tabular-nums text-[var(--danfo)]">{fmtTime(left)}</span>}
+        {labels[g.phase]} {g.phase !== "over" && <span className="tabular-nums text-[var(--accent)]">{fmtTime(left)}</span>}
       </div>
       {r && ["hide", "seek"].includes(g.phase) && (
         <div className="text-[11px] opacity-90">
@@ -132,32 +132,32 @@ export function ZonePanel() {
   if (zone.kind === "food") {
     const items = cfg.items.filter((i) => i.spot === zone.id);
     return (
-      <div className="panel pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2 p-3">
+      <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
         <div className="mb-2 font-bold">🍽️ {zone.name}</div>
         {items.map((i) => (
           <button key={i.id} disabled={balance < i.price} className="btn btn-ghost mb-1 flex w-full justify-between text-sm"
             onClick={() => net.send({ t: "buy", item: i.id, key: crypto.randomUUID() })}>
-            <span>{i.name} <span className="opacity-60">+{i.hunger}% belle</span></span><span className="text-[var(--danfo)]">{naira(i.price)}</span>
+            <span>{i.name} <span className="opacity-60">+{i.hunger}% belle</span></span><span className="text-[var(--accent)]">{naira(i.price)}</span>
           </button>
         ))}
-      </div>
+      </div></div>
     );
   }
   if (zone.kind === "bus_stop") {
     const boarded = g?.members.find((m) => m.id === me)?.boarded;
     return (
-      <div className="panel pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2 p-3">
-        <div className="mb-1 font-bold">🚌 Bus Stop</div>
+      <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
+        <div className="mb-1 font-bold">🚌 Motor Park</div>
         {g?.phase === "travel" && !boarded ? (
           cfg.fares.map((f) => (
-            <button key={f.id} disabled={balance < f.price} className="btn btn-danfo mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
+            <button key={f.id} disabled={balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
               <span>Board {f.name}</span><span>{naira(f.price)}</span>
             </button>
           ))
         ) : (
           <div className="text-xs opacity-80">Rides to the arena leave when your group starts a game.</div>
         )}
-      </div>
+      </div></div>
     );
   }
   return null;
@@ -198,7 +198,7 @@ export function Minimap() {
         const s = sample(n);
         if (s) ctx.fillRect(px(s.x) - 2, pz(s.z) - 2, 4, 4);
       }
-      ctx.fillStyle = "#f7c500";
+      ctx.fillStyle = "#66a8ff";
       ctx.beginPath();
       ctx.arc(px(local.x), pz(local.z), 3.5, 0, Math.PI * 2);
       ctx.fill();
@@ -212,10 +212,13 @@ export function Minimap() {
 export function Toasts() {
   const toasts = useGame((s) => s.toasts);
   return (
-    <div className="pointer-events-none absolute left-1/2 top-32 z-40 flex w-80 -translate-x-1/2 flex-col items-center gap-1">
+    <div className="pointer-events-none absolute left-1/2 top-3 z-[60] flex w-[min(24rem,92vw)] -translate-x-1/2 flex-col items-center gap-1.5">
       {toasts.map((t) => (
-        <div key={t.id} className={`rounded-lg px-3 py-1.5 text-center text-sm font-semibold shadow ${t.kind === "error" ? "bg-red-600/90" : t.kind === "good" ? "bg-green-600/90" : "bg-black/75"}`}>
-          {t.msg}
+        <div key={t.id} className="panel anim-banner flex w-full items-center gap-2.5 px-3 py-2 text-sm font-semibold">
+          <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-base ${t.kind === "error" ? "bg-[var(--clay)]" : t.kind === "good" ? "bg-[var(--leaf)]" : "bg-[var(--accent)]"}`}>
+            {t.kind === "error" ? "!" : t.kind === "good" ? "✓" : "🙈"}
+          </span>
+          <span className="leading-snug">{t.msg}</span>
         </div>
       ))}
     </div>
@@ -229,7 +232,7 @@ export function BlindOverlay() {
   if (!isSeeker || g?.phase !== "hide") return null;
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black text-center">
-      <div className="text-3xl font-black text-[var(--danfo)]">Boju Boju…</div>
+      <div className="text-3xl font-black text-[var(--accent)]">Boju Boju…</div>
       <div className="mt-2 text-lg">Counting… eyes closed 🙈</div>
       <div className="mt-4 text-6xl font-black tabular-nums">{left}</div>
     </div>
@@ -251,6 +254,33 @@ export function RideOverlay() {
       <div className="mt-3 h-2 w-[200vw] bg-neutral-700" />
       <div className="mt-6 text-xl font-black">Oya, we dey go arena!</div>
       <div className="text-sm">Conductor: &ldquo;Enter with your change o!&rdquo;</div>
+    </div>
+  );
+}
+
+/** Hiders get a compass to the safe house during hide/seek (points relative to the camera). */
+export function SafeCompass() {
+  useTicker(100);
+  const g = useGame((s) => s.group);
+  const me = useGame((s) => s.me?.id);
+  const map = useMap();
+  const r = g?.round;
+  if (!g || !r || !me || !map || !["hide", "seek"].includes(g.phase) || r.seeker === me || r.state[me] !== "hiding") return null;
+  const safe = map.safe_houses.find((s) => s.id === g.settings.safe);
+  if (!safe) return null;
+  const sx = (safe.rect[0] + safe.rect[2]) / 2, sz = (safe.rect[1] + safe.rect[3]) / 2;
+  const dist = Math.hypot(sx - local.x, sz - local.z);
+  const inside = r.safe.includes(me);
+  const rel = Math.atan2(sx - local.x, sz - local.z) - (cam.yaw + Math.PI);
+  return (
+    <div className="panel anim-rise pointer-events-none absolute bottom-28 left-3 z-20 flex items-center gap-2 px-3 py-2 max-sm:bottom-40">
+      <span className="grid h-9 w-9 place-items-center rounded-full bg-[var(--leaf)]/25">
+        <span className="text-lg transition-transform duration-150" style={{ transform: `rotate(${-rel}rad)` }}>{inside ? "🏠" : "⬆️"}</span>
+      </span>
+      <span className="text-xs leading-tight">
+        <span className="block font-bold">{inside ? "You're safe!" : safe.name}</span>
+        <span className="opacity-75">{inside ? "Time is ticking…" : `${Math.round(dist)} m away`}</span>
+      </span>
     </div>
   );
 }

@@ -1,18 +1,32 @@
 @import "tailwindcss";
 
+/*
+ * UI theme: Boju blue. (The 3D Lagos world keeps its own real-life colours:
+ * yellow danfos, red laterite, green palms — those live in the scene code.)
+ */
 :root {
-  --ink: #1d1a16;
-  --paper: #fff8e7;
-  --danfo: #f7c500;
-  --leaf: #2f9e57;
-  --clay: #d9643a;
+  --ink: #0a1324;          /* deep night-blue background */
+  --paper: #f2f6ff;        /* text */
+  --accent: #2f7cf6;       /* primary blue */
+  --accent-2: #66a8ff;     /* lighter blue */
+  --accent-ink: #ffffff;   /* text on accent */
+  --leaf: #22b573;         /* success */
+  --clay: #ff5a4f;         /* danger / Boju! */
+  --glass: rgba(16, 28, 54, 0.72);
+  --glass-line: rgba(160, 196, 255, 0.18);
+  --danfo: #f7c500;        /* kept only for Lagos-flavoured accents */
+
+  /* iOS-style motion curves */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 html, body { height: 100%; }
 body {
-  background: #1d1a16;
+  background: radial-gradient(1200px 600px at 20% -10%, #17305e 0%, var(--ink) 55%) fixed, var(--ink);
   color: var(--paper);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
@@ -20,15 +34,68 @@ body {
 .game-root, .game-root * { user-select: none; -webkit-user-select: none; touch-action: none; }
 .game-root input, .game-root textarea { user-select: text; -webkit-user-select: text; touch-action: auto; }
 
-.panel { background: rgba(29, 26, 22, 0.86); border: 1px solid rgba(255, 248, 231, 0.15); border-radius: 14px; backdrop-filter: blur(6px); }
-.btn { border-radius: 12px; padding: 0.55rem 0.9rem; font-weight: 700; transition: transform .08s; }
-.btn:active { transform: scale(0.96); }
-.btn-danfo { background: var(--danfo); color: var(--ink); }
+/* Frosted glass cards (iOS materials) */
+.panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.btn {
+  border-radius: 14px;
+  padding: 0.6rem 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  transition: transform 0.35s var(--ease-spring), background-color 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+.btn:active { transform: scale(0.94); transition-duration: 0.08s; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px rgba(47, 124, 246, 0.35); }
 .btn-leaf { background: var(--leaf); color: white; }
-.btn-ghost { background: rgba(255, 248, 231, 0.12); color: var(--paper); }
-.btn:disabled { opacity: .45; }
+.btn-ghost { background: rgba(160, 196, 255, 0.12); color: var(--paper); }
+.btn:disabled { opacity: 0.4; box-shadow: none; }
+
+/* Selectable option cards (game setup) */
+.choice {
+  border-radius: 16px;
+  background: rgba(160, 196, 255, 0.08);
+  border: 1.5px solid transparent;
+  transition: transform 0.4s var(--ease-spring), border-color 0.2s, background-color 0.2s;
+}
+.choice:active { transform: scale(0.96); }
+.choice[data-on="true"] { border-color: var(--accent); background: rgba(47, 124, 246, 0.18); transform: scale(1.02); }
+
+/* Segmented control */
+.segmented { display: flex; padding: 3px; border-radius: 12px; background: rgba(160, 196, 255, 0.12); }
+.segmented > button { flex: 1; border-radius: 9px; padding: 0.4rem 0.5rem; font-size: 0.8rem; font-weight: 600; transition: background-color 0.3s var(--ease-ios), color 0.2s; }
+.segmented > button[data-on="true"] { background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }
+
+/* ---------- motion ---------- */
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes banner-in { from { opacity: 0; transform: translateY(-120%) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes step-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes tick-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+.anim-sheet { animation: sheet-in 0.5s var(--ease-ios) both; }
+.anim-pop { animation: pop-in 0.45s var(--ease-spring) both; }
+.anim-fade { animation: fade-in 0.3s ease-out both; }
+.anim-banner { animation: banner-in 0.55s var(--ease-spring) both; }
+.anim-rise { animation: rise-in 0.45s var(--ease-ios) both; }
+.anim-step { animation: step-in 0.4s var(--ease-ios) both; }
+.anim-pulse { animation: tick-pulse 1s ease-in-out infinite; }
+@media (min-width: 640px) { .anim-sheet { animation-name: pop-in; } }
+@media (prefers-reduced-motion: reduce) {
+  .anim-sheet, .anim-pop, .anim-fade, .anim-banner, .anim-rise, .anim-step, .anim-pulse { animation: none !important; }
+}
 
 @keyframes ride { from { transform: translateX(-60vw); } to { transform: translateX(60vw); } }
 .ride-bus { animation: ride 2.2s linear infinite; }
 @keyframes roll { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(1.2); } 100% { transform: rotate(360deg) scale(1); } }
 .dice-rolling { animation: roll .35s linear infinite; }
+@keyframes peek { 0%, 70%, 100% { transform: translateY(0) rotate(0); } 80% { transform: translateY(-4px) rotate(-6deg); } 90% { transform: translateY(-4px) rotate(6deg); } }
+.logo-peek { display: inline-block; animation: peek 3.2s var(--ease-ios) infinite; }

@@ -39,6 +39,8 @@ export interface GameMap {
   npc_paths?: { pts: [number, number][]; n: number }[];
   vendors?: { x: number; z: number; ry: number; say: string }[];
   vehicles?: { kind: string; pts: [number, number][]; speed: number; n: number }[];
+  city?: string;
+  venue?: { name: string; lat: number; lng: number };
 }
 
 export interface Home { id: string; name: string; rect: Rect; spawn: [number, number]; door: [number, number] }
@@ -75,7 +77,11 @@ export interface GameConfig {
   home_areas: string[];
   emotes: { id: string; text: string }[];
   chat: { max_len: number };
+  cities: City[];
+  home_coords: Record<string, [number, number]>;
 }
+
+export interface City { id: string; name: string; lat: number; lng: number; blurb: string; arenas: string[]; fares: Fare[] | null }
 
 export interface Content { config: GameConfig; maps: Record<string, GameMap> }
 

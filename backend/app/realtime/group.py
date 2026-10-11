@@ -239,7 +239,7 @@ class GroupRoom:
             raise GroupError("Not travel time")
         if s.pid in self.boarded or s.pid not in self.active:
             return
-        fare = self.cfg.fare(fare_id)
+        fare = next((f for f in self.cfg.fares_for(self.settings["arena"]) if f.id == fare_id), None)
         if fare is None:
             raise GroupError("Unknown ride")
         zone = s.room.map.zones.get("bus_stop") if s.room and s.room.map.kind == "hub" else None
@@ -252,14 +252,14 @@ class GroupRoom:
             self.boarded.discard(s.pid)
             raise GroupError(f"Not enough naira for {fare.name}") from None
         await self.world.push_wallet(s)
-        self.enter_arena(s, fare.ride_s)
+        self.enter_arena(s, fare.ride_s, fare.id)
         self.broadcast_state("boarded")
 
-    def enter_arena(self, s: Session, ride_s: float) -> None:
+    def enter_arena(self, s: Session, ride_s: float, mode: str = "danfo") -> None:
         idx = self.members.index(s.pid)
         x, z = self.arena.spawn_point(idx)
         self.arena.add(s, x, z, self.world.now())
-        s.send({"t": "ride", "seconds": ride_s})
+        s.send({"t": "ride", "seconds": ride_s, "mode": mode, "arena": self.settings["arena"]})
 
     # ------------------------------------------------------------ dice
     def start_dice(self, pool: list[str]) -> None:
@@ -478,7 +478,7 @@ class GroupRoom:
             self.phase_end = min(self.phase_end, now)
 
     async def auto_board(self) -> None:
-        fare = self.cfg.cheapest_fare
+        fare = min(self.cfg.fares_for(self.settings["arena"]), key=lambda f: f.price)
         for p in self.active:
             if p in self.boarded:
                 continue
@@ -490,7 +490,7 @@ class GroupRoom:
             if s is not None:
                 await self.world.push_wallet(s)
                 s.send({"t": "toast", "msg": f"Auto-boarded a {fare.name} — fare paid"})
-                self.enter_arena(s, fare.ride_s)
+                self.enter_arena(s, fare.ride_s, fare.id)
 
     async def finish_round(self) -> None:
         r = self.round

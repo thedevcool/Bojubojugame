@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
 import { naira } from "@/lib/api";
 import { net } from "@/lib/net";
@@ -49,6 +50,14 @@ export function PhaseBar() {
   const me = useGame((s) => s.me?.id);
   const left = useSecondsLeft(g?.phase_end);
   const { section } = useWhere();
+  // last-10-seconds countdown ticks while hiding/seeking
+  const lastTick = useRef(-1);
+  useEffect(() => {
+    if (g && (g.phase === "hide" || g.phase === "seek") && left > 0 && left <= 10 && left !== lastTick.current) {
+      lastTick.current = left;
+      sound.play("tick");
+    }
+  }, [left, g]);
   const map = useMap();
   const myHome = useGame((s) => s.home);
   if (!g || g.phase === "lobby") {
@@ -92,6 +101,17 @@ export function ActionButtons() {
   const canTag = isSeeker && g?.phase === "seek";
   const canTaunt = !isSeeker && (!inGame || (g?.phase === "seek" && myState === "hiding"));
   const hold = (v: boolean) => () => { input.runHeld = v; };
+  const aerial = useGame((s) => s.aerial);
+  const set = useGame((s) => s.set);
+  // Boju can't use the aerial view while counting or seeking — that would be cheating.
+  const canAerial = !(isSeeker && inGame);
+  const toggleAerial = () => {
+    const on = !cam.aerial.on;
+    cam.aerial.on = on;
+    if (on) Object.assign(cam.aerial, { x: local.x, z: local.z, h: 55 });
+    set({ aerial: on });
+    sound.play("pop");
+  };
   return (
     <div className="pointer-events-auto absolute bottom-6 right-3 z-20 flex flex-col items-end gap-2">
       {wheel && (
@@ -103,14 +123,23 @@ export function ActionButtons() {
       )}
       <div className="flex gap-2">
         {canTaunt && <button className="btn btn-ghost h-14 w-14 rounded-full text-xl" onClick={() => setWheel(!wheel)}>😜</button>}
-        <button
-          className={`btn h-14 w-14 rounded-full text-xs ${crouch ? "btn-leaf" : "btn-ghost"}`}
-          onClick={() => { input.crouchToggle = !crouch; setCrouch(!crouch); }}
-        >Crouch</button>
-        <button
-          className="btn btn-ghost h-14 w-14 rounded-full text-xs"
-          onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)}
-        >Run</button>
+        {canAerial && (
+          <button aria-label="Aerial view" className={`btn h-14 w-14 rounded-full text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
+            🛰️<br />{aerial ? "Back" : "Aerial"}
+          </button>
+        )}
+        {!aerial && (
+          <>
+            <button
+              className={`btn h-14 w-14 rounded-full text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
+              onClick={() => { input.crouchToggle = !crouch; setCrouch(!crouch); }}
+            >🧎<br />{crouch ? "Stand" : "Bend"}</button>
+            <button
+              className="btn btn-ghost h-14 w-14 rounded-full text-[11px] leading-tight"
+              onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)} onLostPointerCapture={hold(false)}
+            >🏃🏾<br />Run</button>
+          </>
+        )}
       </div>
       {canTag && (
         <button className="btn h-20 w-20 rounded-full bg-[var(--clay)] text-lg font-black text-white shadow-lg" onClick={() => net.send({ t: "g_tag" })}>
@@ -149,7 +178,7 @@ export function ZonePanel() {
       <div className="pointer-events-auto absolute bottom-28 left-1/2 z-20 w-72 -translate-x-1/2"><div className="panel anim-rise p-3">
         <div className="mb-1 font-bold">🚌 Motor Park</div>
         {g?.phase === "travel" && !boarded ? (
-          cfg.fares.map((f) => (
+          (cfg.cities.find((c) => c.arenas.includes(g.settings.arena))?.fares ?? cfg.fares).map((f) => (
             <button key={f.id} disabled={balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
               <span>Board {f.name}</span><span>{naira(f.price)}</span>
             </button>
@@ -235,25 +264,6 @@ export function BlindOverlay() {
       <div className="text-3xl font-black text-[var(--accent)]">Boju Boju…</div>
       <div className="mt-2 text-lg">Counting… eyes closed 🙈</div>
       <div className="mt-4 text-6xl font-black tabular-nums">{left}</div>
-    </div>
-  );
-}
-
-export function RideOverlay() {
-  const ride = useGame((s) => s.ride);
-  const set = useGame((s) => s.set);
-  useTicker(250);
-  if (!ride) return null;
-  if (Date.now() > ride.until) {
-    setTimeout(() => set({ ride: null }), 0);
-    return null;
-  }
-  return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-sky-300 to-amber-200 text-[var(--ink)]">
-      <div className="ride-bus text-7xl">🚌</div>
-      <div className="mt-3 h-2 w-[200vw] bg-neutral-700" />
-      <div className="mt-6 text-xl font-black">Oya, we dey go arena!</div>
-      <div className="text-sm">Conductor: &ldquo;Enter with your change o!&rdquo;</div>
     </div>
   );
 }

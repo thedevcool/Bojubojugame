@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadAccount, naira, reportPlayer, getLeaderboard, getWallet, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { sound } from "@/game/sound";
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
@@ -32,7 +33,7 @@ export function GroupPanel() {
   const [code, setCode] = useState("");
   const arenas = Object.values(maps ?? {}).filter((m) => m.kind === "arena");
   // Defaults for the one-tap quick game; the step-by-step creator has its own state.
-  const arena = arenas[0]?.id ?? "arena_park";
+  const arena = cfg?.cities[0]?.arenas[0] ?? arenas[0]?.id ?? "arena_park"; // quick game = home city (Lagos)
   const hide = cfg?.game.default_hide_time ?? 30;
   const search = cfg?.game.default_search_time ?? 180;
   const arenaMap = maps?.[g?.settings.arena ?? arena];
@@ -352,6 +353,7 @@ export function SettingsPanel() {
   };
   return (
     <Modal title="Settings" onClose={() => set({ panel: null })}>
+      <SoundToggles />
       <div className="mb-1 text-sm font-bold">Graphics quality</div>
       <div className="mb-4 grid grid-cols-3 gap-2">
         {(["low", "medium", "high"] as Quality[]).map((q) => (
@@ -361,13 +363,30 @@ export function SettingsPanel() {
       <div className="text-sm font-bold">Controls</div>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs opacity-85">
         <li>Phone: left thumb = joystick, right thumb = drag to look.</li>
-        <li>Desktop: WASD / arrows to move, drag mouse to look, Shift to run, C to crouch, scroll to zoom.</li>
-        <li>Crouch behind hedges and low walls — Boju can&apos;t see you from far.</li>
+        <li>Desktop: WASD / arrows to move, drag mouse to look, Shift to run, C to bend down, scroll to zoom. On phones, push the stick all the way to run.</li>
+        <li>Bend down behind hedges and low walls — Boju can&apos;t see you from far.</li>
+        <li>🛰️ Aerial view lets hiders scan the whole map (Boju can&apos;t use it while seeking).</li>
         <li>Boju! tags the nearest hider within 3 m that you can see.</li>
       </ul>
       <button className="btn btn-ghost mt-4 w-full" onClick={screenshot}>📸 Take screenshot</button>
       <button className="btn btn-ghost mt-2 w-full" onClick={() => set({ panel: "changelog" })}>✨ What&apos;s new</button>
     </Modal>
+  );
+}
+
+function SoundToggles() {
+  const [prefs, setPrefs] = useState({ ...sound.prefs });
+  const flip = (k: "sound" | "music") => {
+    const next = { ...prefs, [k]: !prefs[k] };
+    setPrefs(next);
+    sound.setPrefs(next);
+    void sound.unlock();
+  };
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-2">
+      <button className={`btn ${prefs.sound ? "btn-primary" : "btn-ghost"}`} onClick={() => flip("sound")}>{prefs.sound ? "🔊 Sound on" : "🔇 Sound off"}</button>
+      <button className={`btn ${prefs.music ? "btn-primary" : "btn-ghost"}`} onClick={() => flip("music")}>{prefs.music ? "🎶 Music on" : "🎵 Music off"}</button>
+    </div>
   );
 }
 

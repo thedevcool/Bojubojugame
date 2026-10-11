@@ -23,6 +23,7 @@ from app.db import Database, Game, LedgerEntry, Player, Report, RoundStat
 from app.realtime.protocol import BadMessage
 from app.realtime.rooms import writer
 from app.realtime.world import World
+from app.routes import get_route
 from app.safety import KeyedLimiter, TextRejected, clean_chat, clean_nickname
 from app.settings import get_settings
 
@@ -236,6 +237,30 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
                 for r in rows
                 if (r.score or 0) > 0
             ],
+        }
+
+    @app.get("/api/route")
+    async def route(
+        home: Annotated[str, Query(max_length=40)],
+        arena: Annotated[str, Query(max_length=40)],
+        mode: Annotated[str, Query(max_length=20)] = "danfo",
+    ) -> dict[str, Any]:
+        city = cfg.city_of(arena)
+        arena_map = maps.get(arena)
+        start = cfg.home_coords.get(home)
+        if city is None or arena_map is None or start is None:
+            raise HTTPException(404, "Unknown route")
+        venue = arena_map.raw.get("venue") or {"name": city.name, "lat": city.lat, "lng": city.lng}
+        origin = (start[1], start[0])
+        dest = (float(venue["lng"]), float(venue["lat"]))
+        kind = "flight" if mode == "flight" else "road"
+        coords, source = await get_route(db.sessions, origin, dest, f"{kind}:{home}:{arena}", kind)
+        return {
+            "from": {"name": f"{home}, Lagos", "lng": origin[0], "lat": origin[1]},
+            "to": {"name": venue["name"], "lng": dest[0], "lat": dest[1]},
+            "mode": mode,
+            "source": source,
+            "coords": coords,
         }
 
     @app.get("/api/games/{game_id}/summary")

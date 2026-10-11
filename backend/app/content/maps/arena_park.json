@@ -524,5 +524,11 @@
    ]
   }
  ],
- "zones": []
+ "zones": [],
+ "city": "lagos",
+ "venue": {
+  "name": "Freedom Park, Lagos Island",
+  "lat": 6.4497,
+  "lng": 3.3956
+ }
 }

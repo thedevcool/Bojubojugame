@@ -12,8 +12,18 @@
   "game": {
     "min_players": 2,
     "max_players": 6,
-    "hide_time_options": [15, 30, 45, 60],
-    "search_time_options": [90, 120, 180, 240],
+    "hide_time_options": [
+      15,
+      30,
+      45,
+      60
+    ],
+    "search_time_options": [
+      90,
+      120,
+      180,
+      240
+    ],
     "default_hide_time": 30,
     "default_search_time": 180,
     "travel_window_s": 60,
@@ -51,25 +61,224 @@
     "hunger_decay_per_hour": 6
   },
   "fares": [
-    {"id": "danfo", "name": "Danfo", "price": 500, "ride_s": 4},
-    {"id": "keke", "name": "Keke", "price": 800, "ride_s": 3}
+    {
+      "id": "danfo",
+      "name": "Danfo",
+      "price": 500,
+      "ride_s": 8
+    },
+    {
+      "id": "keke",
+      "name": "Keke",
+      "price": 800,
+      "ride_s": 7
+    }
   ],
   "items": [
-    {"id": "corn", "name": "Roasted corn", "category": "food", "price": 500, "hunger": 12, "spot": "corn"},
-    {"id": "suya", "name": "Suya (small wrap)", "category": "food", "price": 1500, "hunger": 25, "spot": "suya"},
-    {"id": "small_chops", "name": "Small chops", "category": "food", "price": 2000, "hunger": 30, "spot": "suya"},
-    {"id": "jollof", "name": "Jollof rice + chicken", "category": "food", "price": 3500, "hunger": 55, "spot": "mama_put"},
-    {"id": "amala", "name": "Amala + ewedu", "category": "food", "price": 3000, "hunger": 50, "spot": "mama_put"}
+    {
+      "id": "corn",
+      "name": "Roasted corn",
+      "category": "food",
+      "price": 500,
+      "hunger": 12,
+      "spot": "corn"
+    },
+    {
+      "id": "suya",
+      "name": "Suya (small wrap)",
+      "category": "food",
+      "price": 1500,
+      "hunger": 25,
+      "spot": "suya"
+    },
+    {
+      "id": "small_chops",
+      "name": "Small chops",
+      "category": "food",
+      "price": 2000,
+      "hunger": 30,
+      "spot": "suya"
+    },
+    {
+      "id": "jollof",
+      "name": "Jollof rice + chicken",
+      "category": "food",
+      "price": 3500,
+      "hunger": 55,
+      "spot": "mama_put"
+    },
+    {
+      "id": "amala",
+      "name": "Amala + ewedu",
+      "category": "food",
+      "price": 3000,
+      "hunger": 50,
+      "spot": "mama_put"
+    }
   ],
-  "home_areas": ["Yaba", "Surulere", "Ikeja", "Lekki", "Ajah", "Mushin", "Ikorodu", "Festac", "Oshodi", "Victoria Island", "Agege", "Gbagada"],
+  "home_areas": [
+    "Yaba",
+    "Surulere",
+    "Ikeja",
+    "Lekki",
+    "Ajah",
+    "Mushin",
+    "Ikorodu",
+    "Festac",
+    "Oshodi",
+    "Victoria Island",
+    "Agege",
+    "Gbagada"
+  ],
   "emotes": [
-    {"id": "mo_wa_nibi", "text": "Mo wa nibi!"},
-    {"id": "no_find", "text": "You no go find me!"},
-    {"id": "omo", "text": "Omo!"},
-    {"id": "e_ku_ise", "text": "E ku ise o!"},
-    {"id": "wave", "text": "👋"},
-    {"id": "laugh", "text": "😂"}
+    {
+      "id": "mo_wa_nibi",
+      "text": "Mo wa nibi!"
+    },
+    {
+      "id": "no_find",
+      "text": "You no go find me!"
+    },
+    {
+      "id": "omo",
+      "text": "Omo!"
+    },
+    {
+      "id": "e_ku_ise",
+      "text": "E ku ise o!"
+    },
+    {
+      "id": "wave",
+      "text": "👋"
+    },
+    {
+      "id": "laugh",
+      "text": "😂"
+    }
   ],
-  "chat": {"max_len": 300, "history": 50, "retention_days": 30, "rate_per_s": 1.0, "burst": 5, "nearby_radius_m": 20},
-  "network": {"hub_shard_max": 30, "hub_interest_radius_m": 40, "snapshot_hz": 10, "max_frame_bytes": 4096}
+  "chat": {
+    "max_len": 300,
+    "history": 50,
+    "retention_days": 30,
+    "rate_per_s": 1.0,
+    "burst": 5,
+    "nearby_radius_m": 20
+  },
+  "network": {
+    "hub_shard_max": 30,
+    "hub_interest_radius_m": 40,
+    "snapshot_hz": 10,
+    "max_frame_bytes": 4096
+  },
+  "cities": [
+    {
+      "id": "lagos",
+      "name": "Lagos",
+      "lat": 6.5244,
+      "lng": 3.3792,
+      "blurb": "Eko o ni baje! Hide in Freedom Park-style grounds.",
+      "arenas": [
+        "arena_park"
+      ],
+      "fares": null
+    },
+    {
+      "id": "ibadan",
+      "name": "Ibadan",
+      "lat": 7.3775,
+      "lng": 3.947,
+      "blurb": "Ancient city of hills and huge trees.",
+      "arenas": [
+        "arena_ibadan"
+      ],
+      "fares": [
+        {
+          "id": "bus",
+          "name": "Interstate bus",
+          "price": 3500,
+          "ride_s": 9
+        },
+        {
+          "id": "car",
+          "name": "Shared car",
+          "price": 5500,
+          "ride_s": 8
+        }
+      ]
+    },
+    {
+      "id": "abuja",
+      "name": "Abuja",
+      "lat": 9.0765,
+      "lng": 7.3986,
+      "blurb": "Capital city vibes — fountains and wide lawns.",
+      "arenas": [
+        "arena_abuja"
+      ],
+      "fares": [
+        {
+          "id": "bus",
+          "name": "Luxury bus",
+          "price": 15000,
+          "ride_s": 11
+        },
+        {
+          "id": "flight",
+          "name": "Flight",
+          "price": 45000,
+          "ride_s": 8
+        }
+      ]
+    }
+  ],
+  "home_coords": {
+    "Yaba": [
+      6.5095,
+      3.3711
+    ],
+    "Surulere": [
+      6.5005,
+      3.354
+    ],
+    "Ikeja": [
+      6.6018,
+      3.3515
+    ],
+    "Lekki": [
+      6.4474,
+      3.4727
+    ],
+    "Ajah": [
+      6.4698,
+      3.5852
+    ],
+    "Mushin": [
+      6.5273,
+      3.3414
+    ],
+    "Ikorodu": [
+      6.6194,
+      3.5105
+    ],
+    "Festac": [
+      6.4667,
+      3.2833
+    ],
+    "Oshodi": [
+      6.555,
+      3.3437
+    ],
+    "Victoria Island": [
+      6.4281,
+      3.4219
+    ],
+    "Agege": [
+      6.6153,
+      3.3209
+    ],
+    "Gbagada": [
+      6.5543,
+      3.3866
+    ]
+  }
 }

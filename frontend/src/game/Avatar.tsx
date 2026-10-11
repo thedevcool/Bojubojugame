@@ -25,75 +25,124 @@ function shirt(i: number): THREE.MeshStandardMaterial {
   return m;
 }
 
+// Skeleton proportions (metres)
+const THIGH = 0.46;
+const SHIN = 0.44;
+const FOOT_H = 0.06;
+const STAND_HIP = THIGH + SHIN + FOOT_H;
+const UPPER_ARM = 0.28;
+const FOREARM = 0.27;
+
+/** Pelvis height that keeps the feet on the ground for a given hip/knee angle. */
+const hipHeight = (hip: number, knee: number) => THIGH * Math.cos(hip) + SHIN * Math.cos(knee - hip) + FOOT_H;
+
+type Limb = { upper: React.RefObject<THREE.Group | null>; lower: React.RefObject<THREE.Group | null> };
+
 /**
- * A stylised-realistic person: capsule limbs that swing from hips/shoulders,
- * ankara shirt, hair, eyes, shoes. ``motion`` is read every frame (no re-render).
+ * Stylised-realistic person with two-bone legs and arms.
+ * Walk/run uses a proper gait (knee lifts on the swing leg); "bend down" is a
+ * real squat: thighs forward, knees bent, back leaning, head up, feet planted.
  */
 export default function Avatar({ av, label, me, motion, tag }: { av: number[]; label?: string; me?: boolean; motion: { current: Motion }; tag?: string }) {
   const [s, t, b] = av;
   const skin = mat(SKIN[s % 8]);
   const pants = mat(BOTTOMS[b % 8]);
   const top = shirt(t);
-  const legL = useRef<THREE.Group>(null), legR = useRef<THREE.Group>(null);
-  const armL = useRef<THREE.Group>(null), armR = useRef<THREE.Group>(null);
-  const body = useRef<THREE.Group>(null);
-  const phase = useRef(0);
+  const shoe = mat("#241a12");
+  const pelvis = useRef<THREE.Group>(null);
+  const spine = useRef<THREE.Group>(null);
+  const neck = useRef<THREE.Group>(null);
+  const legs: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
+  const arms: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
+  const st = useRef({ phase: 0, bend: 0, speed: 0 });
 
-  useFrame((_, dt) => {
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05);
     const m = motion.current;
-    const moving = m.speed > 0.2;
-    phase.current += dt * (moving ? 4 + m.speed * 1.6 : 0);
-    const amp = moving ? Math.min(0.9, 0.25 + m.speed * 0.12) : 0;
-    const sw = Math.sin(phase.current) * amp;
-    if (legL.current) legL.current.rotation.x = m.crouch ? -1.1 + sw * 0.3 : sw;
-    if (legR.current) legR.current.rotation.x = m.crouch ? -1.1 - sw * 0.3 : -sw;
-    if (armL.current) armL.current.rotation.x = -sw * 0.8;
-    if (armR.current) armR.current.rotation.x = sw * 0.8;
-    if (body.current) {
-      body.current.position.y = m.crouch ? -0.45 : moving ? Math.abs(Math.cos(phase.current)) * 0.05 : Math.sin(phase.current * 0.3) * 0.01;
-      body.current.rotation.x = m.crouch ? 0.35 : moving ? 0.06 * Math.min(1, m.speed / 3) : 0;
+    const k = st.current;
+    k.bend = THREE.MathUtils.damp(k.bend, m.crouch ? 1 : 0, 10, dt); // smooth into/out of the squat
+    k.speed = THREE.MathUtils.damp(k.speed, m.speed, 8, dt);
+    const moving = k.speed > 0.2;
+    const running = k.speed > 4;
+    k.phase += dt * (moving ? 3.2 + k.speed * 1.5 : 0);
+    const amp = moving ? Math.min(running ? 0.75 : 0.5, 0.18 + k.speed * 0.11) : 0;
+    const sinP = Math.sin(k.phase);
+
+    // Squat pose blended with gait
+    const squatHip = -1.25, squatKnee = 2.15;
+    for (let i = 0; i < 2; i++) {
+      const side = i === 0 ? 1 : -1;
+      const swing = sinP * side;
+      const gaitHip = -swing * amp;
+      const gaitKnee = Math.max(0, -Math.sin(k.phase + (i ? Math.PI : 0) - 0.6)) * (running ? 1.3 : 0.8) * Math.min(1, k.speed / 2);
+      const hip = THREE.MathUtils.lerp(gaitHip, squatHip + gaitHip * 0.25, k.bend);
+      const knee = THREE.MathUtils.lerp(gaitKnee, squatKnee, k.bend);
+      legs[i].upper.current?.rotation.set(hip, 0, 0);
+      legs[i].lower.current?.rotation.set(knee, 0, 0);
+      // arms swing opposite to legs; bent forward when squatting
+      const armSwing = swing * amp * 0.9;
+      const shoulder = THREE.MathUtils.lerp(armSwing, -0.75, k.bend);
+      const elbow = THREE.MathUtils.lerp(-0.25 - (running ? 0.9 : 0.2), -0.9, k.bend);
+      arms[i].upper.current?.rotation.set(shoulder, 0, side * 0.06);
+      arms[i].lower.current?.rotation.set(elbow, 0, 0);
     }
+    const lean = THREE.MathUtils.lerp(moving ? (running ? 0.18 : 0.06) : 0, 0.55, k.bend);
+    const hipY = THREE.MathUtils.lerp(STAND_HIP, hipHeight(-squatHip, squatKnee), k.bend);
+    const bob = moving ? Math.abs(Math.cos(k.phase)) * (running ? 0.07 : 0.035) : Math.sin(k.phase * 0.3 + performance.now() / 900) * 0.006;
+    if (pelvis.current) pelvis.current.position.set(0, hipY + bob * (1 - k.bend), THREE.MathUtils.lerp(0, -0.12, k.bend));
+    if (spine.current) spine.current.rotation.x = lean;
+    if (neck.current) neck.current.rotation.x = -lean * 0.7; // keep looking ahead
   });
 
   return (
-    <group ref={body}>
-      {/* legs: pivot at hip */}
-      {[[-0.12, legL], [0.12, legR]].map(([x, ref]) => (
-        <group key={x as number} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 0.92, 0]}>
-          <mesh geometry={cap} material={pants} position={[0, -0.42, 0]} scale={[0.17, 0.5, 0.17]} castShadow />
-          <mesh geometry={box} material={mat("#2b2118")} position={[0, -0.86, 0.05]} scale={[0.15, 0.1, 0.3]} castShadow />
+    <group>
+      <group ref={pelvis} position={[0, STAND_HIP, 0]}>
+        {/* hips */}
+        <mesh geometry={box} material={pants} position={[0, 0.03, 0]} scale={[0.38, 0.17, 0.23]} castShadow />
+        {/* legs: hip -> knee -> foot */}
+        {[-0.12, 0.12].map((x, i) => (
+          <group key={x} ref={legs[i].upper} position={[x, 0, 0]}>
+            <mesh geometry={cap} material={pants} position={[0, -THIGH / 2, 0]} scale={[0.19, THIGH / 2 - 0.02, 0.19]} castShadow />
+            <group ref={legs[i].lower} position={[0, -THIGH, 0]}>
+              <mesh geometry={cap} material={pants} position={[0, -SHIN / 2, 0]} scale={[0.16, SHIN / 2 - 0.02, 0.16]} castShadow />
+              <mesh geometry={box} material={shoe} position={[0, -SHIN - 0.01, 0.06]} scale={[0.15, 0.09, 0.3]} castShadow />
+            </group>
+          </group>
+        ))}
+        {/* torso pivots at the waist so the back can bend */}
+        <group ref={spine} position={[0, 0.08, 0]}>
+          <mesh geometry={cap} material={top} position={[0, 0.3, 0]} scale={[0.42, 0.28, 0.26]} castShadow />
+          {[-0.27, 0.27].map((x, i) => (
+            <group key={x} ref={arms[i].upper} position={[x, 0.52, 0]}>
+              <mesh geometry={cap} material={top} position={[0, -UPPER_ARM / 2, 0]} scale={[0.13, UPPER_ARM / 2, 0.13]} castShadow />
+              <group ref={arms[i].lower} position={[0, -UPPER_ARM, 0]}>
+                <mesh geometry={cap} material={skin} position={[0, -FOREARM / 2, 0]} scale={[0.1, FOREARM / 2, 0.1]} castShadow />
+                <mesh geometry={ball} material={skin} position={[0, -FOREARM - 0.04, 0]} scale={0.11} />
+              </group>
+            </group>
+          ))}
+          <group ref={neck} position={[0, 0.6, 0]}>
+            <mesh geometry={cap} material={skin} position={[0, 0.04, 0]} scale={[0.1, 0.06, 0.1]} />
+            <group position={[0, 0.22, 0]}>
+              <mesh geometry={ball} material={skin} scale={[0.27, 0.32, 0.29]} castShadow />
+              <mesh geometry={hairCap} material={mat("#15100c")} position={[0, 0.03, -0.01]} scale={[0.29, 0.31, 0.31]} />
+              <mesh geometry={ball} material={mat("#ffffff")} position={[-0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
+              <mesh geometry={ball} material={mat("#ffffff")} position={[0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
+              <mesh geometry={ball} material={mat("#120d0a")} position={[-0.065, 0.03, 0.14]} scale={0.022} />
+              <mesh geometry={ball} material={mat("#120d0a")} position={[0.065, 0.03, 0.14]} scale={0.022} />
+              <mesh geometry={ball} material={skin} position={[0, -0.03, 0.15]} scale={[0.05, 0.06, 0.05]} />
+              <mesh geometry={box} material={mat("#5a2a22")} position={[0, -0.1, 0.135]} scale={[0.08, 0.015, 0.02]} />
+              <mesh geometry={ball} material={skin} position={[-0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
+              <mesh geometry={ball} material={skin} position={[0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
+            </group>
+          </group>
         </group>
-      ))}
-      {/* torso + hips */}
-      <mesh geometry={box} material={pants} position={[0, 0.95, 0]} scale={[0.38, 0.16, 0.22]} castShadow />
-      <mesh geometry={cap} material={top} position={[0, 1.25, 0]} scale={[0.42, 0.3, 0.26]} castShadow />
-      {/* arms: pivot at shoulder */}
-      {[[-0.27, armL], [0.27, armR]].map(([x, ref]) => (
-        <group key={x as number} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 1.47, 0]}>
-          <mesh geometry={cap} material={top} position={[0, -0.13, 0]} scale={[0.13, 0.15, 0.13]} castShadow />
-          <mesh geometry={cap} material={skin} position={[0, -0.38, 0]} scale={[0.1, 0.25, 0.1]} castShadow />
-          <mesh geometry={ball} material={skin} position={[0, -0.6, 0]} scale={0.11} />
-        </group>
-      ))}
-      {/* neck + head */}
-      <mesh geometry={cap} material={skin} position={[0, 1.6, 0]} scale={[0.1, 0.08, 0.1]} />
-      <group position={[0, 1.78, 0]}>
-        <mesh geometry={ball} material={skin} scale={[0.27, 0.32, 0.29]} castShadow />
-        <mesh geometry={hairCap} material={mat("#15100c")} position={[0, 0.03, -0.01]} scale={[0.29, 0.31, 0.31]} />
-        <mesh geometry={ball} material={mat("#ffffff")} position={[-0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
-        <mesh geometry={ball} material={mat("#ffffff")} position={[0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
-        <mesh geometry={ball} material={mat("#120d0a")} position={[-0.065, 0.03, 0.14]} scale={0.022} />
-        <mesh geometry={ball} material={mat("#120d0a")} position={[0.065, 0.03, 0.14]} scale={0.022} />
-        <mesh geometry={ball} material={skin} position={[0, -0.03, 0.15]} scale={[0.05, 0.06, 0.05]} />
-        <mesh geometry={box} material={mat("#5a2a22")} position={[0, -0.1, 0.135]} scale={[0.08, 0.015, 0.02]} />
-        <mesh geometry={ball} material={skin} position={[-0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
-        <mesh geometry={ball} material={skin} position={[0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
       </group>
-      {me && <mesh geometry={box} material={mat("#f7c500", { emissive: true })} position={[0, 2.25, 0]} scale={0.12} rotation={[0.6, 0.6, 0]} />}
+      {me && <mesh geometry={box} material={mat("#2f7cf6", { emissive: true })} position={[0, 2.25, 0]} scale={0.12} rotation={[0.6, 0.6, 0]} />}
       {label && (
         <Html position={[0, 2.3, 0]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-          <div className="whitespace-nowrap rounded bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-            {label}{tag && <span className="ml-1 rounded bg-[var(--accent)] px-1 text-[9px] text-black">{tag}</span>}
+          <div className="whitespace-nowrap rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+            {label}{tag && <span className="ml-1 rounded-full bg-[var(--accent)] px-1.5 text-[9px] text-white">{tag}</span>}
           </div>
         </Html>
       )}

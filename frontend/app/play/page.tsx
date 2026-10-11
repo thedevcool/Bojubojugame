@@ -8,11 +8,13 @@ import { net } from "@/lib/net";
 import { detectQuality, useGame, type Quality } from "@/lib/store";
 import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
-import { ActionButtons, BlindOverlay, Minimap, PhaseBar, RideOverlay, SafeCompass, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { sound } from "@/game/sound";
+import { ActionButtons, BlindOverlay, Minimap, PhaseBar, SafeCompass, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 import { ChangelogPanel, WhatsNew } from "@/ui/WhatsNew";
 import { ChatDrawer, DicePanel, GameOverPanel, GroupPanel, LeadersPanel, RoundResultPanel, SettingsPanel, WalletPanel } from "@/ui/Panels";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
+const RideMap = dynamic(() => import("@/ui/RealMap").then((m) => m.RideMap), { ssr: false });
 
 export default function PlayPage() {
   const router = useRouter();
@@ -37,7 +39,7 @@ export default function PlayPage() {
       try {
         const fresh = await refreshToken(acc);
         const [content, profile] = await Promise.all([getContent(), getMe(fresh)]);
-        set({ content, balance: profile.balance, hunger: profile.hunger });
+        set({ content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area });
         if (profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
         net.start(fresh);
       } catch (e) {
@@ -46,6 +48,27 @@ export default function PlayPage() {
     })();
     return () => net.stop();
   }, [router, set]);
+
+  // Audio: unlock on the first tap (browser rule), UI clicks, and music per scene.
+  const phase = useGame((s) => s.group?.phase);
+  const mapKind = map?.kind;
+  useEffect(() => {
+    const unlock = () => void sound.unlock();
+    const click = (e: PointerEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.(".btn, .choice, .segmented button")) sound.play("click");
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("pointerdown", click, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("pointerdown", click, true);
+      sound.setScene("off");
+    };
+  }, []);
+  useEffect(() => {
+    if (!mapKind) return;
+    sound.setScene(mapKind === "hub" ? "hub" : phase === "hide" || phase === "seek" ? "tension" : "arena");
+  }, [mapKind, phase]);
 
   // Auto-join from an invite link once we're connected.
   useEffect(() => {
@@ -94,7 +117,7 @@ export default function PlayPage() {
             <WhatsNew />
           </div>
           <BlindOverlay />
-          <RideOverlay />
+          <RideMap />
           <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>
         </>
       ) : (

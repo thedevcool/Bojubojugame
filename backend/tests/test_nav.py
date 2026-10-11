@@ -1,3 +1,5 @@
+import pytest
+
 from app.content import get_maps
 from app.engine.geometry import Box, BoxIndex, collides
 from app.engine.nav import NavGrid, hide_spots
@@ -21,8 +23,14 @@ def test_path_goes_around_a_wall():
     assert max(abs(z) for _, z in path) > 9  # had to detour round the end of the wall
 
 
-def test_arena_nav_and_hide_spots():
-    m = get_maps()["arena_park"]
+@pytest.mark.parametrize("arena", ["arena_park", "arena_abuja", "arena_ibadan"])
+def test_arena_nav_and_hide_spots(arena):
+    m = get_maps()[arena]
+    assert len(m.sections) == 5 and len(m.safe_houses) == 3
+    assert m.raw.get("city") and m.raw.get("venue")
+    for sh in m.safe_houses.values():
+        x0, z0, x1, z1 = sh["rect"]
+        assert m.nav.find_path(*m.spawn, (x0 + x1) / 2, (z0 + z1) / 2), sh["id"]
     grid = NavGrid(m.bounds, m.boxes, 0.35)
     spots = hide_spots(grid, m.boxes)
     assert len(spots) > 20

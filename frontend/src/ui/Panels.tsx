@@ -10,7 +10,7 @@ import AccountCard from "./AccountCard";
 import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { LiveGamesList } from "./Live";
-import { useRole, useSecondsLeft } from "./hooks";
+import { useRole, useSecondsLeft, useTicker } from "./hooks";
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
 function Modal({ children }: { children: React.ReactNode }) {
@@ -294,9 +294,7 @@ export function GameOverPanel() {
           </div>
         ))}
       </div>
-      <button className="btn btn-primary mb-2 w-full text-lg" data-testid="play-again"
-        onClick={() => { net.send({ t: "g_rematch" }); set({ phoneOpen: true, phoneApp: "boju" }); }}>🔁 Play again</button>
-      <div className="-mt-1 mb-2 text-center text-[11px] opacity-70">Same arena, same players — everyone gets a rematch invite</div>
+      <PlayAgain />
       {mini ? (
         <div className="grid grid-cols-2 gap-2">
           <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🚌 Motor Park</button>
@@ -564,5 +562,28 @@ export function LeadersPanel() {
         </ol>
       )}
     </Modal>
+  );
+}
+
+/** Play again = ask the others for a rematch; it starts if at least one of them accepts. */
+function PlayAgain() {
+  const r = useGame((s) => s.rematch);
+  useTicker(500);
+  const left = r ? Math.max(0, Math.ceil((r.until - Date.now()) / 1000)) : 0;
+  if (r?.kind === "waiting") {
+    return (
+      <div className="mb-2 rounded-2xl bg-white/10 p-2.5 text-center text-sm" data-testid="rematch-wait">
+        ⏳ Rematch request sent to {r.n} player{r.n === 1 ? "" : "s"} — waiting {left}s
+        <div className="text-[11px] opacity-70">It starts if anyone accepts. No one? No rematch.</div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <button className="btn btn-primary mb-2 w-full text-lg" data-testid="play-again" onClick={() => net.send({ t: "g_rematch" })}>
+        {r?.kind === "asked" ? `✅ Accept @${r.nick}'s rematch` : "🔁 Play again"}
+      </button>
+      {!r && <div className="-mt-1 mb-2 text-center text-[11px] opacity-70">Asks the other players for a rematch — it&apos;s on if anyone accepts</div>}
+    </>
   );
 }

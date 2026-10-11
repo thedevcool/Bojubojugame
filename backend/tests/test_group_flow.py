@@ -194,14 +194,26 @@ async def test_full_game(db):
         wallet = [m for m in players[[a, b, c].index(s)][1].msgs if m["t"] == "wallet"][-1]
         assert wallet["balance"] == await world.economy.balance(s.pid)
 
-    # Play again: B makes the rematch (same settings, private) and C is invited; C tapping Play again joins it.
+    # Play again is a rematch request: C says no -> nothing happens, B is told.
     await send(world, b, t="g_rematch")
-    ng = b.group
-    assert ng is not g and ng.phase == "lobby" and not ng.public and ng.settings == g.settings
-    inv = cc.last("invite")
-    assert inv["code"] == ng.code and inv["rematch"]
+    assert cb.last("rematch_wait")["n"] == 1 and cc.last("rematch_ask")["nick"] == b.nick
+    await send(world, c, t="g_rematch", answer="no")
+    await advance(world, clock, 0.2)
+    assert b.group is g and c.group is g and cc.last("rematch_end")
+    assert "no rematch" in cb.last("toast")["msg"]
+    # Asked again, nobody answers in time -> still no rematch.
+    await send(world, b, t="g_rematch")
+    await advance(world, clock, 31)
+    assert b.group is g and "no rematch" in cb.last("toast")["msg"]
+    # Asked again and C accepts (tapping Play again counts as yes): a new private game, same settings,
+    # no NPCs, and it starts straight away once everyone answered.
+    await send(world, b, t="g_rematch")
     await send(world, c, t="g_rematch")
-    assert c.group is ng and len(world.groups) >= 1
+    ng = b.group
+    assert ng is not g and c.group is ng and not ng.public and ng.settings == g.settings and not ng.bots
+    assert "accepted" in cb.last("toast")["msg"]
+    await advance(world, clock, 0.2)
+    assert ng.phase == "travel"
     await send(world, a, t="g_rematch")
     assert ca.last("err")["msg"] == "Finish this game first"  # A already rode home
 

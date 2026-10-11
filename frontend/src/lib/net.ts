@@ -127,8 +127,18 @@ class Net {
           g.set({ watching: null, wsnap: null });
         } else if (g.watching === m.code) g.set({ wsnap: m as unknown as NonNullable<typeof g.wsnap> });
         break;
+      case "rematch_ask":
+        g.set({ rematch: { kind: "asked", from: m.from as string, nick: m.nick as string, until: Date.now() + (m.secs as number) * 1000 } });
+        sound.play("pop");
+        break;
+      case "rematch_wait":
+        g.set({ rematch: { kind: "waiting", n: m.n as number, until: Date.now() + (m.secs as number) * 1000 } });
+        break;
+      case "rematch_end":
+        g.set({ rematch: null });
+        break;
       case "invite":
-        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now(), rematch: !!m.rematch } });
+        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
         sound.play("pop");
         break;
       case "dm":

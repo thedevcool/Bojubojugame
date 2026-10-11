@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.7.1",
+    date: "2026-10-11",
+    title: "Rematch, the proper way 🔁",
+    items: [
+      { emoji: "🔁", title: "Play again = rematch request", text: "Tap Play again and the other players get Accept / No. If anyone accepts, the rematch starts with everyone who said yes. No NPCs fill in, and if nobody accepts in 30 seconds, there's no rematch." },
+    ],
+  },
+  {
     version: "2.7.0",
     date: "2026-10-11",
     title: "Rematch! 🔁",

@@ -84,7 +84,6 @@ class GroupRoom:
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
         self.bots: dict[str, BotBrain] = {}
-        self.rematch: str | None = None  # code of the "play again" game made from this one
         self.arrive_at: dict[str, float] = {}
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}

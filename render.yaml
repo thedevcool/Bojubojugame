@@ -36,3 +36,10 @@ services:
         sync: false            # sk_live_... (or sk_test_... while trying it out)
       - key: ADMIN_TOKEN
         generateValue: true    # paste into /admin to approve ads
+      # LagosLife mini version (Vatar Games SDK) — see LAGOSLIFE.md
+      - key: VATAR_SECRET
+        sync: false            # vtr_test_... in the sandbox, vtr_live_... after approval
+      - key: VATAR_WEBHOOK_SECRET
+        sync: false
+      - key: VATAR_RESULTS_SECRET
+        sync: false

@@ -29,6 +29,7 @@ from app.realtime.world import World
 from app.routes import get_route
 from app.safety import KeyedLimiter, TextRejected, clean_chat
 from app.settings import get_settings
+from app.vatar import make_router as make_vatar_router
 
 log = logging.getLogger("boju")
 STARTED = time.time()
@@ -156,6 +157,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     app.include_router(make_router(db, world, cfg))
     app.include_router(make_life_router(db, world, cfg))
     app.include_router(make_ads_router(db, cfg, maps))
+    app.include_router(make_vatar_router(db, world, cfg))
 
     @app.get("/api/wallet")
     async def wallet(pid: Me) -> dict[str, Any]:
@@ -277,6 +279,8 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         if p is None:
             await ws.close(code=4001)
             return
+        if p.vatar_id:
+            world.mini.add(p.id)
         await ws.accept()
         queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=512)
 

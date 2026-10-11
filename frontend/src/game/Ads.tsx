@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import * as THREE from "three";
-import { getAdsConfig, getAdsOnMap, API_URL, type LiveAd } from "@/lib/api";
+import { getAdsConfig, getAdsOnMap, getVatarConfig, API_URL, type LiveAd } from "@/lib/api";
 import { adsState } from "@/lib/ads";
 import { useGame, type AdSpot } from "@/lib/store";
 import type { GameMap } from "@/lib/types";
@@ -83,7 +83,8 @@ export function AdsLayer({ map }: { map: GameMap }) {
   const [ads, setAds] = useState<LiveAd[]>([]);
   useEffect(() => {
     let alive = true;
-    getAdsConfig().then((c) => { adsState.enabled = c.enabled; }).catch(() => {});
+    // LagosLife players pay through LagosLife, everyone else through Paystack
+    (useGame.getState().mini ? getVatarConfig() : getAdsConfig()).then((c) => { adsState.enabled = c.enabled; }).catch(() => {});
     const load = () => getAdsOnMap(map.id).then((r) => { if (alive) setAds(r.live); }).catch(() => {});
     load();
     const id = setInterval(load, 60_000);

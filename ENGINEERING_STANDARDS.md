@@ -18,6 +18,10 @@ cheats, crashes, or player harm. When a rule here conflicts with convenience, th
    Paystack's hosted checkout (we never see card details). Ad money never touches a game wallet,
    game naira can never buy an ad, the ad sheet says "real money" plainly, every poster is
    approved by an admin before it goes live, and a rejected ad is refunded automatically.
+   **In the LagosLife mini version** (`/lagoslife`, `backend/app/vatar.py`), LagosLife owns sign-in,
+   money and payments: never show Paystack, payment links, our naira, a login or an email field
+   there. Ads are approved first and paid with LagosLife's own pay sheet, and every purchase is
+   verified with LagosLife's API before anything is given.
 3. **Minimal personal data.** Accounts are username + password. Email is **optional** and used
    only for password resets — never shown to other players or used for marketing. No phone,
    precise location or real names. "Home" is an area name from a fixed list.

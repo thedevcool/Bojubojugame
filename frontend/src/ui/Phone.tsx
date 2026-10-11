@@ -14,6 +14,7 @@ import { ChatContent, GroupPanel, LeadersPanel, SettingsPanel, WalletPanel, scre
 import { ChangelogContent } from "./WhatsNew";
 import { startDecorating } from "./decorStart";
 import { LiveGamesList } from "./Live";
+import { MatchApp, MiniLeaders, MyAdsApp } from "./LagosLife";
 import { useMap, useTicker } from "./hooks";
 
 interface App { id: string; name: string; icon: string; bg: string; needsPhone?: boolean }
@@ -32,7 +33,20 @@ const APPS: App[] = [
   { id: "settings", name: "Settings", icon: "⚙️", bg: "from-[#a7b0bf] to-[#5d6778]" },
 ];
 const DOCK = ["boju", "messages", "map", "camera"];
-const TITLES: Record<string, string> = Object.fromEntries(APPS.map((a) => [a.id, a.name]));
+/** LagosLife mini version: money, houses and shops live in LagosLife */
+const MINI_APPS: App[] = [
+  APPS[0],
+  { id: "match", name: "Play with friends", icon: "🤝", bg: "from-[#34d399] to-[#059669]" },
+  { id: "llleaders", name: "Leaderboard", icon: "🏆", bg: "from-[#ffd84f] to-[#e0a800]" },
+  APPS.find((a) => a.id === "live")!,
+  APPS.find((a) => a.id === "messages")!,
+  { id: "myads", name: "My ads", icon: "📢", bg: "from-[#fbbf24] to-[#d97706]" },
+  APPS.find((a) => a.id === "map")!,
+  APPS.find((a) => a.id === "news")!,
+  APPS.find((a) => a.id === "settings")!,
+];
+const MINI_DOCK = ["boju", "match", "map", "llleaders"];
+const TITLES: Record<string, string> = Object.fromEntries([...APPS, ...MINI_APPS].map((a) => [a.id, a.name]));
 /** usernames for open DM threads (dm:<id>) */
 const names = new Map<string, string>();
 
@@ -48,7 +62,8 @@ export default function Phone() {
   const openApp = useGame((s) => s.openApp);
   const close = useGame((s) => s.closePhone);
   const model = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
-  const hasPhone = !!model;
+  const mini = useGame((s) => !!s.mini);
+  const hasPhone = !!model || mini;
   const inGroup = useGame((s) => !!s.group);
 
   // launching "action" apps closes the phone and does the thing in the world
@@ -168,8 +183,10 @@ const greeting = () => {
 
 function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
   const openApp = useGame((s) => s.openApp);
+  const mini = useGame((s) => !!s.mini);
+  const apps = mini ? MINI_APPS : APPS, dock = mini ? MINI_DOCK : DOCK;
   const balance = useGame((s) => s.balance);
-  const username = useGame((s) => s.life.username || s.me?.nick || "");
+  const username = useGame((s) => s.mini?.name || s.life.username || s.me?.nick || "");
   const home = useGame((s) => s.home);
   const group = useGame((s) => s.group);
   const badges: Record<string, number> = {
@@ -202,7 +219,7 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
         <div className="glass col-span-2 flex items-center justify-between rounded-[1.4rem] px-4 py-3">
           <div>
             <div className="text-[13px] font-semibold opacity-85">{greeting()}</div>
-            <div className="text-[22px] font-bold leading-tight">@{username}</div>
+            <div className="text-[22px] font-bold leading-tight">{mini ? username : `@${username}`}</div>
             <div className="text-[12px] opacity-70">{now.toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long" })}</div>
           </div>
           <div className="text-right">
@@ -210,17 +227,31 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
             <div className="text-[11px] opacity-70">Lagos</div>
           </div>
         </div>
+        {mini ? (
+          <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp("llleaders")}>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#e0a800] text-[11px]">🏆</span>LagosLife</div>
+            <div className="mt-1 text-[15px] font-bold leading-tight">Leaderboard</div>
+            <div className="text-[10px] opacity-60">your best game counts</div>
+          </button>
+        ) : (
         <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp("wallet")}>
           <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#1d5fd6] text-[11px]">₦</span>Wallet</div>
           <div className="mt-1 text-[22px] font-bold tracking-tight">{nairaShort(balance)}</div>
           <div className="text-[10px] opacity-60">in-game · not real money</div>
         </button>
-        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp(group ? "boju" : "houses")}>
+        )}
+        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp(group ? "boju" : mini ? "match" : "houses")}>
           {group ? (
             <>
               <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#2f7cf6] text-[11px]">🙈</span>Boju Boju</div>
               <div className="mt-1 font-mono text-[20px] font-bold tracking-widest">{group.code}</div>
               <div className="truncate text-[10px] capitalize opacity-60">{group.phase} · {group.members.filter((m) => !m.left).length} players</div>
+            </>
+          ) : mini ? (
+            <>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#059669] text-[11px]">🤝</span>Friends</div>
+              <div className="mt-1 text-[15px] font-bold leading-tight">Play a match</div>
+              <div className="text-[10px] opacity-60">share a 6-letter code</div>
             </>
           ) : (
             <>
@@ -237,13 +268,13 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
           <button className="btn btn-primary mt-2 w-full py-1.5 text-xs" onClick={() => { goToShop(); useGame.getState().closePhone(); }}>🧭 Walk me to Tini Tech</button>
         </div>
       )}
-      <div className="mt-5 grid grid-cols-4 gap-x-1 gap-y-5">{APPS.filter((a) => !DOCK.includes(a.id)).map((a, i) => icon(a, i))}</div>
+      <div className="mt-5 grid grid-cols-4 gap-x-1 gap-y-5">{apps.filter((a) => !dock.includes(a.id)).map((a, i) => icon(a, i))}</div>
       <div className="mt-auto flex justify-center gap-1.5 pb-2.5">
         <span className="h-1.5 w-1.5 rounded-full bg-white" />
         <span className="h-1.5 w-1.5 rounded-full bg-white/35" />
       </div>
       <div className="glass grid grid-cols-4 gap-2 rounded-[1.9rem] px-3 py-2.5">
-        {DOCK.map((id, i) => icon(APPS.find((a) => a.id === id)!, i + 8, true))}
+        {dock.map((id, i) => icon(apps.find((a) => a.id === id)!, i + 8, true))}
       </div>
     </div>
   );
@@ -282,6 +313,9 @@ function AppBody({ app }: { app: string | null }) {
     case "events": return <EventsApp />;
     case "settings": return <SettingsPanel />;
     case "news": return <ChangelogContent />;
+    case "match": return <MatchApp />;
+    case "llleaders": return <MiniLeaders />;
+    case "myads": return <MyAdsApp />;
     default: return null;
   }
 }

@@ -13,6 +13,7 @@ import { sound } from "@/game/sound";
 import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
+import { MiniBridge } from "@/ui/LagosLife";
 import { ActionButtons, BlindOverlay, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
@@ -34,6 +35,7 @@ export default function PlayPage() {
   const map = useMap();
   const decor = useGame((s) => !!s.decor);
   const onboarding = useGame((s) => s.onboard !== null);
+  const mini = useGame((s) => !!s.mini);
   const [error, setError] = useState("");
   const [forceChange, setForceChange] = useState<{ acc: Account; username: string } | null>(null);
   const joined = useRef(false);
@@ -61,15 +63,17 @@ export default function PlayPage() {
           content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area,
           life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname, carId: profile.car_id },
         });
+        const mini = !!useGame.getState().mini; // LagosLife: no phone, house or naira here — straight to the game
+        if (mini) markSeen();
         // first launch (or no phone/house yet): the welcome tour
-        if (!onboardingDone() && (!profile.phone_id || !profile.home_id)) {
+        if (!mini && !onboardingDone() && (!profile.phone_id || !profile.home_id)) {
           set({ onboard: profile.phone_id ? "launch" : "welcome" });
           markSeen(); // the tour is the "what's new" for them — don't stack a second sheet on top
         }
         getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});
-        if (profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
-        if (profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
-        if (!profile.email) setTimeout(() => useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"), 60000);
+        if (!mini && profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
+        if (!mini && profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
+        if (!mini && !profile.email) setTimeout(() => useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"), 60000);
         net.start(fresh);
       } catch (e) {
         setError((e as Error).message || "Can't connect");
@@ -106,7 +110,7 @@ export default function PlayPage() {
       joined.current = true;
       net.send({ t: "g_join", code: join });
       set({ phoneOpen: true, phoneApp: "boju", onboard: null });
-      window.history.replaceState(null, "", "/play");
+      if (!useGame.getState().mini) window.history.replaceState(null, "", "/play");
     }
   }, [me, set]);
 
@@ -165,13 +169,14 @@ export default function PlayPage() {
             <WhatsNew />
             {!decor && <AdBubble />}
             <AdSheet />
+            {mini && <MiniBridge />}
           </div>
           <DecorateOverlay />
           <MapScreen />
           <WatchView />
           <BlindOverlay />
           <RideMap />
-          <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>
+          {!mini && <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>}
         </>
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-2">

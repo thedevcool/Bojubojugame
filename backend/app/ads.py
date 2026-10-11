@@ -52,8 +52,10 @@ AD_KINDS = {
     "duplex",
 }
 HOLD_MINUTES = 30  # an unpaid ad keeps its spot this long
+HOLD_UNPAID_DAYS = 4  # a LagosLife ad (reviewed first, paid after approval) keeps its spot this long unpaid
+MAX_PENDING = 3
 MAX_IMAGE = 400_000
-ACTIVE = ("awaiting_payment", "review", "live")
+ACTIVE = ("awaiting_payment", "review", "approved", "live")
 
 
 class AdIn(BaseModel):
@@ -65,7 +67,7 @@ class AdIn(BaseModel):
     nz: int = Field(ge=-1, le=1)
     size: str = Field(max_length=8)
     title: str = Field(min_length=2, max_length=40)
-    email: str = Field(max_length=254)
+    email: str = Field(default="", max_length=254)  # LagosLife players don't give us an email
     image: str = Field(max_length=MAX_IMAGE * 4 // 3 + 64)  # base64 (data URL prefix allowed)
 
 
@@ -107,6 +109,20 @@ def overlaps(a: Ad, x: float, y: float, z: float, nx: int, nz: int, w: float, h:
         return False
     au, u = (a.z, z) if nx else (a.x, x)
     return abs(au - u) < (a.w + w) / 2 + 0.05 and abs(a.y - y) < (a.h + h) / 2 + 0.05
+
+
+def holds_spot(a: Ad, now: datetime) -> bool:
+    """Does this ad still reserve its spot on the wall?"""
+    created = _aware(a.created_at) or now
+    if a.status == "awaiting_payment":
+        return created > now - timedelta(minutes=HOLD_MINUTES)
+    if a.status in ("review", "approved"):
+        unpaid_vatar = a.provider == "vatar" and a.paid_at is None
+        return not unpaid_vatar or created > now - timedelta(days=HOLD_UNPAID_DAYS)
+    if a.status == "live":
+        until = _aware(a.live_until)
+        return until is not None and until > now
+    return False
 
 
 def decode_image(raw: str) -> tuple[bytes, str]:
@@ -177,9 +193,7 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
             until = _aware(a.live_until)
             if a.status == "live" and until and until > now:
                 live.append(public(a))
-            if a.status == "awaiting_payment" and _aware(a.created_at) < now - timedelta(minutes=HOLD_MINUTES):  # type: ignore[operator]
-                continue
-            if a.status != "live" or (until and until > now):
+            if holds_spot(a, now):
                 taken.append({k: getattr(a, k) for k in ("x", "y", "z", "nx", "nz", "w", "h")})
         return {"live": live, "taken": taken}
 
@@ -190,9 +204,19 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
         size = sizes.get(body.size)
         if m is None or size is None:
             raise HTTPException(404, "Unknown place or size")
-        email = clean_email(body.email)
-        if not email:
-            raise HTTPException(422, "Add an email for your payment receipt")
+        async with db.sessions() as ses:
+            player = await ses.get(Player, pid)
+        vatar = bool(player and player.vatar_id)  # LagosLife player: approval first, then pay in LagosLife
+        if vatar:
+            if not st.vatar_secret:
+                raise HTTPException(503, "Ads aren't switched on in LagosLife yet")
+            email = ""  # LagosLife's rules: we never ask their players for personal data
+        else:
+            if not (st.paystack_secret_key or st.ads_fake_payments):
+                raise HTTPException(503, "Ad payments aren't switched on yet — check back soon")
+            email = clean_email(body.email) or ""
+            if not email:
+                raise HTTPException(422, "Add an email for your payment receipt")
         try:
             title = clean_chat(body.title, 40)
         except TextRejected as e:
@@ -202,23 +226,27 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
         image, image_type = decode_image(body.image)
         now = _now()
         async with db.sessions() as ses, ses.begin():
-            mine = await ses.scalars(select(Ad).where(Ad.player_id == pid, Ad.status == "awaiting_payment"))
-            if sum(1 for a in mine if _aware(a.created_at) > now - timedelta(minutes=HOLD_MINUTES)) >= 3:  # type: ignore[operator]
-                raise HTTPException(429, "Finish paying for your other ads first")
+            mine = await ses.scalars(
+                select(Ad).where(Ad.player_id == pid, Ad.status.in_(("awaiting_payment", "review", "approved")))
+            )
+            if sum(1 for a in mine if a.paid_at is None and holds_spot(a, now)) >= MAX_PENDING:
+                raise HTTPException(429, "Finish your other ads first")
             for a in (await ses.scalars(select(Ad).where(Ad.map_id == body.map_id, Ad.status.in_(ACTIVE)))).all():
-                stale = a.status == "awaiting_payment" and _aware(a.created_at) < now - timedelta(minutes=HOLD_MINUTES)  # type: ignore[operator]
-                ended = a.status == "live" and (u := _aware(a.live_until)) is not None and u <= now
-                if not stale and not ended and overlaps(a, body.x, body.y, body.z, body.nx, body.nz, size.w, size.h):
+                if holds_spot(a, now) and overlaps(a, body.x, body.y, body.z, body.nx, body.nz, size.w, size.h):
                     raise HTTPException(409, "Another ad is already there — move yours a bit")
             ad = Ad(
                 player_id=pid, map_id=body.map_id, x=body.x, y=body.y, z=body.z, nx=body.nx, nz=body.nz,
                 w=size.w, h=size.h, size=size.id, price=size.price, title=title, email=email,
                 reference="", image=image, image_type=image_type,
+                provider="vatar" if vatar else "paystack", status="review" if vatar else "awaiting_payment",
             )  # fmt: skip
             ses.add(ad)
             await ses.flush()
             ad.reference = f"bojuad_{ad.id}"
             ad_id, ref = ad.id, ad.reference
+        if vatar:
+            log.info("ad_submitted_vatar ad=%s", ad_id)
+            return {"id": ad_id, "status": "review", "price": size.price, "product": f"ad_{size.id}"}
         site = st.public_frontend_url if "localhost" not in st.public_frontend_url else st.frontend_origin.split(",")[0]
         callback = site.strip().rstrip("/") + "/ads/return"
         if st.ads_fake_payments:
@@ -280,6 +308,7 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
         return {
             "ads": [
                 {"id": a.id, "title": a.title, "status": a.status, "price": a.price, "map_id": a.map_id, "size": a.size,
+                 "provider": a.provider, "product": f"ad_{a.size}",
                  "live_until": _aware(a.live_until).isoformat() if a.live_until else None}  # type: ignore[union-attr]
                 for a in rows
                 if a.status != "awaiting_payment"
@@ -306,12 +335,14 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
     async def admin_list(x_admin_token: Annotated[str, Header()] = "") -> dict[str, Any]:
         require_admin(x_admin_token)
         async with db.sessions() as ses:
-            rows = (await ses.scalars(select(Ad).where(Ad.status.in_(("review", "live"))).order_by(Ad.paid_at))).all()
+            q = select(Ad).where(Ad.status.in_(("review", "approved", "live"))).order_by(Ad.created_at)
+            rows = (await ses.scalars(q)).all()
             names = dict((await ses.execute(select(Player.id, Player.username))).all())
         return {
             "ads": [
                 {"id": a.id, "title": a.title, "status": a.status, "price": a.price, "map_id": a.map_id, "size": a.size,
                  "by": names.get(a.player_id, "?"), "email": a.email,
+                 "provider": a.provider, "paid": a.paid_at is not None,
                  "live_until": _aware(a.live_until).isoformat() if a.live_until else None}  # type: ignore[union-attr]
                 for a in rows
             ]
@@ -328,15 +359,19 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
                 raise HTTPException(404, "No such ad")
             if action == "approve":
                 if a.status != "review":
-                    raise HTTPException(409, "Only paid ads waiting for review can go live")
-                a.status, a.live_until = "live", _now() + timedelta(days=cfg.ads.days)
+                    raise HTTPException(409, "Only ads waiting for review can be approved")
+                if a.provider == "vatar" and a.paid_at is None:
+                    a.status = "approved"  # the advertiser now pays in LagosLife, then it goes live
+                else:
+                    a.status, a.live_until = "live", _now() + timedelta(days=cfg.ads.days)
             elif action == "remove":
                 a.status = "rejected"  # e.g. a report after it went live (no automatic refund)
             else:
-                if a.status != "review":
+                if a.status not in ("review", "approved"):
                     raise HTTPException(409, "Only ads waiting for review can be rejected")
                 a.status = "rejected"
-                ref, refund = a.reference, True
+                # LagosLife ads are only paid after approval, so there's nothing to refund
+                ref, refund = a.reference, a.provider == "paystack" and a.paid_at is not None
             status = a.status
         if action == "reject" and refund and not get_settings().ads_fake_payments:
             await paystack("POST", "/refund", json={"transaction": ref})

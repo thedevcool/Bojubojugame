@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { adsState } from "@/lib/ads";
-import { createAd, getAdsConfig, getAdsOnMap, getMe, loadAccount, naira, type AdRect, type AdsConfig, type AdSize } from "@/lib/api";
+import { createAd, getAdsConfig, getAdsOnMap, getMe, getVatarConfig, loadAccount, naira, type AdRect, type AdsConfig, type AdSize } from "@/lib/api";
 import { useGame, type AdSpot } from "@/lib/store";
 
 /**
@@ -96,13 +96,18 @@ function Sheet({ spot }: { spot: AdSpot }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const close = () => set({ adSheet: null });
+  // LagosLife mini version: no Paystack, no email — we approve first, then they pay in LagosLife
+  const mini = useGame((s) => !!s.mini);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
-    getAdsConfig().then((c) => { setCfg(c); adsState.enabled = c.enabled; }).catch(() => setErr("Couldn't load ad prices — check your network"));
+    Promise.all([getAdsConfig(), mini ? getVatarConfig() : null])
+      .then(([c, v]) => { const enabled = v ? v.enabled : c.enabled; setCfg({ ...c, enabled }); adsState.enabled = enabled; })
+      .catch(() => setErr("Couldn't load ad prices — check your network"));
     getAdsOnMap(spot.map).then((r) => setTaken(r.taken)).catch(() => {});
     const acc = loadAccount();
-    if (acc) getMe(acc).then((m) => setEmail((e) => e || m.email || "")).catch(() => {});
-  }, [spot.map]);
+    if (acc && !mini) getMe(acc).then((m) => setEmail((e) => e || m.email || "")).catch(() => {});
+  }, [spot.map, mini]);
 
   useEffect(() => {
     if (!file) { setPreview(null); return; }
@@ -141,17 +146,24 @@ function Sheet({ spot }: { spot: AdSpot }) {
     const acc = loadAccount();
     if (!acc || !size || !at) return;
     if (title.trim().length < 2) return setErr("Add your brand or business name");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Add an email for your Paystack receipt");
+    if (!mini && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Add an email for your Paystack receipt");
     if (!file) return setErr("Add your poster image (JPG or PNG)");
     setBusy(true);
     try {
       const image = await prepareImage(file, size.w / size.h);
       const r = await createAd(acc, {
         map_id: spot.map, x: spot.nx ? spot.x : at.a, z: spot.nx ? at.a : spot.z, y: at.y, nx: spot.nx, nz: spot.nz,
-        size: size.id, title: title.trim(), email: email.trim(), image,
+        size: size.id, title: title.trim(), email: mini ? "" : email.trim(), image,
       });
+      if (mini || !r.pay_url) {
+        setSent(true);
+        setBusy(false);
+        set({ adsVersion: useGame.getState().adsVersion + 1 });
+        return;
+      }
+      const payUrl = r.pay_url;
       try { sessionStorage.setItem("boju.adReturn", window.location.pathname + window.location.search); } catch { /* ignore */ }
-      window.location.href = r.pay_url;
+      window.location.href = payUrl;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Something went wrong — try again");
       setBusy(false);
@@ -181,10 +193,24 @@ function Sheet({ spot }: { spot: AdSpot }) {
           </div>
         ) : (
           <>
+            {sent ? (
+              <div className="py-6 text-center" data-testid="ad-sent">
+                <div className="text-4xl">📨</div>
+                <div className="mt-1 font-bold">Sent for approval!</div>
+                <div className="mx-auto max-w-xs text-xs opacity-75">We&apos;ll check your poster. Once it&apos;s approved, pay in 📱 → My ads and it goes up for {cfg.days} days.</div>
+                <button className="btn btn-primary mt-3" onClick={close}>Done</button>
+              </div>
+            ) : (<>
+            {mini ? (
+              <div className="mt-3 rounded-2xl bg-emerald-400/15 px-3 py-2 text-[11px] leading-snug text-emerald-100">
+                ✅ <b>Free to send.</b> We check your poster first. Once it&apos;s approved you pay in LagosLife (📱 → My ads), and it stays up for {cfg.days} days.
+              </div>
+            ) : (
             <div className="mt-3 rounded-2xl bg-amber-400/15 px-3 py-2 text-[11px] leading-snug text-amber-100">
               💳 <b>Real money</b>, paid securely with Paystack — separate from your game naira. Your poster goes up after a quick check
               and stays for {cfg.days} days. If we can&apos;t approve it, you get a full refund.
             </div>
+            )}
 
             <div className="mt-3 text-xs font-bold uppercase tracking-wide opacity-70">Where on this wall</div>
             <svg viewBox={`0 0 ${len} ${spot.top}`} preserveAspectRatio="xMidYMid meet" onPointerDown={tapPreview}
@@ -218,7 +244,7 @@ function Sheet({ spot }: { spot: AdSpot }) {
 
             <div className="mt-3 grid gap-2">
               <input className="w-full rounded-xl bg-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[var(--accent)]" maxLength={40} placeholder="Brand or business name" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <input className="w-full rounded-xl bg-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[var(--accent)]" type="email" maxLength={254} placeholder="Email for your receipt" value={email} onChange={(e) => setEmail(e.target.value)} />
+              {!mini && <input className="w-full rounded-xl bg-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[var(--accent)]" type="email" maxLength={254} placeholder="Email for your receipt" value={email} onChange={(e) => setEmail(e.target.value)} />}
               <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-white/20 p-2.5">
                 {preview && size ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -234,9 +260,14 @@ function Sheet({ spot }: { spot: AdSpot }) {
 
             {err && <div className="mt-2 text-sm text-red-300">{err}</div>}
             <button data-testid="ad-pay" className="btn btn-primary mt-3 w-full" disabled={busy || !size || !at} onClick={pay}>
-              {busy ? "Opening Paystack…" : size && at ? `Pay ${naira(size.price)} with Paystack` : "Pick a size"}
+              {mini
+                ? busy ? "Sending…" : size && at ? `Send for approval · ${naira(size.price)} after` : "Pick a size"
+                : busy ? "Opening Paystack…" : size && at ? `Pay ${naira(size.price)} with Paystack` : "Pick a size"}
             </button>
-            <div className="mt-1.5 text-center text-[10px] opacity-60">No ads on people&apos;s houses. Nothing offensive, misleading or 18+.</div>
+            <div className="mt-1.5 text-center text-[10px] opacity-60">
+              No ads on people&apos;s houses. Nothing offensive, misleading or 18+.{mini ? " No prices, payment details or \"pay here\" links." : ""}
+            </div>
+            </>)}
           </>
         )}
       </div>

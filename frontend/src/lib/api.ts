@@ -16,13 +16,21 @@ function safeSet(k: string, v: string): void {
   try { localStorage.setItem(k, v); } catch { /* storage blocked */ }
 }
 
+/** LagosLife mini version: the account lives in memory only (third-party storage is often blocked in frames). */
+let memAccount: Account | null = null;
+export function setMemoryAccount(a: Account): void { memAccount = a; }
+
 export function loadAccount(): Account | null {
+  if (memAccount) return memAccount;
   const raw = safeGet(KEY);
   if (!raw) return null;
   try { return JSON.parse(raw) as Account; } catch { return null; }
 }
 
-export function saveAccount(a: Account): void { safeSet(KEY, JSON.stringify(a)); }
+export function saveAccount(a: Account): void {
+  if (memAccount) { memAccount = a; return; }
+  safeSet(KEY, JSON.stringify(a));
+}
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -192,17 +200,17 @@ export interface AdSize { id: string; name: string; w: number; h: number; price:
 export interface AdsConfig { days: number; currency_note: string; sizes: AdSize[]; enabled: boolean }
 export interface AdRect { x: number; y: number; z: number; nx: number; nz: number; w: number; h: number }
 export interface LiveAd extends AdRect { id: string; title: string; image: string }
-export interface MyAd { id: string; title: string; status: string; price: number; map_id: string; size: string; live_until: string | null }
+export interface MyAd { id: string; title: string; status: string; price: number; map_id: string; size: string; live_until: string | null; provider?: string; product?: string }
 let adsConfigPromise: Promise<AdsConfig> | null = null;
 export const getAdsConfig = () => (adsConfigPromise ??= fetch(`${API_URL}/api/ads/config`).then((r) => json<AdsConfig>(r)).catch((e) => { adsConfigPromise = null; throw e; }));
 export const getAdsOnMap = async (mapId: string) => json<{ live: LiveAd[]; taken: AdRect[] }>(await fetch(`${API_URL}/api/ads/map/${encodeURIComponent(mapId)}`));
 export const createAd = (acc: Account, body: Omit<AdRect, "w" | "h"> & { map_id: string; size: string; title: string; email: string; image: string }) =>
-  send<{ id: string; reference: string; pay_url: string; price: number }>(acc, "/api/ads", body);
+  send<{ id: string; price: number; reference?: string; pay_url?: string; status?: string; product?: string }>(acc, "/api/ads", body);
 export const verifyAd = (acc: Account, reference: string) =>
   get<{ status: string; title: string; price: number; map_id: string }>(acc, `/api/ads/verify?reference=${encodeURIComponent(reference)}`);
 export const getMyAds = (acc: Account) => get<{ ads: MyAd[] }>(acc, "/api/ads/mine");
 
-export interface AdminAd extends MyAd { by: string; email: string }
+export interface AdminAd extends MyAd { by: string; email: string; paid?: boolean }
 const admin = (token: string) => ({ "X-Admin-Token": token });
 export const adminListAds = async (token: string) => json<{ ads: AdminAd[] }>(await fetch(`${API_URL}/api/admin/ads`, { headers: admin(token) }));
 export const adminAct = async (token: string, id: string, action: "approve" | "reject" | "remove") =>
@@ -212,3 +220,16 @@ export const adminAdImage = async (token: string, id: string) => {
   if (!r.ok) throw new Error("image");
   return URL.createObjectURL(await r.blob());
 };
+
+// ---------------------------------------------------------------- LagosLife mini version (Vatar Games SDK)
+export async function vatarSignIn(session: string): Promise<Account & { mode: "live" | "test" }> {
+  const r = await json<{ token: string; player_id: string; device_secret: string; username: string; nickname: string; mode: "live" | "test" }>(
+    await post("/api/vatar/session", { session }),
+  );
+  return { playerId: r.player_id, deviceSecret: r.device_secret, token: r.token, nickname: r.nickname, mode: r.mode };
+}
+export const getVatarConfig = async () => json<{ enabled: boolean; products: Record<string, string> }>(await fetch(`${API_URL}/api/vatar/config`));
+export const vatarClaim = (acc: Account, session: string, purchaseId: string, adId?: string) =>
+  send<{ ok: boolean; ad: string; status: string }>(acc, "/api/vatar/ads/claim", { session, purchase_id: purchaseId, ad_id: adId ?? null });
+export const vatarMatchLink = (acc: Account, session: string, matchId: string, groupCode?: string) =>
+  send<{ group_code: string | null; create: boolean }>(acc, "/api/vatar/match", { session, match_id: matchId, group_code: groupCode ?? null });

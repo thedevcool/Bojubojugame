@@ -84,6 +84,8 @@ interface GameStore {
   adTap: AdSpot | null;
   adSheet: AdSpot | null;
   adsVersion: number;
+  /** LagosLife mini version (inside their Games app): their money, homes and friends; our hide & seek */
+  mini: { mode: "live" | "test"; name: string } | null;
   set: (p: Partial<GameStore>) => void;
   openApp: (app: string | null) => void;
   closePhone: () => void;
@@ -148,6 +150,7 @@ export const useGame = create<GameStore>((set, get) => ({
   adTap: null,
   adSheet: null,
   adsVersion: 0,
+  mini: null,
   homeArea: null,
   dice: null,
   over: null,

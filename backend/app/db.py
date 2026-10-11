@@ -54,6 +54,9 @@ class Player(Base):
     car_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     home_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     rent_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Signed in through LagosLife (Vatar Games SDK): their per-game player id (p_… live, t_… test).
+    # These "mini" accounts have no usable password and can't log in on our own site.
+    vatar_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
     hunger: Mapped[float] = mapped_column(default=80.0)
@@ -118,13 +121,30 @@ class Ad(Base):
     title: Mapped[str] = mapped_column(String(40))
     email: Mapped[str] = mapped_column(String(254))
     reference: Mapped[str] = mapped_column(String(64), unique=True)
-    # awaiting_payment -> review -> live -> (expired) ; or rejected / refunded
+    # paystack: awaiting_payment -> review (paid) -> live ; or rejected / refunded
+    # vatar (LagosLife): review (unpaid) -> approved -> live (paid in LagosLife) ; or rejected
+    provider: Mapped[str] = mapped_column(String(12), default="paystack")
+    purchase_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="awaiting_payment")
     image: Mapped[bytes] = mapped_column(LargeBinary)
     image_type: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VatarMatch(Base):
+    """A LagosLife match (stakes held by LagosLife) played as one of our games."""
+
+    __tablename__ = "vatar_matches"
+    match_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(8))
+    nonce: Mapped[str] = mapped_column(String(128))
+    claimed_by: Mapped[str] = mapped_column(String(32))  # our player who creates the lobby
+    group_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    game_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    settled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class DirectMessage(Base):
@@ -308,6 +328,8 @@ class Database:
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_home ON players (home_id) WHERE home_id IS NOT NULL",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_username ON players (lower(username))",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_email ON players (lower(email)) WHERE email IS NOT NULL",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_vatar ON players (vatar_id) WHERE vatar_id IS NOT NULL",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_ads_purchase ON ads (purchase_id) WHERE purchase_id IS NOT NULL",
             ):
                 await conn.execute(text(ddl))
 

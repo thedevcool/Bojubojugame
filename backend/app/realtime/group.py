@@ -276,6 +276,8 @@ class GroupRoom:
             raise GroupError("At least one real player is needed")
         hungry = []
         for p in self.humans:
+            if p in self.world.mini:
+                continue
             if await self.world.economy.get_hunger(p) < self.cfg.game.min_hunger_to_play:
                 hungry.append(self.nicks[p])
         if hungry:
@@ -309,12 +311,13 @@ class GroupRoom:
         if zone is None or not in_rect(zone["rect"], s.x, s.z):
             raise GroupError("Walk to the bus stop first")
         self.boarded.add(s.pid)  # reserve before awaiting to block double-boarding
-        try:
-            _, bal = await self.world.economy.post(s.pid, -fare.price, "fare", f"fare:{self.id}:{s.pid}", ref=fare.id)
-        except InsufficientFunds:
-            self.boarded.discard(s.pid)
-            raise GroupError(f"Not enough naira for {fare.name}") from None
-        await self.world.push_wallet(s)
+        if s.pid not in self.world.mini:
+            try:
+                await self.world.economy.post(s.pid, -fare.price, "fare", f"fare:{self.id}:{s.pid}", ref=fare.id)
+            except InsufficientFunds:
+                self.boarded.discard(s.pid)
+                raise GroupError(f"Not enough naira for {fare.name}") from None
+            await self.world.push_wallet(s)
         self.enter_arena(s, fare.ride_s, fare.id)
         self.broadcast_state("boarded")
 
@@ -591,12 +594,15 @@ class GroupRoom:
                 continue
             self.boarded.add(p)
             s = self.session(p)
-            await self.world.economy.post(
-                p, -fare.price, "fare", f"fare:{self.id}:{p}", ref=f"auto:{fare.id}", clamp=True
-            )
+            mini = p in self.world.mini
+            if not mini:
+                await self.world.economy.post(
+                    p, -fare.price, "fare", f"fare:{self.id}:{p}", ref=f"auto:{fare.id}", clamp=True
+                )
             if s is not None:
-                await self.world.push_wallet(s)
-                s.send({"t": "toast", "msg": f"Auto-boarded a {fare.name} — fare paid"})
+                if not mini:
+                    await self.world.push_wallet(s)
+                s.send({"t": "toast", "msg": f"Auto-boarded a {fare.name}" + ("" if mini else " — fare paid")})
                 self.enter_arena(s, fare.ride_s, fare.id)
 
     async def finish_round(self) -> None:
@@ -669,6 +675,11 @@ class GroupRoom:
         self.broadcast_state("game_over")
         self.broadcast({"t": "g_over", "game_id": self.id, "results": self.final_results})
         await self.world.save_game_results(self.id, self.final_results)
+        for hook in self.world.game_over_hooks:
+            try:
+                await hook(self.id, self.final_results)
+            except Exception:  # a hook (e.g. LagosLife being down) must never break the game
+                log.exception("game_over hook failed game=%s", self.id)
 
     # ------------------------------------------------------------ leaving
     def leave(self, s: Session) -> None:

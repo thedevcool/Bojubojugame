@@ -24,18 +24,26 @@ export function TopBar() {
   const phoneId = useGame((s) => s.life.phoneId);
   const onboard = useGame((s) => s.onboard);
   const phone = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
+  const mini = useGame((s) => s.mini);
   useTicker(200);
   const stamina = local.stamina / 5;
   return (
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
       <div className="panel flex min-w-0 items-center gap-2.5 px-3 py-2">
-        <button onClick={() => openApp("wallet")} className="text-left">
-          <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg" title={naira(balance)}>{nairaShort(balance)}</div>
-          <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
-        </button>
+        {mini ? (
+          <div className="text-left">
+            <div className="text-sm font-black leading-none">🙈 {mini.name}</div>
+            <div className="text-[10px] opacity-70">Boju Boju{mini.mode === "test" ? " · TEST" : ""}</div>
+          </div>
+        ) : (
+          <button onClick={() => openApp("wallet")} className="text-left">
+            <div className="text-base font-black leading-none text-[var(--accent)] sm:text-lg" title={naira(balance)}>{nairaShort(balance)}</div>
+            <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
+          </button>
+        )}
         <div className="w-14 sm:w-20">
-          <div className="text-[10px] opacity-80">Belle {Math.round(hunger)}%</div>
-          <div className="h-1.5 rounded bg-white/15"><div className="h-1.5 rounded bg-[var(--clay)]" style={{ width: `${hunger}%` }} /></div>
+          {!mini && <div className="text-[10px] opacity-80">Belle {Math.round(hunger)}%</div>}
+          {!mini && <div className="h-1.5 rounded bg-white/15"><div className="h-1.5 rounded bg-[var(--clay)]" style={{ width: `${hunger}%` }} /></div>}
           <div className="mt-1 h-1 rounded bg-white/15"><div className="h-1 rounded bg-sky-300" style={{ width: `${stamina * 100}%` }} /></div>
         </div>
         <span title={connected ? "Online" : "Reconnecting"} className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-400" : "animate-pulse bg-red-500"}`} />
@@ -48,7 +56,7 @@ export function TopBar() {
           className={`relative grid h-12 w-9 place-items-center rounded-[10px] border-2 bg-[#0a1324] text-lg shadow-lg transition active:scale-90 ${onboard === "launch" ? "phone-nudge" : ""}`}
           style={{ borderColor: phone?.color ?? "rgba(255,255,255,.35)" }}>
           <span className="absolute top-1 h-1 w-3 rounded-full bg-white/30" />
-          {phoneId ? "📱" : "🎒"}
+          {phoneId || mini ? "📱" : "🎒"}
           {badge > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-red-500 px-1 text-[10px] font-bold">{badge}</span>}
         </button>
       </div>
@@ -211,7 +219,10 @@ export function ZonePanel() {
   const me = useGame((s) => s.me?.id);
   const home = useGame((s) => s.home);
   const map = useMap();
+  const mini = useGame((s) => !!s.mini);
   if (!zone || !cfg) return null;
+  // LagosLife players shop, eat and live in LagosLife: only the bus stops work here (rides are free)
+  if (mini && zone.kind !== "bus_stop") return null;
   if (zone.kind === "food") {
     const items = cfg.items.filter((i) => i.spot === zone.id);
     return (
@@ -236,7 +247,7 @@ export function ZonePanel() {
         {g?.phase === "over" ? (
           <>
             <button className="btn btn-primary mb-1 w-full" onClick={() => net.send({ t: "g_return" })}>🏠 Ride home</button>
-            <div className="text-xs opacity-70">Free ride back to Lagos — your house{home ? ` (${home.name})` : " / the Motor Park"}.</div>
+            <div className="text-xs opacity-70">{mini ? "Free ride back to the Motor Park. Your LagosLife home is one tap away: ← at the top." : `Free ride back to Lagos — your house${home ? ` (${home.name})` : " / the Motor Park"}.`}</div>
           </>
         ) : !g ? (
           <TravelOptions />
@@ -253,8 +264,8 @@ export function ZonePanel() {
         <div className="mb-1 font-bold">🚌 Motor Park</div>
         {g?.phase === "travel" && !boarded ? (
           (cfg.cities.find((c) => c.arenas.includes(g.settings.arena))?.fares ?? cfg.fares).map((f) => (
-            <button key={f.id} disabled={balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
-              <span>Board {f.name}</span><span>{naira(f.price)}</span>
+            <button key={f.id} disabled={!mini && balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
+              <span>Board {f.name}</span><span>{mini ? "Free" : naira(f.price)}</span>
             </button>
           ))
         ) : g && g.phase !== "over" ? (
@@ -520,11 +531,12 @@ function TravelOptions() {
   const mapId = useGame((s) => s.mapId);
   const pin = useGame((s) => (s.pin?.kind === "trip" ? s.pin : null));
   const balance = useGame((s) => s.balance);
+  const mini = useGame((s) => !!s.mini);
   const [to, setTo] = useState<string | null>(null);
   if (!cfg || !maps) return null;
   const here = mapId === "hub_plaza" ? "hub" : mapId;
   const dests = [
-    ...(here !== "hub" ? [{ to: "hub", label: "🏠 Home (Lagos)" }] : []),
+    ...(here !== "hub" ? [{ to: "hub", label: mini ? "🚌 Lagos Motor Park" : "🏠 Home (Lagos)" }] : []),
     ...cfg.cities.flatMap((c) => c.arenas.filter((a) => a !== here).map((a) => ({ to: a, label: `${c.name} · ${maps[a]?.venue?.name ?? maps[a]?.name}` }))),
   ];
   const dest = to ?? pin?.to ?? dests[0]?.to;
@@ -535,9 +547,9 @@ function TravelOptions() {
         {dests.map((d) => <option key={d.to} value={d.to} className="text-black">{d.to === pin?.to ? "📌 " : ""}{d.label}</option>)}
       </select>
       {fares.map((f) => (
-        <button key={f.id} disabled={balance < f.price} className="btn btn-primary flex w-full justify-between py-1.5 text-sm"
+        <button key={f.id} disabled={!mini && balance < f.price} className="btn btn-primary flex w-full justify-between py-1.5 text-sm"
           onClick={() => dest && net.send({ t: "trip", to: dest, mode: f.id, key: crypto.randomUUID() })}>
-          <span>Board {f.name}</span><span>{naira(f.price)}</span>
+          <span>Board {f.name}</span><span>{mini ? "Free" : naira(f.price)}</span>
         </button>
       ))}
       <div className="text-[10px] opacity-60">Explore any city without a game. Pin places on the 🗺️ map.</div>

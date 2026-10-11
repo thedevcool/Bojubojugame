@@ -58,6 +58,11 @@ Advertisers tap a kiosk/shop/billboard/arena wall in the game → **📢 Place a
 Without `PAYSTACK_SECRET_KEY` the ad sheet just says "coming soon". Never set
 `ADS_FAKE_PAYMENTS` in production — it skips payment and exists only for local testing.
 
+### LagosLife mini version
+The game also runs inside LagosLife's Games app at `/lagoslife`. Keys, products, sandbox testing and
+submission are all in **[LAGOSLIFE.md](LAGOSLIFE.md)**. On Render that means `VATAR_SECRET`,
+`VATAR_WEBHOOK_SECRET` and `VATAR_RESULTS_SECRET`.
+
 ### Optional: keep it awake
 To skip the 1‑minute wake‑up, create a free job at cron-job.org that opens
 `https://<your-service>.onrender.com/health` every 10 minutes. One service running

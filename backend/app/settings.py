@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     paystack_secret_key: str = ""
     admin_token: str = ""  # protects /admin (approve / reject ads)
     ads_fake_payments: bool = False  # dev/tests only: skip Paystack and treat payments as successful
+    # LagosLife mini version (Vatar Games SDK v1). Secrets come from the LagosLife developer dashboard.
+    vatar_api: str = "https://lagoslife.app/api/games/v1"
+    vatar_secret: str = ""  # vtr_test_… in the sandbox, vtr_live_… once approved
+    vatar_webhook_secret: str = ""  # vtr_whsec_…
+    vatar_results_secret: str = ""  # signs match results
 
     @property
     def async_database_url(self) -> str:

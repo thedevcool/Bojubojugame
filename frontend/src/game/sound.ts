@@ -42,7 +42,7 @@ class SoundEngine {
       const T = await import("tone");
       await T.start();
       T.getContext().lookAhead = 0.03;
-      this.master = new T.Gain(0.9).toDestination();
+      this.master = new T.Gain(this.paused ? 0 : 0.9).toDestination();
       const comp = new T.Compressor(-18, 3).connect(this.master);
       this.sfxBus = new T.Gain(this.prefs.sound ? 0.9 : 0).connect(comp);
       this.musicBus = new T.Gain(this.prefs.music ? 0.32 : 0).connect(comp);
@@ -75,6 +75,13 @@ class SoundEngine {
       this.setScene(want);
     })().catch(() => { this.loading = null; });
     return this.loading;
+  }
+
+  private paused = false;
+  /** LagosLife pauses us (phone in the background, or its pay sheet is open): go quiet until resume. */
+  pause(on: boolean): void {
+    this.paused = on;
+    if (this.T) this.master.gain.rampTo(on ? 0 : 0.9, 0.15);
   }
 
   setPrefs(p: Partial<typeof this.prefs>): void {

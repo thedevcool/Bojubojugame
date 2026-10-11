@@ -53,11 +53,21 @@ async function playMatch(m: VMatch, say: (s: string) => void): Promise<void> {
       if (!code) throw new Error("Couldn't create the game — try again");
       await vatarMatchLink(acc, await freshSession(), m.id, code);
       say("Waiting for everyone to join…");
-      // start as soon as every match player is in the lobby
+      // start as soon as every match player is in the lobby. Anyone not here after 45 s (a friend whose
+      // game didn't open, or LagosLife's sandbox test bot) gets NPCs in their place so the match can finish.
       for (let j = 0; j < 300; j++) {
         const g = st().group;
         if (!g || g.phase !== "lobby") return;
-        if (g.members.filter((x) => !x.left && !x.bot && x.online).length >= m.players.length) {
+        const humans = g.members.filter((x) => !x.left && !x.bot && x.online).length;
+        if (humans >= m.players.length) {
+          net.send({ t: "g_start" });
+          return;
+        }
+        if (j === 45) {
+          say("Not everyone made it — NPCs are filling in");
+          const npcs = g.members.filter((x) => !x.left && x.bot).length;
+          for (let k = humans + npcs; k < Math.max(3, m.players.length); k++) net.send({ t: "g_add_bot" });
+          await wait(800);
           net.send({ t: "g_start" });
           return;
         }

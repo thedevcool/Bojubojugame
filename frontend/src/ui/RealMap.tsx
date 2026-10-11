@@ -73,8 +73,8 @@ function pinEl(html: string, cls: string): HTMLDivElement {
 // ------------------------------------------------------------------ ride
 interface Route { from: { name: string; lng: number; lat: number }; to: { name: string; lng: number; lat: number }; coords: [number, number][]; source: string }
 
-const MODE_ICON: Record<string, string> = { danfo: "🚌", keke: "🛺", bus: "🚍", car: "🚗", flight: "✈️" };
-const MODE_NAME: Record<string, string> = { danfo: "Danfo", keke: "Keke", bus: "Bus", car: "Shared car", flight: "Flight" };
+const MODE_ICON: Record<string, string> = { danfo: "🚌", keke: "🛺", bus: "🚍", car: "🚗", flight: "✈️", own_car: "🚘" };
+const MODE_NAME: Record<string, string> = { danfo: "Danfo", keke: "Keke", bus: "Bus", car: "Shared car", flight: "Flight", own_car: "Your car" };
 
 function haversine(a: [number, number], b: [number, number]): number {
   const R = 6371, toR = Math.PI / 180;
@@ -153,7 +153,10 @@ export function RideMap() {
 
   useEffect(() => {
     if (!ride) return;
-    const id = setTimeout(() => set({ ride: null }), Math.max(0, ride.until - Date.now()) + 900);
+    const id = setTimeout(() => {
+      set({ ride: null });
+      if (useGame.getState().group?.phase === "gather") useGame.getState().toast("You don reach! Waka join the others inside the circle ⭕", "good");
+    }, Math.max(0, ride.until - Date.now()) + 900);
     return () => clearTimeout(id);
   }, [ride, set]);
 
@@ -220,6 +223,52 @@ export function CityMap({ selected, onSelect, className }: { selected: string; o
     if (c && mapRef.current) mapRef.current.flyTo({ center: [c.lng, c.lat], zoom: 6.2, duration: 1400, essential: true });
   }, [selected, cities, ready]);
 
+  return (
+    <div className={`relative ${className ?? ""}`}>
+      <div ref={box} style={{ width: "100%", height: "100%" }} />
+      <Credit />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Naija travel map
+/** Interactive map of Nigeria with a pin per destination (pan, pinch, tap a pin). */
+export function NaijaMap({ dests, selected, onSelect, className }: {
+  dests: { to: string; label: string; lat: number; lng: number }[]; selected: string | null; onSelect: (to: string) => void; className?: string;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MLMap | null>(null);
+  const pins = useRef<Record<string, HTMLDivElement>>({});
+  const pick = useRef(onSelect);
+  pick.current = onSelect;
+  const [ready, setReady] = useState(false);
+  const key = dests.map((d) => d.to).join();
+  useEffect(() => {
+    if (!box.current) return;
+    let alive = true;
+    (async () => {
+      const { map, ml } = await createMap(box.current!, [5.4, 7.4], 5.2, true);
+      if (!alive) { map.remove(); return; }
+      mapRef.current = map;
+      for (const d of dests) {
+        const el = pinEl(d.label, "cursor-pointer whitespace-nowrap rounded-full bg-[#0a1324]/85 px-2.5 py-1 text-xs font-bold text-white shadow-lg transition-transform duration-300");
+        el.onclick = () => pick.current(d.to);
+        pins.current[d.to] = el;
+        new ml.Marker({ element: el }).setLngLat([d.lng, d.lat]).addTo(map);
+      }
+      setReady(true);
+    })();
+    return () => { alive = false; mapRef.current?.remove(); mapRef.current = null; pins.current = {}; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  useEffect(() => {
+    for (const [id, el] of Object.entries(pins.current)) {
+      el.style.transform = id === selected ? "scale(1.2)" : "scale(1)";
+      el.style.background = id === selected ? "#2f7cf6" : "rgba(10,19,36,.85)";
+    }
+    const d = dests.find((x) => x.to === selected);
+    if (d && mapRef.current) mapRef.current.flyTo({ center: [d.lng, d.lat], zoom: 9, duration: 1400, essential: true });
+  }, [selected, ready, dests]);
   return (
     <div className={`relative ${className ?? ""}`}>
       <div ref={box} style={{ width: "100%", height: "100%" }} />

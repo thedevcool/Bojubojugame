@@ -52,6 +52,25 @@ async def advance(world, clock, seconds):
         await world.tick()
 
 
+async def gather_all(world, clock, g):
+    """Everyone gets off the bus and walks into the circle; the dice only start then."""
+    assert g.phase == "gather"
+    clock.t = max([clock.t, *g.arrive_at.values()]) + 0.1
+    await world.tick()
+    assert g.phase == "gather"  # still at the bus stop, not in the circle yet
+    for i, p in enumerate(g.active):
+        world.sessions[p].x, world.sessions[p].z = g.arena.spawn_point(i)
+    clock.t += 0.1
+    await world.tick()
+
+
+def scatter(world, g):
+    """Hiders run off during the hide phase (standing next to Boju gets you caught at once)."""
+    spots = [(-20, -30), (25, -25), (-30, 20), (30, 5), (-10, -38)]
+    for h, (x, z) in zip(g.round.hiders, spots, strict=False):
+        world.sessions[h].x, world.sessions[h].z = x, z
+
+
 async def until(world, clock, g, phase, limit=400):
     start = clock.t
     while g.phase != phase:
@@ -94,7 +113,9 @@ async def test_full_game(db):
     await send(world, a, t="g_board", fare="keke")
     assert a.room is g.arena and ca.last("ride")
     await advance(world, clock, get_config().game.travel_window_s + 0.5)
-    assert g.phase == "dice" and all(s.room is g.arena for s in (a, b, c))
+    assert g.phase == "gather" and all(s.room is g.arena for s in (a, b, c))
+    await gather_all(world, clock, g)
+    assert g.phase == "dice"
     assert await world.economy.balance(b.pid) == 20000 - get_config().cheapest_fare.price
 
     await send(world, a, t="g_pick", n=1)
@@ -125,8 +146,8 @@ async def test_full_game(db):
     assert g.can_see(seeker, hiders[0])
     await advance(world, clock, 1)
     assert hiders[1].pid in r.in_safe
-    await send(world, seeker, t="g_tag")
-    assert r.found_order == [hiders[0].pid]
+    assert r.found_order == [hiders[0].pid]  # caught just by reaching them — no button
+    assert ca.last("g_tag")["auto"]
     assert hiders[0].spectator
 
     # Safe-house time runs out (20 s), then the round ends at search time.
@@ -143,6 +164,7 @@ async def test_full_game(db):
     assert g.pending_seeker == hiders[0].pid
     await until(world, clock, g, "hide")
     assert g.round.is_final and g.round.seeker == hiders[0].pid
+    scatter(world, g)
     await until(world, clock, g, "result")
     assert g.last_result["deltas"][hiders[0].pid] == -2500
     await until(world, clock, g, "over")
@@ -169,9 +191,11 @@ async def test_seeker_disconnect_skips_round(db):
     await send(world, a, t="g_start")
     g = a.group
     await advance(world, clock, 61)
+    await gather_all(world, clock, g)
     await advance(world, clock, 16)
     assert g.phase in ("reveal", "hide")
     await advance(world, clock, 6)
+    scatter(world, g)
     seeker = world.sessions[g.round.seeker]
     world.disconnect(seeker, seeker.sender)
     await advance(world, clock, 16)
@@ -266,3 +290,17 @@ async def test_interstate_fares_and_ride_mode(db):
     await send(world, a, t="g_board", fare="bus")
     assert ca.last("ride")["mode"] == "bus" and ca.last("ride")["arena"] == "arena_abuja"
     assert await world.economy.balance(a.pid) == 20000 - 15000
+
+
+async def test_gather_times_out_and_walks_stragglers_in(db):
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, _) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
+    await send(world, a, t="g_start")
+    g = a.group
+    await advance(world, clock, 61)
+    assert g.phase == "gather" and ca.last("g_state")["gather"]["r"] > 0
+    await advance(world, clock, g.phase_end - clock.t + 0.2)
+    assert g.phase == "dice"
+    assert all(g.in_circle(p, clock.t) for p in g.active)

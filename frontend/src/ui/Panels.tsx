@@ -199,7 +199,7 @@ export function DicePanel() {
     const taken = new Set(g.members.map((m) => m.pick).filter(Boolean));
     return (
       <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4 text-center">
-        <div className="text-lg font-black">Who go be Boju? 🎲</div>
+        <div className="text-lg font-black">Who go dey Boju? 🎲</div>
         <div className="mb-3 text-xs opacity-80">{inPool ? "Pick your number — if the dice lands on it, you seek!" : "Others are picking…"} ({left}s)</div>
         <div className="grid grid-cols-3 gap-2">
           {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -218,7 +218,7 @@ export function DicePanel() {
       {face && <div className={`text-7xl ${rolling ? "dice-rolling" : ""}`}>{DICE[face]}</div>}
       {!rolling && (
         <div className="mt-2 text-xl font-black text-[var(--accent)]">
-          {g.pending_seeker === me ? "Na you be Boju! 🙈" : `${nick(g.pending_seeker)} na Boju!`}
+          {g.pending_seeker === me ? "Na you dey Boju! 🙈" : `${nick(g.pending_seeker)} dey Boju!`}
         </div>
       )}
     </div></div>
@@ -355,31 +355,71 @@ export function ChatContent() {
   );
 }
 
+const LEDGER_ICON: Record<string, [string, string]> = {
+  starting_balance: ["🎁", "#2fbf71"], daily_bonus: ["📅", "#2fbf71"], round: ["🙈", "#2f7cf6"], fare: ["🚌", "#e0a800"], food: ["🍢", "#ff7a1a"],
+  phone: ["📱", "#7b5cff"], rent: ["🏠", "#e8731a"], topup: ["🎉", "#2fbf71"], furniture: ["🛋️", "#a5672f"], car: ["🚗", "#e04f5f"],
+};
+
 export function WalletPanel() {
   const hunger = useGame((s) => s.hunger);
+  const username = useGame((s) => s.life.username);
   const [data, setData] = useState<{ balance: number; disclaimer: string; entries: WalletEntry[] } | null>(null);
   useEffect(() => {
     const acc = loadAccount();
     if (acc) getWallet(acc).then(setData).catch(() => setData(null));
   }, []);
-  const reasons: Record<string, string> = { starting_balance: "Welcome money", daily_bonus: "Daily bonus", round: "Round reward", fare: "Transport fare", food: "Food", phone: "Phone", rent: "House rent", topup: "Test-phase bonus" };
+  const reasons: Record<string, string> = { starting_balance: "Welcome money", daily_bonus: "Daily bonus", round: "Round reward", fare: "Transport fare", food: "Food", phone: "Phone", rent: "House rent", topup: "Test-phase bonus", furniture: "Furniture", car: "Car" };
   return (
     <Modal>
-      <div className="rounded-xl bg-[var(--accent)] p-4 text-[var(--ink)]">
-        <div className="text-xs font-bold uppercase">Balance</div>
-        <div className="text-3xl font-black">{naira(data?.balance ?? useGame.getState().balance)}</div>
-        <div className="text-xs font-semibold">{data?.disclaimer ?? "In-game naira — not real money"}. It cannot be bought, sold or cashed out.</div>
+      <div className="wallet-card anim-pop">
+        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider opacity-85">
+          <span>Boju Naira</span><span>🙈</span>
+        </div>
+        <div className="mt-5 text-[34px] font-bold tracking-tight">{naira(data?.balance ?? useGame.getState().balance)}</div>
+        <div className="mt-3 flex items-end justify-between text-[11px] opacity-85">
+          <span>@{username}</span>
+          <span>{data?.disclaimer ?? "In-game naira — not real money"}</span>
+        </div>
       </div>
-      <div className="mt-2 text-sm">Belle (hunger): {Math.round(hunger)}%</div>
-      <div className="mt-3 space-y-1 text-sm">
-        {data?.entries.map((e, i) => (
-          <div key={i} className="flex justify-between border-b border-white/10 py-1">
-            <span>{reasons[e.reason] ?? e.reason}</span>
-            <span className={e.amount >= 0 ? "text-green-400" : "text-red-400"}>{e.amount >= 0 ? "+" : ""}{naira(e.amount)}</span>
+      <p className="mt-2 px-1 text-[11px] opacity-60">It cannot be bought, sold or cashed out.</p>
+      <div className="ios-section-title">Belle</div>
+      <div className="ios-group">
+        <div className="ios-row">
+          <span className="ios-glyph bg-[#ff7a1a]">🍲</span>
+          <div className="flex-1">
+            <div className="text-[15px]">Hunger</div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#ff7a1a]" style={{ width: `${hunger}%` }} /></div>
           </div>
-        ))}
+          <span className="text-sm tabular-nums opacity-80">{Math.round(hunger)}%</span>
+        </div>
+      </div>
+      <div className="ios-section-title">Recent activity</div>
+      <div className="ios-group">
+        {!data ? <div className="ios-row text-sm opacity-60">Loading…</div> : data.entries.filter((e) => e.amount !== 0).map((e, i) => {
+          const [ic, bg] = LEDGER_ICON[e.reason] ?? ["₦", "#5d6778"];
+          return (
+            <div key={i} className="ios-row">
+              <span className="ios-glyph" style={{ background: bg }}>{ic}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px]">{reasons[e.reason] ?? e.reason}</div>
+                <div className="text-[11px] opacity-50">{new Date(e.at).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+              </div>
+              <span className={`text-[15px] font-semibold tabular-nums ${e.amount >= 0 ? "text-[#30d158]" : ""}`}>{e.amount >= 0 ? "+" : ""}{naira(e.amount)}</span>
+            </div>
+          );
+        })}
       </div>
     </Modal>
+  );
+}
+
+/** iOS-style switch. */
+export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+      className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors duration-300 ${on ? "bg-[#30d158]" : "bg-white/20"}`}>
+      <span className="absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-md transition-[left] duration-300" style={{ left: on ? 22 : 2, transitionTimingFunction: "var(--ease-spring)" }} />
+    </button>
   );
 }
 
@@ -387,6 +427,14 @@ export function SettingsPanel() {
   const set = useGame((s) => s.set);
   const openApp = useGame((s) => s.openApp);
   const quality = useGame((s) => s.quality);
+  const [prefs, setPrefs] = useState({ ...sound.prefs });
+  const [help, setHelp] = useState(false);
+  const flip = (k: "sound" | "music", v: boolean) => {
+    const next = { ...prefs, [k]: v };
+    setPrefs(next);
+    sound.setPrefs(next);
+    void sound.unlock();
+  };
   const choose = (q: Quality) => {
     set({ quality: q });
     try { localStorage.setItem("boju.quality", q); } catch { /* ignore */ }
@@ -394,30 +442,38 @@ export function SettingsPanel() {
   return (
     <div className="anim-fade">
       <AccountCard />
-      <InstallApp className="mb-4" />
-      <ControlModePicker />
-      <SoundToggles />
-      <div className="mb-1 text-sm font-bold">Graphics quality</div>
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        {(["low", "medium", "high"] as Quality[]).map((q) => (
-          <button key={q} className={`btn capitalize ${quality === q ? "btn-primary" : "btn-ghost"}`} onClick={() => choose(q)}>{q}</button>
-        ))}
+      <div className="ios-section-title">Controls</div>
+      <ControlModePicker bare />
+      <div className="ios-section-title">Sound</div>
+      <div className="ios-group">
+        <div className="ios-row"><span className="ios-glyph bg-[#ff375f]">🔊</span><span className="flex-1 text-[15px]">Sound effects</span><Switch label="Sound effects" on={prefs.sound} onChange={(v) => flip("sound", v)} /></div>
+        <div className="ios-row"><span className="ios-glyph bg-[#bf5af2]">🎶</span><span className="flex-1 text-[15px]">Music</span><Switch label="Music" on={prefs.music} onChange={(v) => flip("music", v)} /></div>
       </div>
-      <div className="text-sm font-bold">How to play</div>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs opacity-85">
-        <li>Joystick: left thumb moves, right thumb drags to look. Tap-to-go: tap the ground and your person walks there.</li>
-        <li>Two fingers pinch to zoom (also in 🛰️ aerial view). Desktop: WASD, mouse drag, Shift run, C bend, wheel zoom.</li>
-        <li>Bend down behind hedges and low walls — Boju can&apos;t see you from far. 🪑 Sit on beds and benches.</li>
-        <li>🛰️ Aerial view lets hiders scan the whole map (Boju can&apos;t use it while seeking).</li>
-        <li>Boju! tags the nearest hider within 3 m that you can see.</li>
-      </ul>
-      <button className="btn btn-ghost mt-4 w-full" onClick={() => openApp("news")}>✨ What&apos;s new</button>
+      <div className="ios-section-title">Graphics</div>
+      <div className="segmented">
+        {(["low", "medium", "high"] as Quality[]).map((q) => <button key={q} data-on={quality === q} className="capitalize" onClick={() => choose(q)}>{q}</button>)}
+      </div>
+      <p className="px-1 pt-1 text-[11px] opacity-50">Low saves battery and data. High adds soft shadows.</p>
+      <div className="ios-section-title">App</div>
+      <InstallApp className="mb-2" />
+      <div className="ios-group">
+        <button className="ios-row" onClick={() => openApp("news")}><span className="ios-glyph bg-[#7b5cff]">✨</span><span className="text-[15px]">What&apos;s new</span><span className="ios-chevron">›</span></button>
+        <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>
+        {help && (
+          <ul className="list-disc space-y-1 px-5 py-3 pl-9 text-[13px] opacity-85">
+            <li>Joystick: left thumb moves, right thumb drags to look. Tap-to-go: tap the ground and you walk there.</li>
+            <li>Two fingers pinch to zoom. Tap the round map (top left) to pin places and travel.</li>
+            <li>Bend down behind hedges and low walls. Tap a bed to sleep, sofas and benches to sit.</li>
+            <li>Boju catches you just by reaching you — keep your distance and break line of sight.</li>
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
 /** Joystick or tap-to-go — chosen on first launch, changeable here. */
-export function ControlModePicker({ onPick }: { onPick?: () => void }) {
+export function ControlModePicker({ onPick, bare }: { onPick?: () => void; bare?: boolean }) {
   const mode = useGame((s) => s.controlMode);
   const set = useGame((s) => s.set);
   const pick = (m: "joystick" | "tap") => {
@@ -430,8 +486,8 @@ export function ControlModePicker({ onPick }: { onPick?: () => void }) {
     { id: "tap" as const, icon: "👆🏾", name: "Tap to go", text: "Tap anywhere on the ground — you walk there" },
   ];
   return (
-    <div className="mb-4">
-      <div className="mb-1 text-sm font-bold">Controls</div>
+    <div className={bare ? "" : "mb-4"}>
+      {!bare && <div className="mb-1 text-sm font-bold">Controls</div>}
       <div className="grid grid-cols-2 gap-2">
         {opts.map((o) => (
           <button key={o.id} className="choice flex flex-col items-start gap-0.5 p-3 text-left" data-on={mode === o.id} onClick={() => pick(o.id)}>
@@ -441,22 +497,6 @@ export function ControlModePicker({ onPick }: { onPick?: () => void }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-function SoundToggles() {
-  const [prefs, setPrefs] = useState({ ...sound.prefs });
-  const flip = (k: "sound" | "music") => {
-    const next = { ...prefs, [k]: !prefs[k] };
-    setPrefs(next);
-    sound.setPrefs(next);
-    void sound.unlock();
-  };
-  return (
-    <div className="mb-4 grid grid-cols-2 gap-2">
-      <button className={`btn ${prefs.sound ? "btn-primary" : "btn-ghost"}`} onClick={() => flip("sound")}>{prefs.sound ? "🔊 Sound on" : "🔇 Sound off"}</button>
-      <button className={`btn ${prefs.music ? "btn-primary" : "btn-ghost"}`} onClick={() => flip("music")}>{prefs.music ? "🎶 Music on" : "🎵 Music off"}</button>
     </div>
   );
 }

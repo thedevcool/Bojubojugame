@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app import houses
 from app.engine.geometry import Box, BoxIndex
 from app.engine.nav import NavGrid, hide_spots
 from app.engine.rules import Scoring
@@ -38,6 +39,7 @@ class GameRules(BaseModel):
     hunger_per_round: int
     min_hunger_to_play: int
     lobby_idle_expiry_s: float
+    gather_timeout_s: float = 75.0
 
 
 class Movement(BaseModel):
@@ -119,6 +121,28 @@ class Phone(BaseModel):
     tagline: str = ""
 
 
+class Furniture(BaseModel):
+    id: str
+    name: str
+    price: int = Field(ge=0)
+    w: float = Field(gt=0, le=4)
+    d: float = Field(gt=0, le=4)
+    h: float = Field(gt=0, le=3.2)
+    category: str
+    solid: bool = True
+    seat: float | None = None  # sit height, if you can sit on it
+    bed: bool = False  # you can sleep on it
+
+
+class Car(BaseModel):
+    id: str
+    name: str
+    price: int = Field(ge=0)
+    color: str
+    speed: float = Field(gt=0, le=16)
+    tagline: str = ""
+
+
 class Rent(BaseModel):
     days: int = Field(ge=1)
     prices: dict[str, int]
@@ -139,6 +163,8 @@ class GameConfig(BaseModel):
     network: NetCfg
     cities: list[City]
     phones: list[Phone]
+    furniture: list[Furniture]
+    cars: list[Car]
     rent: Rent
     home_coords: dict[str, tuple[float, float]]
 
@@ -148,6 +174,12 @@ class GameConfig(BaseModel):
     def fares_for(self, arena_id: str) -> list[Fare]:
         city = self.city_of(arena_id)
         return city.fares if city and city.fares else self.fares
+
+    def car(self, car_id: str | None) -> Car | None:
+        return next((c for c in self.cars if c.id == car_id), None)
+
+    def furniture_by_id(self) -> dict[str, Furniture]:
+        return {f.id: f for f in self.furniture}
 
     def item(self, item_id: str) -> Item | None:
         return next((i for i in self.items if i.id == item_id), None)
@@ -177,13 +209,17 @@ NON_SOLID = {
     "puddle",
     "lawn",
     "lot",
+    "porch",
+    "canopy",
+    "door_leaf",
+    "ac",
 }
 TRUNK = {"tree": 0.7, "big_tree": 1.6, "palm": 0.5}
 WALL_T = 0.3
 DOOR_W = 2.0
 
 
-def _expand_room(p: dict[str, Any]) -> list[dict[str, Any]]:
+def _expand_room(p: dict[str, Any], door_w: float = DOOR_W) -> list[dict[str, Any]]:
     """A 'room' is 4 walls with a doorway on one side (modular kit)."""
     x, z, w, d, h = p["x"], p["z"], p["w"], p["d"], p["h"]
     color = p.get("color", "#d8c8a8")
@@ -198,7 +234,7 @@ def _expand_room(p: dict[str, Any]) -> list[dict[str, Any]]:
             mid = (a + b) / 2
             return [wall(mid, fixed, b - a, WALL_T) if horizontal else wall(fixed, mid, WALL_T, b - a)]
         c = (a + b) / 2
-        parts = [(a, c - DOOR_W / 2), (c + DOOR_W / 2, b)]
+        parts = [(a, c - door_w / 2), (c + door_w / 2, b)]
         out = []
         for s, e in parts:
             m, ln = (s + e) / 2, e - s
@@ -225,53 +261,39 @@ def _expand_room(p: dict[str, Any]) -> list[dict[str, Any]]:
     return [floor, *walls]
 
 
-# Furniture for a home with its door on the +z ("s") side, in local coordinates:
-# (kind, local_x as fraction-offset helper, local_z, w, d, h)
-def _furniture(w: float, d: float) -> list[tuple[str, float, float, float, float, float]]:
-    return [
-        ("bed", -w / 2 + 1.25, -d / 2 + 1.3, 1.8, 2.1, 0.55),
-        ("wardrobe", w / 2 - 0.95, -d / 2 + 0.55, 1.4, 0.6, 2.0),
-        ("tv", w / 2 - 0.5, 0.4, 0.5, 1.4, 1.1),
-        ("table", -w / 2 + 1.0, d / 2 - 1.5, 1.0, 1.0, 0.75),
-        ("rug", 0.0, 0.0, 2.6, 1.8, 0.02),
-        ("fan", 0.0, -0.3, 1.2, 1.2, 0.1),
-    ]
-
-
-def _to_world(door: str, x: float, z: float, lx: float, lz: float) -> tuple[float, float]:
-    if door == "n":
-        return x - lx, z - lz
-    if door == "e":
-        return x + lz, z - lx
-    if door == "w":
-        return x - lz, z + lx
-    return x + lx, z + lz
-
-
 def _expand_home(p: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """A home = room walls with a doorway + roof + furniture + a spawn point inside."""
+    """A home = outer walls (with windows) + room-and-parlour partitions + porch + roof.
+
+    Furniture is not part of the map: tenants own it (see app/houses.py, app/life.py).
+    """
     door = p.get("door", "s")
-    room = _expand_room({**p, "kind": "room"})
-    room[0]["color"] = "#b9a58a"  # tiled floor
     x, z, w, d, h = p["x"], p["z"], p["w"], p["d"], p["h"]
+    style = p.get("style", "bungalow")
     local_w, local_d = (w, d) if door in ("n", "s") else (d, w)
+    lay = houses.layout(local_w, local_d, style)
+    room = _expand_room({**p, "kind": "room"}, door_w=houses.FRONT_DOOR_W)
+    room[0]["color"] = "#b9a58a"  # tiled floor
+    for part in room[1:]:
+        part["win"] = True  # windows with burglar-proof bars on the outside walls
     out = list(room)
-    for kind, lx, lz, fw, fd, fh in _furniture(local_w, local_d):
-        wx, wz = _to_world(door, x, z, lx, lz)
+
+    def local_box(kind: str, r: tuple[float, float, float, float], hh: float, **kw: Any) -> dict[str, Any]:
+        cx, cz = houses.to_world(door, x, z, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2)
+        bw, bd = r[2] - r[0], r[3] - r[1]
         if door in ("e", "w"):
-            fw, fd = fd, fw
-        out.append(
-            {
-                "kind": kind,
-                "x": wx,
-                "z": wz,
-                "w": fw,
-                "d": fd,
-                "h": fh,
-                "label": p["id"],
-                "y": h - 0.35 if kind == "fan" else 0,
-            }
-        )
+            bw, bd = bd, bw
+        return {"kind": kind, "x": round(cx, 3), "z": round(cz, 3), "w": bw, "d": bd, "h": hh, "label": p["id"], **kw}
+
+    for r in lay.walls:
+        out.append(local_box("wall", r, h, color="#efe6d4", inner=True))
+    hd = local_d / 2
+    # porch: a raised slab and two pillars holding a small canopy over the front door
+    out.append(local_box("porch", (-1.6, hd, 1.6, hd + 1.4), 0.14, solid=False))
+    for px in (-1.45, 1.45):
+        out.append(local_box("pillar", (px - 0.13, hd + 1.15, px + 0.13, hd + 1.41), h - 0.2))
+    out.append(local_box("canopy", (-1.75, hd, 1.75, hd + 1.55), h - 0.2, solid=False))
+    out.append(local_box("door_leaf", (-0.78, hd - 0.85, -0.72, hd - 0.05), 2.1, solid=False))
+    out.append(local_box("ac", (local_w / 2 + 0.15, -0.5, local_w / 2 + 0.55, 0.5), 2.2, solid=False))
     out.append(
         {
             "kind": "roof",
@@ -282,17 +304,25 @@ def _expand_home(p: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any
             "h": h,
             "label": p["id"],
             "color": p.get("roof", "#7a3b2a"),
-            "style": p.get("style", "bungalow"),
+            "style": style,
         }
     )
-    sx, sz = _to_world(door, x, z, 0.0, 0.6)
-    ox, oz = _to_world(door, x, z, 0.0, local_d / 2 + 1.6)
+    sx, sz = houses.to_world(door, x, z, 0.0, hd - 1.6)
+    ox, oz = houses.to_world(door, x, z, 0.0, hd + 1.9)
     home = {
         "id": p["id"],
         "name": p.get("name", "Home"),
         "rect": [x - w / 2 + 0.2, z - d / 2 + 0.2, x + w / 2 - 0.2, z + d / 2 - 0.2],
         "spawn": [round(sx, 2), round(sz, 2)],
         "door": [round(ox, 2), round(oz, 2)],
+        "center": [x, z],
+        "dir": door,
+        "lw": local_w,
+        "ld": local_d,
+        "style": style,
+        "walls": [list(r) for r in lay.walls],
+        "doorways": [list(r) for r in lay.doorways],
+        "rooms": [{"name": n, "rect": list(r)} for n, r in lay.rooms],
     }
     return out, home
 

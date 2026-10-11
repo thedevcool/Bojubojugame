@@ -94,7 +94,7 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null }
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null; car_id: string | null }
 
 export function logout(): void {
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
@@ -145,6 +145,16 @@ export interface HouseInfo { id: string; name: string; rent: number; duplex: boo
 export const getHomes = (acc: Account) => get<{ days: number; mine: string | null; rent_until: string | null; free: number; homes: HouseInfo[] }>(acc, "/api/homes");
 export const rentHome = (acc: Account, homeId: string) =>
   send<{ ok: boolean; rent_until: string }>(acc, "/api/home/rent", { home_id: homeId, key: crypto.randomUUID() });
+
+export interface OwnedItem { id: number; item: string; lx: number; lz: number; rot: number; placed: boolean }
+export const getFurniture = (acc: Account) => get<{ items: OwnedItem[] }>(acc, "/api/furniture");
+export const buyFurniture = (acc: Account, item: string) =>
+  send<{ ok: boolean; item: OwnedItem }>(acc, "/api/shop/furniture", { item, key: crypto.randomUUID() });
+export const saveLayout = (acc: Account, items: OwnedItem[]) =>
+  send<{ ok: boolean }>(acc, "/api/home/layout", { items: items.map(({ id, placed, lx, lz, rot }) => ({ id, placed, lx, lz, rot })) });
+
+export const buyCar = (acc: Account, carId: string) =>
+  send<{ ok: boolean; car_id: string }>(acc, "/api/shop/car", { car_id: carId, key: crypto.randomUUID() });
 
 export interface Friend { id: string; username: string; online: boolean; unread: number }
 export const getFriends = (acc: Account) => get<{ friends: Friend[]; incoming: Friend[]; outgoing: Friend[] }>(acc, "/api/friends");

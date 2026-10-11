@@ -1,7 +1,8 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
 import { useGame } from "./store";
-import type { ChatMsg, GroupState, Home, RosterEntry, Standing } from "./types";
+import type { ChatMsg, GroupState, Home, PlacedItem, RosterEntry, Standing } from "./types";
+import { setAllFurniture, setHomeFurniture } from "@/game/furniture";
 import { sound } from "@/game/sound";
 import { cam, clock, fx, local, pushSnapshot, remotes } from "@/game/state";
 
@@ -81,8 +82,11 @@ class Net {
         cam.aerial.on = false;
         local.path = [];
         g.setBend(false); // never arrive somewhere still bent down
-        local.sit = false;
-        g.set({ aerial: false, sitting: false, stayed: false });
+        local.sit = local.lie = local.drive = false;
+        local.seatTarget = null;
+        g.set({ aerial: false, sitting: false, sleeping: false, seatAsk: false, decor: null, stayed: false, driving: false, mapOpen: false });
+        if (g.pin?.kind === "here" && g.pin.map !== (m.map as string)) g.set({ pin: null });
+        if (g.pin?.kind === "trip" && g.pin.to === (m.map === "hub_plaza" ? "hub" : (m.map as string))) g.set({ pin: null }); // arrived
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
@@ -91,14 +95,20 @@ class Net {
         local.x = m.x as number;
         local.z = m.z as number;
         local.path = [];
-        local.sit = false;
-        g.set({ sitting: false });
+        local.sit = local.lie = false;
+        g.set({ sitting: false, sleeping: false });
         break;
       case "home": {
         const home = (m.home as Home | null) ?? null;
         g.set({ home, life: { ...g.life, homeId: home?.id ?? null } });
         break;
       }
+      case "furn_all":
+        setAllFurniture(m.homes as Record<string, PlacedItem[]>);
+        break;
+      case "furn":
+        setHomeFurniture(m.home as string, m.items as PlacedItem[]);
+        break;
       case "doors":
         g.set({ doorOwners: m.owners as Record<string, string> });
         break;
@@ -171,7 +181,7 @@ class Net {
       case "g_tag":
         if (m.ok) {
           const mine = m.target === g.me?.id;
-          g.toast(mine ? "Omo, you don cast! 😩" : `Mo ti ri e! ${m.nick as string} don cast!`, mine ? "error" : "good");
+          g.toast(mine ? "Boju don catch you! 😩" : `Mo ti ri e! ${m.nick as string} don cast!`, mine ? "error" : "good");
           sound.play(mine ? "caught" : "gotcha");
           fx.shake = mine ? 1 : 0.5;
         } else {
@@ -229,9 +239,13 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
     case "travel": g.toast("Game don start! Waka go the Motor Park and board a danfo.", "good"); break;
-    case "dice": g.set({ dice: null }); g.toast("Pick your number 1–6!"); break;
+    case "gather":
+      if (gs.gather) g.set({ guide: { x: gs.gather.center[0], z: gs.gather.center[1], label: "⭕ The circle" } });
+      if (!g.ride) g.toast("Oya, everybody gather inside the circle ⭕", "good");
+      break;
+    case "dice": g.set({ dice: null, guide: null }); g.toast("Everybody don gather! Pick your number 1–6 🎲"); break;
     case "hide":
-      g.toast(seeker === me ? "You be Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
+      g.toast(seeker === me ? "Na you dey Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
       if (seeker === me) { cam.aerial.on = false; g.set({ aerial: false }); }
       break;
     case "seek":

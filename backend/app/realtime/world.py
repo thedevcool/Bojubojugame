@@ -16,14 +16,15 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import houses
 from app.content import HUB_MAP_ID, GameConfig, MapData
-from app.db import ChatMessage, Game, Player, RoundStat
+from app.db import ChatMessage, FurnitureItem, Game, Player, RoundStat
 from app.economy import Economy, InsufficientFunds
 from app.engine import rules
-from app.engine.geometry import MoveCheck, collides, distance, in_bounds, in_rect, validate_move
+from app.engine.geometry import Box, MoveCheck, collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
-from app.realtime.rooms import HubShard, Room, Sender, Session
+from app.realtime.rooms import ExploreRoom, HubShard, Room, Sender, Session
 from app.safety import TextRejected, clean_chat
 
 log = logging.getLogger("boju.world")
@@ -38,9 +39,14 @@ LIMITS: dict[str, tuple[float, float]] = {
     "buy": (2, 4),
     "g_invite": (0.5, 4),
     "knock": (0.3, 3),
+    "trip": (0.5, 3),
     "knock_answer": (2, 6),
     "default": (4, 10),
 }
+
+
+def furniture_row(it: FurnitureItem) -> dict[str, Any]:
+    return {"id": it.id, "item": it.item, "lx": round(it.lx, 2), "lz": round(it.lz, 2), "rot": it.rot % 4}
 
 
 class World:
@@ -65,12 +71,22 @@ class World:
         # house id -> tenant id (one per house); house id -> visitors the tenant let in
         self.home_owners: dict[str, str] = {}
         self.guests: dict[str, set[str]] = {}
+        # house id -> placed furniture (local coords) and the solid boxes it adds to the hub
+        self.explore: dict[str, ExploreRoom] = {}  # arena id -> open venue room for travellers
+        self.furniture: dict[str, list[dict[str, Any]]] = {}
+        self.furniture_boxes: dict[str, list[Box]] = {}
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
     # ------------------------------------------------------------ connection lifecycle
     async def connect(
-        self, pid: str, nick: str, sender: Sender, avatar: list[int] | None = None, home_id: str | None = None
+        self,
+        pid: str,
+        nick: str,
+        sender: Sender,
+        avatar: list[int] | None = None,
+        home_id: str | None = None,
+        car: str | None = None,
     ) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
@@ -91,6 +107,7 @@ class World:
             )
             s.stamina = self.cfg.movement.stamina_max_s
             self.sessions[pid] = s
+        s.car = car
         s.send(
             {
                 "t": "hello",
@@ -100,6 +117,7 @@ class World:
             }
         )
         s.send(self.doors_msg())
+        s.send({"t": "furn_all", "homes": self.furniture})
         if s.room is None:
             self.join_hub(s, at=self.home_spawn(s))
         else:  # reconnect: resend where you are
@@ -150,7 +168,8 @@ class World:
         for i in range(48):
             ang, rad = i * 2.399963, 0.0 if i == 0 else 0.7 + 0.45 * math.sqrt(i)
             x, z = base[0] + math.cos(ang) * rad, base[1] + math.sin(ang) * rad
-            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, hub.near(x, z, x, z)):
+            near = hub.near(x, z, x, z) + self.furniture_near(x, z, x, z)
+            if not in_bounds(hub.bounds, x, z, r) or collides(x, z, r + 0.05, near):
                 continue
             if all(math.hypot(x - ox, z - oz) > 0.9 for ox, oz in others):
                 return round(x, 2), round(z, 2)
@@ -176,7 +195,51 @@ class World:
     async def load_home_owners(self) -> None:
         async with self.db() as ses:
             rows = (await ses.execute(select(Player.id, Player.home_id).where(Player.home_id.is_not(None)))).all()
-        self.home_owners = {home: pid for pid, home in rows}
+            self.home_owners = {home: pid for pid, home in rows}
+            items = (
+                await ses.scalars(
+                    select(FurnitureItem).where(
+                        FurnitureItem.placed.is_(True), FurnitureItem.player_id.in_(list(self.home_owners.values()))
+                    )
+                )
+            ).all()
+        owner_home = {pid: home for home, pid in self.home_owners.items()}
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for it in items:
+            if (h := owner_home.get(it.player_id)) is not None:
+                grouped.setdefault(h, []).append(furniture_row(it))
+        for h, rows_ in grouped.items():
+            self.set_furniture(h, rows_, broadcast=False)
+
+    # ------------------------------------------------------------ furniture inside houses
+    def set_furniture(self, home_id: str, items: list[dict[str, Any]], broadcast: bool = True) -> None:
+        home = self.maps[HUB_MAP_ID].home_by_id(home_id)
+        if home is None:
+            return
+        catalog = self.cfg.furniture_by_id()
+        boxes: list[Box] = []
+        for it in items:
+            spec = catalog.get(it["item"])
+            if spec is None or not spec.solid:
+                continue
+            fw, fd = houses.footprint(spec.w, spec.d, it["rot"])
+            if home["dir"] in ("e", "w"):
+                fw, fd = fd, fw
+            x, z = houses.to_world(home["dir"], home["center"][0], home["center"][1], it["lx"], it["lz"])
+            boxes.append(Box(x - fw / 2, z - fd / 2, x + fw / 2, z + fd / 2, spec.h))
+        self.furniture[home_id] = items
+        self.furniture_boxes[home_id] = boxes
+        if broadcast:
+            msg = {"t": "furn", "home": home_id, "items": items}
+            for sh in self.shards:
+                sh.broadcast(msg)
+
+    def furniture_near(self, x0: float, z0: float, x1: float, z1: float) -> list[Box]:
+        lo_x, hi_x, lo_z, hi_z = min(x0, x1) - 1, max(x0, x1) + 1, min(z0, z1) - 1, max(z0, z1) + 1
+        out: list[Box] = []
+        for boxes in self.furniture_boxes.values():
+            out += [b for b in boxes if b.min_x <= hi_x and b.max_x >= lo_x and b.min_z <= hi_z and b.max_z >= lo_z]
+        return out
 
     def doors_msg(self) -> dict[str, Any]:
         return {"t": "doors", "owners": dict(self.home_owners)}
@@ -244,7 +307,7 @@ class World:
         hub = self.maps[HUB_MAP_ID]
         at = self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point()
         self.join_hub(s, at=at)
-        s.crouch = s.sit = False
+        s.crouch = s.sit = s.lie = False
         if arena:
             fare = min(self.cfg.fares_for(arena), key=lambda f: f.price)
             s.send({"t": "ride", "seconds": fare.ride_s, "mode": fare.id, "arena": arena, "dir": "home"})
@@ -322,6 +385,8 @@ class World:
                 await self.on_buy(s, msg)
             elif isinstance(msg, P.Invite):
                 self.on_invite(s, msg)
+            elif isinstance(msg, P.Trip):
+                await self.on_trip(s, msg)
             elif isinstance(msg, P.Knock):
                 self.on_knock(s, msg)
             elif isinstance(msg, P.KnockAnswer):
@@ -341,7 +406,13 @@ class World:
             return
         mv = self.cfg.movement
         dt = now - s.last_move_at
-        if m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
+        car = self.cfg.car(s.car) if m.dr and s.car else None
+        in_game = s.group is not None and s.group.phase not in ("lobby", "over") and s.room is s.group.arena
+        if car is not None and (in_game or not (room.map.kind == "hub" or isinstance(room, ExploreRoom))):
+            car = None  # no driving inside a running game
+        if car is not None:
+            cap = car.speed
+        elif m.c and s.crouch:  # only cap at crouch speed once the server already saw the crouch
             cap = mv.crouch_speed
         elif m.r and s.stamina > -2.0:
             cap = mv.run_speed
@@ -361,12 +432,15 @@ class World:
             tolerance=mv.speed_tolerance,
             radius=mv.player_radius,
             bounds=room.map.bounds,
-            boxes=room.map.near(s.x, s.z, m.x, m.z),
+            boxes=room.map.near(s.x, s.z, m.x, m.z)
+            + (self.furniture_near(s.x, s.z, m.x, m.z) if room.map.id == HUB_MAP_ID else []),
             max_step=budget + 0.05,
         )
         if check.ok and room.map.id == HUB_MAP_ID:
             target = self.home_at(m.x, m.z)
-            if target is not None and not in_rect(target["rect"], s.x, s.z) and not self.may_enter(s, target["id"]):
+            if target is not None and car is not None and not in_rect(target["rect"], s.x, s.z):
+                check = MoveCheck(False, "car")  # no driving into houses
+            elif target is not None and not in_rect(target["rect"], s.x, s.z) and not self.may_enter(s, target["id"]):
                 check = MoveCheck(False, "locked")  # knock first: the owner must let you in
         if not check.ok:
             s.move_budget = budget
@@ -380,8 +454,68 @@ class World:
             s.stamina -= step / mv.run_speed  # time spent running, independent of packet timing
         else:
             s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
-        s.x, s.z, s.ry, s.crouch, s.run, s.sit = m.x, m.z, m.ry, m.c, m.r, m.st
+        s.x, s.z, s.ry, s.crouch, s.run, s.sit, s.lie = m.x, m.z, m.ry, m.c, m.r, m.st, m.ly
+        s.driving = bool(m.dr and s.car and not in_game)
         s.last_move_at = now
+
+    # ------------------------------------------------------------ travel without a game
+    def explore_room(self, arena_id: str) -> ExploreRoom:
+        r = self.explore.get(arena_id)
+        if r is None:
+            r = self.explore[arena_id] = ExploreRoom(f"explore:{arena_id}", self.maps[arena_id])
+        return r
+
+    async def on_trip(self, s: Session, m: P.Trip) -> None:
+        """Board at the bus stop (pay the fare) or drive your own car to a pinned place."""
+        g = s.group
+        if g is not None and g.phase != "over":
+            raise GroupError("Finish or leave your game first")
+        room = s.room
+        if room is None:
+            return
+        here = room.map.id
+        dest_map = self.maps.get(m.to) if m.to != "hub" else self.maps[HUB_MAP_ID]
+        if dest_map is None or (m.to != "hub" and dest_map.kind != "arena"):
+            raise GroupError("Unknown place")
+        if dest_map.id == here:
+            raise GroupError("You are already here")
+        city_arena = m.to if m.to != "hub" else here
+        if m.mode == "own_car":
+            car = self.cfg.car(s.car) if s.car else None
+            if car is None:
+                raise GroupError("Buy a car first — Tokunbo Autos is beside the motor park")
+            seconds, price, mode = max(4.0, min(f.ride_s for f in self.cfg.fares_for(city_arena)) * 0.7), 0, "own_car"
+        else:
+            fare = next((f for f in self.cfg.fares_for(city_arena) if f.id == m.mode), None)
+            if fare is None:
+                raise GroupError("Unknown ride")
+            stop = room.map.zones.get("bus_stop")
+            if stop is None or not in_rect(stop["rect"], s.x, s.z):
+                raise GroupError("Walk to the bus stop to board")
+            seconds, price, mode = fare.ride_s, fare.price, fare.id
+        if price:
+            try:
+                await self.economy.post(s.pid, -price, "fare", f"trip:{s.pid}:{m.key}", ref=f"{here}>{m.to}")
+            except InsufficientFunds:
+                raise GroupError("Your money no reach for this ride") from None
+            await self.push_wallet(s)
+        if g is not None:
+            self.leave_group(s, quiet=True)
+        s.crouch = s.sit = s.lie = s.driving = False
+        if m.to == "hub":
+            hub = self.maps[HUB_MAP_ID]
+            self.join_hub(s, at=self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point())
+            s.send({"t": "ride", "seconds": seconds, "mode": mode, "arena": here, "dir": "home"})
+        else:
+            dest = self.explore_room(m.to)
+            stop = dest_map.zones.get("bus_stop")
+            x, z = (
+                ((stop["rect"][0] + stop["rect"][2]) / 2, (stop["rect"][1] + stop["rect"][3]) / 2)
+                if stop
+                else dest_map.spawn
+            )
+            dest.add(s, x + self.rng.uniform(-1.5, 1.5), z + self.rng.uniform(-1, 1), self.now())
+            s.send({"t": "ride", "seconds": seconds, "mode": mode, "arena": m.to, "dir": "go"})
 
     def on_invite(self, s: Session, m: P.Invite) -> None:
         """Invite any online player you can see to your lobby (they get a Join prompt)."""
@@ -402,6 +536,8 @@ class World:
             s.send({"t": "corr", "x": round(s.x, 2), "z": round(s.z, 2), "s": seq})
 
     async def on_group(self, s: Session, msg: Any) -> None:
+        if isinstance(msg, (P.GroupCreate, P.GroupJoin)) and isinstance(s.room, ExploreRoom):
+            raise GroupError("Games start from Lagos — ride home from the 🚏 bus stop first")
         if isinstance(msg, P.GroupCreate):
             if s.group is not None and s.group.phase != "over":
                 raise GroupError("Leave your current group first")
@@ -659,7 +795,7 @@ class World:
             if self._group_expired(g, now):
                 self._drop_group(code, g)
         now_ms = int(now * 1000)
-        rooms: list[Room] = [*self.shards, *(g.arena for g in self.groups.values())]
+        rooms: list[Room] = [*self.shards, *(g.arena for g in self.groups.values()), *self.explore.values()]
         for room in rooms:
             room.snapshot(now_ms)
         # forget players who left without a group after a grace period
@@ -696,7 +832,8 @@ class World:
             elif s is not None and s.group is g:
                 s.group = None
                 if s.room is g.arena:
-                    self.join_hub(s, at=self.arrival_point())
+                    # still looking around the venue: keep exploring it, now as a traveller
+                    self.explore_room(g.settings["arena"]).add(s, s.x, s.z, self.now())
         log.info("group_closed game=%s", g.id)
 
     async def run(self) -> None:

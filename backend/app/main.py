@@ -285,7 +285,9 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             queue.put_nowait(data)
 
         out_task = asyncio.create_task(writer(queue, ws.send_bytes))
-        session = await world.connect(pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]), home_id=p.home_id)
+        session = await world.connect(
+            pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]), home_id=p.home_id, car=p.car_id
+        )
         strikes = 0
         try:
             while True:

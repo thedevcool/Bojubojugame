@@ -123,6 +123,42 @@ function Windows({ w, d, h, floors }: { w: number; d: number; h: number; floors:
   return <>{out}</>;
 }
 
+/**
+ * House wall: plaster in the house colour, a darker painted band at the foot
+ * (rain splash), and on outside walls louvre windows with burglar-proof bars.
+ */
+function HouseWall({ p }: { p: Prop }) {
+  const along = p.w >= p.d; // wall runs along x
+  const len = along ? p.w : p.d, thick = along ? p.d : p.w;
+  const color = p.color ?? "#e7d1a1";
+  const n = p.win ? Math.floor(len / 2.4) : 0;
+  const ry = along ? 0 : Math.PI / 2;
+  const items = [];
+  for (let i = 0; i < n; i++) {
+    const x = -len / 2 + (len / n) * (i + 0.5);
+    for (const side of [1, -1]) {
+      const z = side * (thick / 2 + 0.01);
+      items.push(
+        <group key={`${i}${side}`} position={[x, 0, z]}>
+          <B p={[0, 1.55, 0]} s={[1.12, 1.12, 0.03]} c="#f7f4ee" shadow={false} />
+          <B p={[0, 1.55, side * 0.01]} s={[1.0, 1.0, 0.02]} c={mat("#3d5d73", { rough: 0.2 })} shadow={false} />
+          {[0.3, 0.55, 0.8, 1.05, 1.3].map((k) => <B key={k} p={[0, 1.05 + k * 0.8, side * 0.025]} s={[0.98, 0.025, 0.012]} c="#86a3b5" shadow={false} />)}
+          {side === 1 && [-0.4, -0.2, 0, 0.2, 0.4].map((bx) => <B key={bx} p={[bx, 1.55, 0.05]} s={[0.025, 1.08, 0.025]} c="#22262a" shadow={false} />)}
+          {side === 1 && <B p={[0, 0.98, 0.06]} s={[1.25, 0.06, 0.1]} c="#e8e2d6" shadow={false} />}
+        </group>,
+      );
+    }
+  }
+  return (
+    <group rotation={[0, ry, 0]}>
+      <B p={[0, p.h / 2, 0]} s={[len, p.h, thick]} c={wallMat(color)} />
+      {p.win && <B p={[0, 0.22, 0]} s={[len + 0.01, 0.44, thick + 0.02]} c={wallMat("#8a6f55")} shadow={false} />}
+      {p.inner && <B p={[0, 0.06, 0]} s={[len + 0.01, 0.12, thick + 0.02]} c="#6b5a48" shadow={false} />}
+      {items}
+    </group>
+  );
+}
+
 function Building({ p, floors }: { p: Prop; floors: number }) {
   const color = p.color ?? "#e7d1a1";
   return (
@@ -273,6 +309,7 @@ function PropMesh({ p }: { p: Prop }) {
         </>
       );
     case "wall":
+      if (p.win || p.inner) return <HouseWall p={p} />;
       return (
         <>
           <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={wallMat(c ?? "#c9b48a")} />
@@ -342,7 +379,15 @@ function PropMesh({ p }: { p: Prop }) {
     case "tyres":
       return [0, 1, 2].map((i) => <mesh key={i} geometry={cyl} material={mat("#151515")} position={[0, 0.15 + i * 0.3, 0]} scale={[p.w, 0.28, p.d]} castShadow />);
     case "tank":
-      return <mesh geometry={cyl} material={mat("#1d1a16")} position={[0, p.h / 2, 0]} scale={[p.w, p.h, p.d]} castShadow />;
+      // the black plastic water tank on a steel stand that every Lagos compound has
+      return (
+        <>
+          {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => <B key={`${sx}${sz}`} p={[sx * p.w * 0.38, 0.75, sz * p.d * 0.38]} s={[0.08, 1.5, 0.08]} c="#5b5f63" />)}
+          <B p={[0, 1.52, 0]} s={[p.w * 0.95, 0.06, p.d * 0.95]} c="#5b5f63" />
+          <mesh geometry={cyl} material={mat("#1d1a16", { rough: 0.6 })} position={[0, 1.55 + (p.h - 1.55) / 2, 0]} scale={[p.w, p.h - 1.55, p.d]} castShadow />
+          <mesh geometry={cyl} material={mat("#2a2622")} position={[0, p.h + 0.04, 0]} scale={[p.w * 0.35, 0.08, p.d * 0.35]} />
+        </>
+      );
     case "generator":
       return (
         <>
@@ -465,6 +510,42 @@ function PropMesh({ p }: { p: Prop }) {
           <B p={[0, 0, 0]} s={[0.15, 0.02, p.w]} c="#eeeeee" shadow={false} />
         </group>
       );
+    case "porch":
+      return (
+        <>
+          <B p={[0, 0.07, 0]} s={[p.w, 0.14, p.d]} c={mat("#ffffff", { map: concrete(), tile: 1.2 })} />
+          <B p={[0, 0.14, 0]} s={[p.w * 0.6, 0.02, p.d * 0.7]} c="#7d2f2a" shadow={false} />
+        </>
+      );
+    case "pillar":
+      return (
+        <>
+          <mesh geometry={cyl} material={wallMat("#f4efe4")} position={[0, p.h / 2, 0]} scale={[0.26, p.h, 0.26]} castShadow />
+          <B p={[0, 0.08, 0]} s={[0.36, 0.16, 0.36]} c={wallMat("#d8cfbd")} />
+        </>
+      );
+    case "canopy":
+      return (
+        <>
+          <B p={[0, p.h + 0.08, 0]} s={[p.w, 0.12, p.d]} c={wallMat("#f4efe4")} />
+          <B p={[0, p.h + 0.2, 0]} s={[p.w + 0.1, 0.1, p.d + 0.1]} c={mat("#7a3b2a", { map: zinc(), tile: 1.5 })} />
+        </>
+      );
+    case "door_leaf":
+      // the front door, swung open into the parlour
+      return (
+        <>
+          <B p={[0, 1.05, 0]} s={[Math.max(p.w, 0.06), 2.1, Math.max(p.d, 0.06)]} c="#6b3a1f" />
+          <B p={[0, 1.05, 0]} s={[Math.max(p.w, 0.06) + 0.012, 0.08, Math.max(p.d, 0.06) + 0.012]} c="#c9a227" shadow={false} />
+        </>
+      );
+    case "ac":
+      return (
+        <>
+          <B p={[0, p.h, 0]} s={[p.w, 0.55, p.d]} c={mat("#e9ecee", { rough: 0.5 })} />
+          <mesh geometry={cyl} material={mat("#4b4f54")} position={[0, p.h, 0]} scale={[Math.min(p.w, p.d) * 0.8, 0.36, Math.min(p.w, p.d) * 0.8]} rotation={[p.w > p.d ? Math.PI / 2 : 0, 0, p.w > p.d ? 0 : Math.PI / 2]} />
+        </>
+      );
     case "fountain":
       return (
         <>
@@ -560,7 +641,12 @@ function Roof({ p }: { p: Prop }) {
       ) : (
         <>
           <mesh geometry={roofGeo} material={mat(p.color ?? "#9aa0a6", { map: zinc(2) })} position={[0, p.h + 0.85, 0]} scale={[p.w * 1.05, 1.7, p.d * 1.05]} castShadow />
-          <mesh geometry={cyl} material={mat("#1d1a16")} position={[p.w / 4, p.h + 1.2, -p.d / 4]} scale={[1, 1.1, 1]} castShadow />
+          {/* fascia board + satellite dish */}
+          <B p={[0, p.h + 0.05, 0]} s={[p.w + 0.1, 0.18, p.d + 0.1]} c={wallMat("#f4efe4")} />
+          <group position={[p.w / 4, p.h + 1.0, -p.d / 4]} rotation={[0.5, 0.8, 0]}>
+            <mesh geometry={sphere} material={mat("#e6e6e6", { rough: 0.4 })} scale={[0.9, 0.9, 0.25]} castShadow />
+            <B p={[0, 0, 0.3]} s={[0.04, 0.04, 0.6]} c="#9a9a9a" shadow={false} />
+          </group>
         </>
       )}
     </group>

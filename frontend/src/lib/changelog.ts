@@ -9,6 +9,18 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.1.0",
+    date: "2026-10-11",
+    title: "Real homes, cars & travel Naija 🚗🏡",
+    items: [
+      { emoji: "🛋️", title: "Room & parlour + decorate", text: "Houses now have a parlour and bedroom (duplexes add a kitchen). Buy furniture at Ọ̀ṣọ́ Home & Furniture and arrange it your way.", tryIt: "Go home and tap 🛋️ Decor" },
+      { emoji: "😴", title: "Sleep and sit", text: "Tap a bed to sleep (or sit on the edge); sofas and chairs work too. A nap refills your stamina." },
+      { emoji: "🗺️", title: "Map, pins & travel", text: "Tap the round map to pin any place. Board at the bus stop to any city venue — no game needed.", tryIt: "Tap the map (top left)" },
+      { emoji: "🚗", title: "Buy a car and drive", text: "Tokunbo Autos is beside the motor park. Drive around Lagos or straight to Abuja." },
+      { emoji: "⭕", title: "Fairer Boju + new phone look", text: "Everyone gathers in the circle before the dice, Boju catches you just by reaching you, and your phone got a full glow-up." },
+    ],
+  },
+  {
     version: "2.0.0",
     date: "2026-10-11",
     title: "Boju Boju v1: your life in Lagos 📱🏠",

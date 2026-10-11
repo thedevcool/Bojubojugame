@@ -3,19 +3,21 @@
 import { Html, Sky } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, N8AO, Vignette } from "@react-three/postprocessing";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
-import type { GameMap, RosterEntry } from "@/lib/types";
+import type { GameMap, Home, RosterEntry } from "@/lib/types";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
+import { setCatalog, toWorld, worldRotY, furn, checkLayout } from "./furniture";
+import { FurnitureLayer, FurnitureMesh } from "./FurnitureMeshes";
 import { navState, stopWalking, walkTo } from "./nav";
 import { inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
-import { MapProps } from "./props";
+import { MapProps, Vehicle } from "./props";
 import { sound } from "./sound";
-import { cam, fx, input, local, remotes, sample } from "./state";
+import { cam, fx, input, local, remotes, sample, sceneRefs } from "./state";
 import { grass, laterite } from "./textures";
 
 const SEND_HZ = 12;
@@ -59,12 +61,15 @@ function LocalPlayer({ map }: { map: GameMap }) {
   const last = useRef({ sent: 0, x: NaN, z: NaN, c: false, s: false });
   const seat = useRef<Seat | null>(null);
   const stuck = useRef({ t: 0, d: Infinity });
+  const avatarGroup = useRef<THREE.Group>(null);
+  const carGroup = useRef<THREE.Group>(null);
+  const carColor = useGame((s) => s.content?.config.cars.find((c) => c.id === s.life.carId)?.color);
   const cfg = useGame((s) => s.content?.config.movement);
   const me = useGame((s) => s.me);
   const av = useGame((s) => (s.me ? Object.values(s.roster).find((r) => r.id === s.me?.id)?.av : undefined));
   const { camera } = useThree();
   const want = useMemo(() => new THREE.Vector3(), []);
-  const camState = useRef({ dist: cam.dist, pitch: cam.pitch, clear: 1, home: null as string | null });
+  const camState = useRef({ dist: cam.dist, pitch: cam.pitch, clear: 1, lift: 0, home: null as string | null });
   navState.map = map;
 
   useFrame((state, rawDt) => {
@@ -101,19 +106,32 @@ function LocalPlayer({ map }: { map: GameMap }) {
     }
     if (!local.path.length) stuck.current.d = Infinity;
     const moving = mag > 0.08 && !local.frozen && (manual || local.path.length > 0);
-    if (moving && local.sit) { local.sit = false; useGame.getState().set({ sitting: false }); }
-    local.crouch = !local.sit && (input.crouchToggle || k.has("KeyC") || k.has("ControlLeft"));
+    if (moving && (local.sit || local.lie)) { local.sit = local.lie = false; useGame.getState().set({ sitting: false, sleeping: false }); }
+    if (manual) local.seatTarget = null;
+    // arrived at furniture you tapped: sit on it, or ask "sleep or sit?" for a bed
+    const tgt = local.seatTarget;
+    if (tgt && !local.path.length) {
+      local.seatTarget = null;
+      if (Math.hypot(tgt.x - local.x, tgt.z - local.z) < 2.2) {
+        if (tgt.bed) useGame.getState().set({ seatAsk: true });
+        else { local.sit = true; useGame.getState().set({ sitting: true }); }
+      }
+    }
+    local.crouch = !local.sit && !local.lie && (input.crouchToggle || k.has("KeyC") || k.has("ControlLeft"));
     const wantRun = (input.runHeld || input.joyRun || autoRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
     local.run = wantRun && moving && local.stamina > 0;
     if (local.run) local.stamina = Math.max(0, local.stamina - dt);
     else local.stamina = Math.min(cfg.stamina_max_s, local.stamina + cfg.stamina_regen_per_s * dt);
     local.moving = moving;
     let speed = 0;
+    const st0g = useGame.getState();
+    const myCar = local.drive ? st0g.content?.config.cars.find((c) => c.id === st0g.life.carId) : undefined;
+    if (local.drive && !myCar) local.drive = false;
     if (moving) {
-      speed = (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
+      speed = myCar ? myCar.speed * 0.97 * mag : (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
       const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
-      const locked = map.kind === "hub" && lockedHomeAt(map, nx, nz);
+      const locked = map.kind === "hub" && (lockedHomeAt(map, nx, nz) || (myCar && map.homes?.find((h) => inRect(h.rect, nx, nz))?.id));
       if (locked && !(map.homes?.find((h) => h.id === locked && inRect(h.rect, local.x, local.z)))) {
         // someone's house: knock first (the server would refuse the step anyway)
         if (local.path.length) stopWalking();
@@ -124,15 +142,21 @@ function LocalPlayer({ map }: { map: GameMap }) {
       local.ry = Math.atan2(vx, vz);
     }
     // sitting: snap to the nearest bed/bench, or sit on the floor
-    if (local.sit && !seat.current) {
-      seat.current = findSeat(map, local.x, local.z);
+    const resting = local.sit || local.lie;
+    if (resting && (!seat.current || !!seat.current.lie !== local.lie)) {
+      seat.current = findSeat(map, local.x, local.z, local.lie);
+      if (local.lie && !seat.current.lie) { local.lie = false; local.sit = true; useGame.getState().set({ sleeping: false, sitting: true }); }
       if (seat.current.ry !== null) local.ry = seat.current.ry;
-    } else if (!local.sit) seat.current = null;
-    motion.current.speed = speed;
+    } else if (!resting) seat.current = null;
+    if (local.lie) local.stamina = Math.min(cfg.stamina_max_s, local.stamina + dt * 2); // a nap restores your breath
+    motion.current.speed = myCar ? 0 : speed;
     motion.current.crouch = local.crouch;
+    if (avatarGroup.current) avatarGroup.current.visible = !myCar;
+    if (carGroup.current) carGroup.current.visible = !!myCar;
     motion.current.sit = local.sit;
+    motion.current.lie = local.lie;
     motion.current.seatY = seat.current?.y ?? 0;
-    sound.footsteps(speed, local.crouch);
+    sound.footsteps(myCar ? 0 : speed, local.crouch);
     local.insideHome = map.homes?.find((h) => inRect(h.rect, local.x, local.z))?.id ?? null;
     if (local.insideHome !== camState.current.home) {
       camState.current.home = local.insideHome;
@@ -155,7 +179,22 @@ function LocalPlayer({ map }: { map: GameMap }) {
     // ---- camera
     const c = camState.current;
     const onboarding = useGame.getState().onboard === "welcome";
-    if (cam.aerial.on) {
+    const decor = useGame.getState().decor;
+    const decorHome = decor ? map.homes?.find((h) => h.id === decor.home) : undefined;
+    if (decorHome) {
+      // decorate mode: look straight down into your house like a floor plan
+      const [hx, hz] = decorHome.center;
+      // fit the whole floor plan on screen (portrait phones are narrow), front door at the bottom
+      const pc = camera as THREE.PerspectiveCamera;
+      const tv = Math.tan(THREE.MathUtils.degToRad(pc.fov / 2));
+      const height = Math.max((decorHome.lw / 2 + 0.8) / (tv * pc.aspect), (decorHome.ld / 2 + 2.2) / tv);
+      const [fx0, fz0] = toWorld(decorHome, 0, 0.02);
+      want.set(fx0, height, fz0);
+      camera.position.lerp(want, 1 - Math.exp(-dt * 6));
+      camera.up.set(hx - fx0, 0, hz - fz0).normalize();
+      camera.lookAt(hx, 0, hz);
+    } else if (cam.aerial.on) {
+      camera.up.set(0, 1, 0);
       // map-app feel: targets move with your fingers, the camera glides after them, flicks keep coasting
       const a = cam.aerial;
       if (!a.drag) {
@@ -176,18 +215,33 @@ function LocalPlayer({ map }: { map: GameMap }) {
       camera.position.lerp(want, 1 - Math.exp(-dt * 9));
       camera.lookAt(a.x, 0, a.z);
     } else {
+      camera.up.set(0, 1, 0);
       const inside = !!local.insideHome;
       if (onboarding) cam.yaw += dt * 0.22; // slow welcome orbit
       // indoors you can still look all around the room, just from a closer, higher camera
-      const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : cam.dist;
-      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : cam.pitch;
+      const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : local.drive ? cam.dist + 4 : cam.dist;
+      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : local.drive ? Math.max(cam.pitch, 0.5) : cam.pitch;
       c.dist = THREE.MathUtils.lerp(c.dist, wantDist, 1 - Math.exp(-dt * 5));
       c.pitch = THREE.MathUtils.lerp(c.pitch, wantPitch, 1 - Math.exp(-dt * 5));
       const ox = Math.sin(cam.yaw) * c.dist * Math.cos(c.pitch), oy = Math.sin(c.pitch) * c.dist, oz = Math.cos(cam.yaw) * c.dist * Math.cos(c.pitch);
-      const clear = inside ? 1 : cameraClearance(map, local.x, HEAD_Y, local.z, local.x + ox, HEAD_Y - 0.1 + oy, local.z + oz);
+      let clear = 1;
+      let lift = 0;
+      if (inside) {
+        // indoors: keep the camera inside the room (a cut-away view from above), never out past the walls
+        const hr = map.homes?.find((h) => h.id === local.insideHome)?.rect;
+        if (hr) {
+          let t = 1;
+          const lim = (o: number, d: number, lo: number, hi: number) => (d > 0 ? (hi - o) / d : d < 0 ? (lo - o) / d : 1);
+          if (ox) t = Math.min(t, lim(local.x, ox, hr[0] + 0.3, hr[2] - 0.3));
+          if (oz) t = Math.min(t, lim(local.z, oz, hr[1] + 0.3, hr[3] - 0.3));
+          clear = Math.max(0.05, Math.min(1, t));
+          lift = (1 - clear) * c.dist * 0.6; // squeezed by a wall: rise up instead
+        }
+      } else clear = cameraClearance(map, local.x, HEAD_Y, local.z, local.x + ox, HEAD_Y - 0.1 + oy, local.z + oz);
       // pull in fast when blocked, ease back out slowly (no popping)
       c.clear = clear < c.clear ? clear : THREE.MathUtils.lerp(c.clear, clear, 1 - Math.exp(-dt * 3));
-      want.set(local.x + ox * c.clear, HEAD_Y - 0.1 + oy * c.clear, local.z + oz * c.clear);
+      c.lift = THREE.MathUtils.lerp(c.lift, lift, 1 - Math.exp(-dt * 6));
+      want.set(local.x + ox * c.clear, HEAD_Y - 0.1 + (inside ? oy + c.lift : oy * c.clear), local.z + oz * c.clear);
       camera.position.lerp(want, 1 - Math.exp(-dt * 14));
       if (fx.shake > 0.001) {
         camera.position.x += (Math.random() - 0.5) * fx.shake * 0.4;
@@ -207,19 +261,20 @@ function LocalPlayer({ map }: { map: GameMap }) {
     // ---- network (12 Hz, only when something changed)
     const now = state.clock.elapsedTime;
     const l = last.current;
-    if (now - l.sent >= 1 / SEND_HZ && (l.x !== local.x || l.z !== local.z || l.c !== local.crouch || l.s !== local.sit || now - l.sent > 1)) {
+    if (now - l.sent >= 1 / SEND_HZ && (l.x !== local.x || l.z !== local.z || l.c !== local.crouch || l.s !== (local.sit || local.lie) || now - l.sent > 1)) {
       l.sent = now;
       l.x = local.x;
       l.z = local.z;
       l.c = local.crouch;
-      l.s = local.sit;
-      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, st: local.sit, s: ++local.seq });
+      l.s = local.sit || local.lie;
+      net.send({ t: "mv", x: +local.x.toFixed(2), z: +local.z.toFixed(2), ry: +local.ry.toFixed(2), c: local.crouch, r: local.run, st: local.sit, ly: local.lie, dr: local.drive, s: ++local.seq });
     }
   });
 
   return (
     <group ref={group}>
-      <Avatar av={av ?? [0, 0, 0]} me={!!me} motion={motion} />
+      <group ref={avatarGroup}><Avatar av={av ?? [0, 0, 0]} me={!!me} motion={motion} /></group>
+      <group ref={carGroup} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]} visible={false}>
         <ringGeometry args={[1.2, 1.8, 32]} />
         <meshBasicMaterial color="#2f7cf6" transparent opacity={0.85} depthWrite={false} />
@@ -236,6 +291,9 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   const emote = useGame((s) => s.emotes.find((e) => e.n === r.n && e.until > Date.now()));
   // the name tag is DOM (not hidden with the 3D group), so mirror visibility in React state
   const [shown, setShown] = useState(false);
+  const avatarRef = useRef<THREE.Group>(null);
+  const carRef = useRef<THREE.Group>(null);
+  const carColor = useGame((s) => (r.car ? s.content?.config.cars.find((c) => c.id === r.car)?.color : undefined));
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
@@ -248,10 +306,15 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
     prev.current = { x: snap.x, z: snap.z };
     motion.current.speed = THREE.MathUtils.lerp(motion.current.speed, Math.min(sp, 7), 0.25);
     motion.current.crouch = (snap.f & 1) === 1;
-    const sitting = (snap.f & 16) === 16;
-    if (sitting && !seat.current) seat.current = findSeat(map, snap.x, snap.z);
-    if (!sitting) seat.current = null;
+    const driving = (snap.f & 64) === 64 && !!carColor;
+    if (avatarRef.current) avatarRef.current.visible = !driving;
+    if (carRef.current) carRef.current.visible = driving;
+    const lying = (snap.f & 32) === 32;
+    const sitting = (snap.f & 16) === 16 && !lying;
+    if ((sitting || lying) && (!seat.current || !!seat.current.lie !== lying)) seat.current = findSeat(map, snap.x, snap.z, lying);
+    if (!sitting && !lying) seat.current = null;
     motion.current.sit = sitting;
+    motion.current.lie = lying && !!seat.current?.lie;
     motion.current.seatY = seat.current?.y ?? 0;
     const s = seat.current;
     g.position.set(s ? s.x : snap.x, 0, s ? s.z : snap.z);
@@ -259,13 +322,48 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   });
   return (
     <group ref={group} visible={false}>
-      <Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} />
+      <group ref={avatarRef}><Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} /></group>
+      <group ref={carRef} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
     </group>
   );
 }
 
+/** Decorate mode: your draft layout, with the selected item lifted and tinted (red if it can't go there). */
+function DecorDraft({ homes }: { homes: Home[] }) {
+  const decor = useGame((s) => s.decor);
+  if (!decor) return null;
+  const h = homes.find((x) => x.id === decor.home);
+  if (!h) return null;
+  const placed = decor.items.filter((i) => i.placed);
+  const problem = checkLayout(h, placed);
+  return (
+    <>
+      {placed.map((it) => {
+        const s = furn.catalog[it.item];
+        if (!s) return null;
+        const [x, z] = toWorld(h, it.lx, it.lz);
+        const sel = decor.sel === it.id;
+        const bad = problem?.id === it.id;
+        return (
+          <group key={it.id} position={[x, sel ? 0.12 : 0, z]} rotation={[0, worldRotY(h, it.rot), 0]}>
+            <FurnitureMesh s={s} />
+            {(sel || bad) && (
+              <mesh position={[0, 0.03 - (sel ? 0.12 : 0) + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[s.w, s.d]} />
+                <meshBasicMaterial color={bad ? "#ff3b30" : "#2f7cf6"} transparent opacity={0.45} depthWrite={false} />
+              </mesh>
+            )}
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
 function DebugHook() {
-  const { scene, camera } = useThree();
+  const { scene, camera, gl } = useThree();
+  sceneRefs.camera = camera;
+  sceneRefs.canvas = gl.domElement;
   const w = window as unknown as { __boju?: Record<string, unknown> };
   if (w.__boju) Object.assign(w.__boju, { scene, camera });
   return null;
@@ -287,6 +385,7 @@ function lockedHomeAt(map: GameMap, x: number, z: number): string | null {
 }
 
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 /** Tap-to-move: turns a screen tap into a ground point and plans a walk there. */
 function TapMover() {
@@ -316,7 +415,33 @@ function TapMover() {
       }
     }
     if (best) { st.set({ card: best }); sound.play("pop"); return; }
-    if (!t.walk || local.frozen) return;
+    if (local.frozen) return;
+    ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    {
+      // tapped a bed / sofa / chair (inside a house)? test the ray against each one at its own height
+      let f: (typeof furn.boxes)[number] | undefined;
+      let fd = Infinity;
+      for (const b of furn.boxes) {
+        const s = furn.catalog[b.item];
+        if (!s || !(s.bed || s.seat !== null) || Math.hypot(b.cx - local.x, b.cz - local.z) > 25) continue;
+        topPlane.constant = -Math.min(s.h, 0.9) * 0.9;
+        if (!ray.ray.intersectPlane(topPlane, hit)) continue;
+        if (hit.x < b.x0 - 0.1 || hit.x > b.x1 + 0.1 || hit.z < b.z0 - 0.1 || hit.z > b.z1 + 0.1) continue;
+        const d = ray.ray.origin.distanceTo(hit);
+        if (d < fd) { fd = d; f = b; }
+      }
+      if (f) {
+        const cx = Math.min(Math.max(local.x, f.x0), f.x1), cz = Math.min(Math.max(local.z, f.z0), f.z1);
+        const d = Math.hypot(local.x - cx, local.z - cz);
+        const bed = !!furn.catalog[f.item]?.bed;
+        local.seatTarget = { x: cx, z: cz, bed };
+        if (d > 0.9) walkTo(cx + ((local.x - cx) / (d || 1)) * 0.6, cz + ((local.z - cz) / (d || 1)) * 0.6);
+        sound.play("pop");
+        return;
+      }
+    }
+    if (!t.walk) return;
     ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (!ray.ray.intersectPlane(groundPlane, hit)) return;
@@ -354,6 +479,7 @@ function GuideMarker() {
   const arrow = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!guide) return;
+    if (pin.current) pin.current.visible = Math.hypot(guide.x - local.x, guide.z - local.z) > 4;
     if (pin.current) {
       pin.current.position.set(guide.x, 3.2 + Math.sin(clock.elapsedTime * 3) * 0.25, guide.z);
       pin.current.rotation.y = clock.elapsedTime * 1.5;
@@ -385,6 +511,30 @@ function GuideMarker() {
         </mesh>
       </group>
     </>
+  );
+}
+
+/** The meeting circle everyone stands in before the dice (pulses, turns green when you're in). */
+function GatherCircle() {
+  const gather = useGame((s) => (s.group?.phase === "gather" ? s.group.gather : null));
+  const inside = useGame((s) => !!s.me && !!s.group?.gather?.in.includes(s.me.id));
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 3) * 0.03);
+  });
+  if (!gather) return null;
+  const [x, z] = gather.center;
+  return (
+    <group position={[x, 0.07, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={ring}>
+        <ringGeometry args={[gather.r - 0.35, gather.r, 64]} />
+        <meshBasicMaterial color={inside ? "#39d353" : "#ffffff"} transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+      <mesh>
+        <circleGeometry args={[gather.r - 0.35, 64]} />
+        <meshBasicMaterial color={inside ? "#39d353" : "#2f7cf6"} transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
@@ -465,6 +615,8 @@ function Sun({ shadows }: { shadows: boolean }) {
 
 function World({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
+  const catalog = useGame((s) => s.content?.config.furniture);
+  useEffect(() => { setCatalog(catalog ?? [], map); }, [catalog, map]);
   const aerial = useGame((s) => s.aerial);
   const b = map.bounds;
   const cx = (b[0] + b[2]) / 2, cz = (b[1] + b[3]) / 2;
@@ -486,8 +638,11 @@ function World({ map }: { map: GameMap }) {
       </mesh>
       <MapProps props={map.props} lowDetail={quality === "low"} />
       <Markers map={map} />
+      <GatherCircle />
       <AerialLabels map={map} />
       {map.kind === "hub" && <Ambient map={map} />}
+      {map.kind === "hub" && map.homes && <FurnitureLayer homes={map.homes} />}
+      {map.kind === "hub" && map.homes && <DecorDraft homes={map.homes} />}
       <LocalPlayer map={map} />
       <Remotes map={map} />
       <TapMover />
@@ -506,7 +661,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

@@ -109,3 +109,46 @@ async def test_visitors_must_knock_and_owner_must_be_online(db):
     # knocking on an offline owner's door gets no answer
     await send(world, v, t="knock", home=home["id"])
     assert "not online" in vc.last("err")["msg"]
+
+
+async def test_travel_without_a_game_and_drive_your_car(db):
+    world, clock, s, c = await setup(db)
+    from tests.test_group_flow import zone_point
+
+    await world.economy.post(s.pid, 50000, "starting_balance", f"start:{s.pid}")
+    bal0 = await world.economy.balance(s.pid)
+    # boarding needs the bus stop
+    await send(world, s, t="trip", to="arena_park", mode="danfo", key="trip-key-001")
+    assert "bus stop" in c.last("err")["msg"]
+    s.x, s.z = zone_point("bus_stop")
+    await send(world, s, t="trip", to="arena_park", mode="danfo", key="trip-key-002")
+    assert s.room is world.explore["arena_park"] and c.last("ride")["dir"] == "go"
+    assert await world.economy.balance(s.pid) < bal0
+    # no starting games from a trip
+    await send(world, s, t="g_create", arena="arena_park", hide=30, search=180, safe="", bots=1)
+    assert "Lagos" in c.last("err")["msg"]
+    # own car: needs one; then drive home from anywhere for free
+    await send(world, s, t="trip", to="hub", mode="own_car", key="trip-key-003")
+    assert "car" in c.last("err")["msg"]
+    s.car = "sedan"
+    s.limits.clear()  # trip rate limit is real-time based
+    bal1 = await world.economy.balance(s.pid)
+    await send(world, s, t="trip", to="hub", mode="own_car", key="trip-key-004")
+    assert s.room.map.id == "hub_plaza" and c.last("ride")["dir"] == "home"
+    assert await world.economy.balance(s.pid) == bal1
+
+    # driving: 8 m/s is fine in your car, not on foot
+    s.place(0.0, -40.0, clock.t, notify=False)
+    s.limits.clear()
+    x = 0.0
+    for i in range(10):
+        clock.t += 0.1
+        x += 0.8
+        await send(world, s, t="mv", x=round(x, 2), z=-40.0, ry=0, c=False, r=False, st=False, dr=True, s=i + 1)
+    assert abs(s.x - x) < 0.01 and s.driving
+    c.msgs.clear()
+    for i in range(10):
+        clock.t += 0.1
+        x += 0.8
+        await send(world, s, t="mv", x=round(x, 2), z=-40.0, ry=0, c=False, r=False, st=False, dr=False, s=i + 20)
+    assert c.last("corr") is not None

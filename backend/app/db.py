@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, inspect, text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -38,6 +38,7 @@ class Player(Base):
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     # Life sim: the phone you bought and the house you rent
     phone_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    car_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     home_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     rent_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -67,6 +68,20 @@ class Friendship(Base):
     b_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
     requested_by: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(10), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class FurnitureItem(Base):
+    """A piece of furniture a player owns. Placed items sit in their house (local coords, see app/houses.py)."""
+
+    __tablename__ = "furniture"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    item: Mapped[str] = mapped_column(String(24))
+    placed: Mapped[bool] = mapped_column(Boolean, default=False)
+    lx: Mapped[float] = mapped_column(Float, default=0.0)
+    lz: Mapped[float] = mapped_column(Float, default=0.0)
+    rot: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -1,11 +1,11 @@
 import type { GameMap, Rect } from "@/lib/types";
+import { solidColliders } from "./furniture";
 
 /** Client-side mirror of backend/app/engine/geometry.py for smooth prediction. */
 export function resolveCollision(map: GameMap, x: number, z: number, r: number): [number, number] {
   for (let iter = 0; iter < 3; iter++) {
     let moved = false;
-    for (const p of map.props) {
-      const c = p.collider;
+    for (const c of [...map.props.map((p) => p.collider), ...solidColliders()]) {
       if (!c) continue;
       const cx = Math.min(Math.max(x, c[0]), c[2]);
       const cz = Math.min(Math.max(z, c[1]), c[3]);

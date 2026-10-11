@@ -14,12 +14,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app import houses
 from app.accounts import Me
 from app.content import HUB_MAP_ID, GameConfig
-from app.db import Database, DirectMessage, Friendship, Player, RoundStat
+from app.db import Database, DirectMessage, Friendship, FurnitureItem, Player, RoundStat
 from app.economy import InsufficientFunds
 from app.engine.geometry import in_rect
-from app.realtime.world import World
+from app.realtime.world import World, furniture_row
 from app.safety import KeyedLimiter, TextRejected, clean_chat
 
 
@@ -28,9 +29,34 @@ class BuyPhoneIn(BaseModel):
     key: str = Field(min_length=8, max_length=64)
 
 
+class BuyCarIn(BaseModel):
+    car_id: str = Field(max_length=20)
+    key: str = Field(min_length=8, max_length=64)
+
+
 class RentIn(BaseModel):
     home_id: str = Field(max_length=40)
     key: str = Field(min_length=8, max_length=64)
+
+
+MAX_FURNITURE = 60
+
+
+class BuyFurnitureIn(BaseModel):
+    item: str = Field(max_length=24)
+    key: str = Field(min_length=8, max_length=64)
+
+
+class LayoutChange(BaseModel):
+    id: int
+    placed: bool
+    lx: float = Field(ge=-10, le=10)
+    lz: float = Field(ge=-10, le=10)
+    rot: int = Field(ge=0, le=3)
+
+
+class LayoutIn(BaseModel):
+    items: list[LayoutChange] = Field(max_length=MAX_FURNITURE)
 
 
 class FriendIn(BaseModel):
@@ -104,6 +130,38 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             p.phone_id = phone.id
         await push_wallet(pid)
         return {"ok": True, "phone_id": phone.id}
+
+    # ------------------------------------------------------------ cars
+    @r.post("/shop/car")
+    async def buy_car(body: BuyCarIn, pid: Me) -> dict[str, Any]:
+        car = cfg.car(body.car_id)
+        if car is None:
+            raise HTTPException(404, "Unknown car")
+        s = world.sessions.get(pid)
+        zone = hub.zones.get("car_shop")
+        if (
+            s is None
+            or s.room is None
+            or s.room.map.id != HUB_MAP_ID
+            or zone is None
+            or not in_rect(zone["rect"], s.x, s.z)
+        ):
+            raise HTTPException(409, "Walk into Tokunbo Autos to buy a car")
+        if s.car == car.id:
+            raise HTTPException(409, "You already own this car")
+        try:
+            await world.economy.post(pid, -car.price, "car", f"car:{pid}:{body.key}", ref=car.id)
+        except InsufficientFunds:
+            raise HTTPException(402, "Omo, your money no reach for this motor") from None
+        async with db.sessions() as ses, ses.begin():
+            p = await ses.get(Player, pid, with_for_update=True)
+            assert p is not None
+            p.car_id = car.id
+        s.car = car.id
+        if s.room is not None:
+            s.room.broadcast_roster()
+        await push_wallet(pid)
+        return {"ok": True, "car_id": car.id}
 
     # ------------------------------------------------------------ houses
     @r.get("/homes")
@@ -196,12 +254,120 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             p.rent_until = start + timedelta(days=cfg.rent.days)
             until = p.rent_until
         if evicted:
+            await unplace_all(evicted)
             world.set_home(evicted, None)
             if (s := world.sessions.get(evicted)) is not None:
                 s.send({"t": "toast", "msg": "Your rent ran out and someone new moved into your house 🏠"})
+        moved = prev_home != home["id"]
+        if moved and prev_home:
+            world.set_furniture(prev_home, [])
         world.set_home(pid, home["id"])
+        if moved:
+            world.set_furniture(home["id"], await furnish(pid, home))
         await push_wallet(pid)
         return {"ok": True, "home": home, "rent_until": until.isoformat()}
+
+    # ------------------------------------------------------------ furniture: shop, inventory, decorate
+    def layout_of(home: dict[str, Any]) -> houses.Layout:
+        return houses.layout(home["lw"], home["ld"], home["style"])
+
+    async def unplace_all(owner: str) -> None:
+        async with db.sessions() as ses, ses.begin():
+            await ses.execute(update(FurnitureItem).where(FurnitureItem.player_id == owner).values(placed=False))
+
+    async def furnish(owner: str, home: dict[str, Any]) -> list[dict[str, Any]]:
+        """Moving in: first house comes with starter furniture; later moves keep your layout where it fits."""
+        lay, catalog = layout_of(home), cfg.furniture_by_id()
+        async with db.sessions() as ses, ses.begin():
+            mine = list(
+                (
+                    await ses.scalars(
+                        select(FurnitureItem).where(FurnitureItem.player_id == owner).order_by(FurnitureItem.id)
+                    )
+                ).all()
+            )
+            if not mine:
+                for item, lx, lz, rot in houses.starter_set(lay):
+                    ses.add(FurnitureItem(player_id=owner, item=item, placed=True, lx=lx, lz=lz, rot=rot))
+                await ses.flush()
+                mine = list((await ses.scalars(select(FurnitureItem).where(FurnitureItem.player_id == owner))).all())
+            else:
+                ok: list[houses.Placement] = []
+                for it in mine:
+                    if not it.placed:
+                        continue
+                    trial = [*ok, houses.Placement(it.id, it.item, it.lx, it.lz, it.rot)]
+                    if houses.check_layout(lay, trial, catalog) is None:
+                        ok = trial
+                    else:
+                        it.placed = False  # doesn't fit in the new house: back to your store room
+            return [furniture_row(it) for it in mine if it.placed]
+
+    @r.get("/furniture")
+    async def my_furniture(pid: Me) -> dict[str, Any]:
+        async with db.sessions() as ses:
+            rows = (
+                await ses.scalars(
+                    select(FurnitureItem).where(FurnitureItem.player_id == pid).order_by(FurnitureItem.id)
+                )
+            ).all()
+        return {"items": [{**furniture_row(it), "placed": it.placed} for it in rows]}
+
+    @r.post("/shop/furniture")
+    async def buy_furniture(body: BuyFurnitureIn, pid: Me) -> dict[str, Any]:
+        spec = cfg.furniture_by_id().get(body.item)
+        if spec is None:
+            raise HTTPException(404, "Unknown item")
+        s = world.sessions.get(pid)
+        zone = hub.zones.get("furniture_shop")
+        if (
+            s is None
+            or s.room is None
+            or s.room.map.id != HUB_MAP_ID
+            or zone is None
+            or not in_rect(zone["rect"], s.x, s.z)
+        ):
+            raise HTTPException(409, "Walk into the furniture shop to buy furniture")
+        async with db.sessions() as ses:
+            count = await ses.scalar(select(func.count()).where(FurnitureItem.player_id == pid))
+        if (count or 0) >= MAX_FURNITURE:
+            raise HTTPException(409, f"Your store room is full ({MAX_FURNITURE} items)")
+        try:
+            await world.economy.post(pid, -spec.price, "furniture", f"furn:{pid}:{body.key}", ref=spec.id)
+        except InsufficientFunds:
+            raise HTTPException(402, "Omo, your money no reach for this one") from None
+        async with db.sessions() as ses, ses.begin():
+            it = FurnitureItem(player_id=pid, item=spec.id, placed=False)
+            ses.add(it)
+            await ses.flush()
+            row = {**furniture_row(it), "placed": False}
+        await push_wallet(pid)
+        return {"ok": True, "item": row}
+
+    @r.post("/home/layout")
+    async def save_layout(body: LayoutIn, pid: Me) -> dict[str, Any]:
+        """Decorate mode: move, rotate, place or store your furniture. The whole layout must be valid."""
+        async with db.sessions() as ses, ses.begin():
+            p = await ses.get(Player, pid)
+            home = hub.home_by_id(p.home_id) if p else None
+            if home is None:
+                raise HTTPException(409, "Rent a house first")
+            mine = {
+                it.id: it
+                for it in (await ses.scalars(select(FurnitureItem).where(FurnitureItem.player_id == pid))).all()
+            }
+            for ch in body.items:
+                it = mine.get(ch.id)
+                if it is None:
+                    raise HTTPException(404, "That item isn't yours")
+                it.placed, it.lx, it.lz, it.rot = ch.placed, round(ch.lx, 2), round(ch.lz, 2), ch.rot % 4
+            placed = [houses.Placement(it.id, it.item, it.lx, it.lz, it.rot) for it in mine.values() if it.placed]
+            problem = houses.check_layout(layout_of(home), placed, cfg.furniture_by_id())
+            if problem:
+                raise HTTPException(422, problem)  # rolls back
+            rows = [furniture_row(it) for it in mine.values() if it.placed]
+        world.set_furniture(home["id"], rows)
+        return {"ok": True, "items": rows}
 
     # ------------------------------------------------------------ friends
     async def friend_rows(ses: Any, pid: str) -> list[Friendship]:

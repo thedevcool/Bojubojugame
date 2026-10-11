@@ -16,6 +16,8 @@ export interface Prop {
   line?: string;
   style?: string;
   y?: number;
+  win?: boolean;
+  inner?: boolean;
   collider: [number, number, number, number, number] | null;
 }
 
@@ -43,7 +45,16 @@ export interface GameMap {
   venue?: { name: string; lat: number; lng: number };
 }
 
-export interface Home { id: string; name: string; rect: Rect; spawn: [number, number]; door: [number, number] }
+export interface Home {
+  id: string; name: string; rect: Rect; spawn: [number, number]; door: [number, number];
+  /** house centre, door side and local size (local frame: door on +z) */
+  center: [number, number]; dir: "n" | "s" | "e" | "w"; lw: number; ld: number; style: string;
+  walls: Rect[]; doorways: Rect[]; rooms: { name: string; rect: Rect }[];
+}
+
+export interface FurnitureSpec { id: string; name: string; price: number; w: number; d: number; h: number; category: string; solid: boolean; seat: number | null; bed: boolean }
+export interface CarModel { id: string; name: string; price: number; color: string; speed: number; tagline: string }
+export interface PlacedItem { id: number; item: string; lx: number; lz: number; rot: number }
 
 export interface Item { id: string; name: string; category: string; price: number; hunger: number; spot: string | null }
 export interface Fare { id: string; name: string; price: number; ride_s: number }
@@ -80,6 +91,8 @@ export interface GameConfig {
   cities: City[];
   home_coords: Record<string, [number, number]>;
   phones: PhoneModel[];
+  furniture: FurnitureSpec[];
+  cars: CarModel[];
   rent: { days: number; prices: Record<string, number> };
 }
 
@@ -125,7 +138,7 @@ export interface RoundResult {
 
 export interface Standing { id: string; nick: string; earned: number; finds: number; survived: number }
 
-export type Phase = "lobby" | "travel" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
+export type Phase = "lobby" | "travel" | "gather" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
 
 export interface GroupState {
   id: string;
@@ -140,8 +153,9 @@ export interface GroupState {
   pending_seeker: string | null;
   last_result: RoundResult | null;
   final: Standing[] | null;
+  gather: { center: [number, number]; r: number; in: string[] } | null;
   event: string;
 }
 
 export interface ChatMsg { ch: "group" | "near"; from: string; nick: string; text: string; ts: number }
-export interface RosterEntry { n: number; id: string; nick: string; av: number[]; bot?: boolean }
+export interface RosterEntry { n: number; id: string; nick: string; av: number[]; bot?: boolean; car?: string | null }

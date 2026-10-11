@@ -62,24 +62,39 @@ names = [
     "No. 8 Adeniji St",
     "No. 10 Adeniji St",
 ]
+# room-and-parlour bungalows: 11 m wide, 10 m deep
 for i, x in enumerate((-68, -50, -32, -16)):
-    P("home", x, 26, 9, 8, 3.2, door="n", id=f"adeniji_{i * 2 + 3}", name=names[i], color=colors[i], roof=roofs[i % 4])
+    # both rows face Adeniji Street (z = 40)
+    P(
+        "home",
+        x,
+        27,
+        11,
+        10,
+        3.2,
+        door="s",
+        id=f"adeniji_{i * 2 + 3}",
+        name=names[i],
+        color=colors[i],
+        roof=roofs[i % 4],
+    )
     P(
         "home",
         x,
         54,
-        9,
-        8,
+        11,
+        10,
         3.2,
-        door="s",
+        door="n",
         id=f"adeniji_{i * 2 + 4}",
         name=names[i + 4],
         color=colors[i + 4],
         roof=roofs[(i + 1) % 4],
     )
-    P("generator", x + 5.6, 22.5, 1.4, 0.9, 1.1)
-    P("generator", x - 5.6, 57.5, 1.4, 0.9, 1.1)
-    P("palm" if i % 2 else "tree", x + 6.5, 31, 2, 2, 6.5)
+    P("generator", x + 7.3, 23, 1.4, 0.9, 1.1)
+    P("generator", x - 7.3, 57, 1.4, 0.9, 1.1)
+    P("tank", x - 7.4, 24, 1.3, 1.3, 2.6)  # water tank on a stand
+    P("palm" if i % 2 else "tree", x + 7.6, 32.6, 2, 2, 6.5)
 for x in (-59, -41, -24):
     P("fence", x, 24.5, 0.25, 11, 1.6, color="#c9b48a")
     P("fence", x, 55.5, 0.25, 11, 1.6, color="#c9b48a")
@@ -102,8 +117,8 @@ for i, (x, z, door) in enumerate(((-62, -30, "s"), (-36, -30, "s"), (-62, -62, "
         "home",
         x,
         z,
+        13,
         11,
-        9,
         3.4,
         door=door,
         id=f"estate_{i + 1}",
@@ -114,8 +129,8 @@ for i, (x, z, door) in enumerate(((-62, -30, "s"), (-36, -30, "s"), (-62, -62, "
     )
     P(
         "car",
-        x + 7.5,
-        z + (5 if door == "s" else -5),
+        x + (8.5 if i in (0, 1) else -8.5),
+        z + (7.5 if door == "s" else -7.5),
         2,
         4.2,
         1.5,
@@ -137,25 +152,34 @@ P("lot", 55, 23, 30, 22, 0.02)
 for x in (46, 52, 58):
     P("danfo", x, 27, 2.4, 6, 2.6)
 P("keke", 64, 24, 1.4, 2.4, 1.8)
+# Tokunbo Autos: a car lot beside the motor park
+P("sign", 66, 34.6, 6, 0.3, 4, text="TOKUNBO AUTOS")
+for x, c in ((61, "#c0392b"), (66, "#1d1a16"), (71, "#2f6db5")):
+    P("car", x, 39, 2, 4.2, 1.5, color=c)
+# Tokunbo Autos: a car lot beside the motor park
+P("sign", 66, 34.6, 6, 0.3, 4, text="TOKUNBO AUTOS")
+for x, c in ((61, "#c0392b"), (66, "#1d1a16"), (71, "#2f6db5")):
+    P("car", x, 39, 2, 4.2, 1.5, color=c)
 P("keke", 66, 28, 1.4, 2.4, 1.8)
 P("bus_shelter", 50, 14.5, 8, 2, 2.8, text="MOTOR PARK")
 P("sign", 62, 12.5, 4, 0.3, 3.4, text="OSHODI • CMS • OBALENDE")
 for z, txt, c in (
-    (26, "OGA PHONE", "#3d7fd9"),
+    (26, "TINI TECH", "#3d7fd9"),
     (32, "BISI PROVISIONS", "#2f9e57"),
     (38, "SHARP CUT BARBER", "#8e44ad"),
     (44, "GOOD HEALTH CHEMIST", "#d94f3d"),
+    (50, "OSO HOME & FURNITURE", "#8b5a2b"),
 ):
     P("shop", 12, z, 4, 5, 3.2, color=c, text=txt, face="w")
 P("venue", 42, 62, 18, 12, 7, color="#6b3fa0", text="EVENTS — coming soon")
 # Bode Close: more homes beside the events ground (each house has one tenant; add streets as players grow)
-for i, (x, z, door) in enumerate(((70, 51, "w"), (70, 62, "w"), (70, 73, "w"), (22, 62, "e"), (22, 73, "e"))):
+for i, (x, z, door) in enumerate(((70, 50, "w"), (70, 62, "w"), (70, 74, "w"), (22, 61, "e"), (22, 73.5, "e"))):
     P(
         "home",
         x,
         z,
-        9,
-        8,
+        10,
+        11,
         3.2,
         door=door,
         id=f"bode_{i + 1}",
@@ -165,7 +189,7 @@ for i, (x, z, door) in enumerate(((70, 51, "w"), (70, 62, "w"), (70, 73, "w"), (
     )
 P("kiosk", 24, 24, 2.4, 2.4, 2.6, color="#f7c500", text="RECHARGE")
 P("tree", 30, 38, 3, 3, 6.5)
-P("tree", 66, 44, 3, 3, 6.5)
+P("tree", 62, 42, 3, 3, 6.5)
 P("palm", 24, 50, 2, 2, 7)
 P("billboard", 30, 9.2, 8, 0.4, 7, text="SUPA MALT — e sweet die!")
 P("billboard", -40, -9.2, 8, 0.4, 7, text="NAIJA FRESH BREAD")
@@ -203,7 +227,14 @@ hub = {
     "safe_houses": [],
     "zones": [
         {"id": "bus_stop", "kind": "bus_stop", "name": "Motor Park", "rect": [44, 9, 56, 18]},
-        {"id": "phone_shop", "kind": "phone_shop", "name": "Oga Phone", "rect": [6.8, 23.6, 9.9, 28.4]},
+        {"id": "phone_shop", "kind": "phone_shop", "name": "Tini Tech", "rect": [6.8, 23.6, 9.9, 28.4]},
+        {"id": "car_shop", "kind": "car_shop", "name": "Tokunbo Autos", "rect": [58, 34, 74, 37]},
+        {
+            "id": "furniture_shop",
+            "kind": "furniture_shop",
+            "name": "Ọ̀ṣọ́ Home & Furniture",
+            "rect": [6.8, 47.6, 9.9, 52.4],
+        },
         {"id": "suya", "kind": "food", "name": "Suya Spot", "rect": [11, 8.5, 19, 15]},
         {"id": "corn", "kind": "food", "name": "Roasted Corn", "rect": [19, 8.5, 24, 15]},
         {"id": "mama_put", "kind": "food", "name": "Mama Put", "rect": [26.8, 12.4, 33.2, 17.6]},

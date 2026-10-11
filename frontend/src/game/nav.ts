@@ -1,4 +1,5 @@
 import type { GameMap } from "@/lib/types";
+import { furn, solidColliders } from "./furniture";
 import { local } from "./state";
 
 /**
@@ -15,7 +16,7 @@ const cache = new Map<string, Grid>();
 function build(map: GameMap): Grid {
   const [bx0, bz0, bx1, bz1] = map.bounds;
   const w = Math.floor((bx1 - bx0) / CELL), h = Math.floor((bz1 - bz0) / CELL);
-  const boxes = map.props.map((p) => p.collider).filter((c): c is [number, number, number, number, number] => !!c);
+  const boxes = [...map.props.map((p) => p.collider), ...solidColliders()].filter((c): c is [number, number, number, number, number] => !!c);
   const walk = new Uint8Array(w * h).fill(1);
   const r = RADIUS + 0.05;
   for (let i = 0; i < w; i++) { walk[i * h] = 0; walk[i * h + h - 1] = 0; }
@@ -34,8 +35,9 @@ function build(map: GameMap): Grid {
 }
 
 function grid(map: GameMap): Grid {
-  let g = cache.get(map.id);
-  if (!g) { g = build(map); cache.set(map.id, g); }
+  const key = `${map.id}:${map.kind === "hub" ? furn.version : 0}`; // furniture moves -> rebuild
+  let g = cache.get(key);
+  if (!g) { cache.clear(); g = build(map); cache.set(key, g); }
   return g;
 }
 

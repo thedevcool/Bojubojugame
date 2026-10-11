@@ -23,6 +23,8 @@ class Move(_In):
     c: bool = False  # crouch
     r: bool = False  # run
     st: bool = False  # sitting
+    ly: bool = False  # lying down (sleeping on a bed)
+    dr: bool = False  # driving your car
     s: int = Field(ge=0, le=2**31)
 
 
@@ -73,6 +75,15 @@ class KnockAnswer(_In):
     ok: bool
 
 
+class Trip(_In):
+    """Travel without a game: board at a bus stop (fare id) or drive your own car ("own_car")."""
+
+    t: Literal["trip"]
+    to: str = Field(max_length=40)  # "hub" or an arena id
+    mode: str = Field(max_length=20)
+    key: str = Field(min_length=8, max_length=64)
+
+
 class Board(_In):
     t: Literal["g_board"]
     fare: str = Field(max_length=20)
@@ -115,6 +126,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_board": Board,
     "g_invite": Invite,
     "knock": Knock,
+    "trip": Trip,
     "knock_answer": KnockAnswer,
     "g_pick": Pick,
     "emote": Emote,

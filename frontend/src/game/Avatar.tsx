@@ -8,7 +8,7 @@ import { BOTTOMS, SKIN } from "./palette";
 import { mat } from "./props";
 import { ankara } from "./textures";
 
-export interface Motion { speed: number; crouch: boolean; sit?: boolean; seatY?: number }
+export interface Motion { speed: number; crouch: boolean; sit?: boolean; seatY?: number; lie?: boolean }
 
 const box = new THREE.BoxGeometry(1, 1, 1);
 const cap = new THREE.CapsuleGeometry(0.5, 1, 3, 8);
@@ -54,7 +54,8 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
   const neck = useRef<THREE.Group>(null);
   const legs: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
   const arms: Limb[] = [{ upper: useRef(null), lower: useRef(null) }, { upper: useRef(null), lower: useRef(null) }];
-  const st = useRef({ phase: 0, bend: 0, speed: 0, sit: 0 });
+  const st = useRef({ phase: 0, bend: 0, speed: 0, sit: 0, lie: 0 });
+  const body = useRef<THREE.Group>(null);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -62,7 +63,13 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
     const k = st.current;
     k.bend = THREE.MathUtils.damp(k.bend, m.crouch ? 1 : 0, 10, dt); // smooth into/out of the squat
     k.speed = THREE.MathUtils.damp(k.speed, m.speed, 8, dt);
-    k.sit = THREE.MathUtils.damp(k.sit, m.sit ? 1 : 0, 7, dt);
+    k.sit = THREE.MathUtils.damp(k.sit, m.sit && !m.lie ? 1 : 0, 7, dt);
+    k.lie = THREE.MathUtils.damp(k.lie, m.lie ? 1 : 0, 5, dt);
+    if (body.current) {
+      // lying on a bed: tip over backwards so the head rests at the headboard (-z), face up
+      body.current.rotation.x = (-Math.PI / 2) * k.lie;
+      body.current.position.set(0, ((m.seatY ?? 0.55) + 0.14) * k.lie, 0.85 * k.lie);
+    }
     const seatY = m.seatY ?? 0;
     const chair = seatY > 0.2; // on a bed/bench: legs hang down; on the floor: legs out in front
     const L = THREE.MathUtils.lerp;
@@ -102,6 +109,7 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
 
   return (
     <group>
+      <group ref={body}>
       <group ref={pelvis} position={[0, STAND_HIP, 0]}>
         {/* hips */}
         <mesh geometry={box} material={pants} position={[0, 0.03, 0]} scale={[0.38, 0.17, 0.23]} castShadow />
@@ -144,9 +152,10 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
           </group>
         </group>
       </group>
+      </group>
       {me && <mesh geometry={box} material={mat("#2f7cf6", { emissive: true })} position={[0, 2.25, 0]} scale={0.12} rotation={[0.6, 0.6, 0]} />}
       {label && (
-        <Html position={[0, 2.3, 0]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+        <Html position={[0, st.current.lie > 0.5 ? 1.3 : 2.3, 0]} center distanceFactor={10} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
             {label}{tag && <span className="ml-1 rounded-full bg-[var(--accent)] px-1.5 text-[9px] text-white">{tag}</span>}
           </div>

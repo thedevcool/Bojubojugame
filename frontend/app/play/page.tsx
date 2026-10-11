@@ -11,6 +11,7 @@ import Controls from "@/game/Controls";
 import { useMap } from "@/ui/hooks";
 import { sound } from "@/game/sound";
 import { MapScreen, MiniMapWidget } from "@/ui/MapView";
+import { WatchView } from "@/ui/Live";
 import { ActionButtons, BlindOverlay, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 import { DecorateOverlay } from "@/ui/Decorate";
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
@@ -162,6 +163,7 @@ export default function PlayPage() {
           </div>
           <DecorateOverlay />
           <MapScreen />
+          <WatchView />
           <BlindOverlay />
           <RideMap />
           <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 text-[10px] opacity-60">In-game naira only — not real money</div>

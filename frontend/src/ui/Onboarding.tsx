@@ -44,7 +44,16 @@ export default function Onboarding() {
   useEffect(() => {
     if (!atHome) return;
     finish();
-    useGame.getState().toast("🏠 Welcome home! Sit down, relax — then 📱 → Boju Boju to play.", "good");
+    const st = useGame.getState();
+    st.toast("🏠 Welcome home! It's empty for now — buy furniture at Ọ̀ṣọ́ Home & Furniture", "good");
+    // next step: how to play with real people (join a waiting group, create one, invite, or NPCs)
+    setTimeout(() => {
+      const s2 = useGame.getState();
+      if (!s2.group && !s2.phoneOpen) {
+        s2.openApp("boju");
+        s2.toast("🙈 Ready to play? Join people who are waiting, create a game, or play with NPCs", "good");
+      }
+    }, 2600);
   }, [atHome]);
 
   if (!step) return null;

@@ -10,7 +10,7 @@ import { useGame } from "@/lib/store";
 import type { GameMap, Home, RosterEntry } from "@/lib/types";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
-import { setCatalog, toWorld, worldRotY, furn, checkLayout } from "./furniture";
+import { setCatalog, toWorld, worldRotY, furn, checkLayout, solidColliders } from "./furniture";
 import { FurnitureLayer, FurnitureMesh } from "./FurnitureMeshes";
 import { navState, stopWalking, walkTo } from "./nav";
 import { inRect, resolveCollision } from "./physics";
@@ -386,6 +386,8 @@ function lockedHomeAt(map: GameMap, x: number, z: number): string | null {
 
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const box3 = new THREE.Box3();
+const wallHit = new THREE.Vector3();
 
 /** Tap-to-move: turns a screen tap into a ground point and plans a walk there. */
 function TapMover() {
@@ -444,7 +446,39 @@ function TapMover() {
     if (!t.walk) return;
     ndc.set(((t.x - r.left) / r.width) * 2 - 1, -((t.y - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    if (!ray.ray.intersectPlane(groundPlane, hit)) return;
+    const map = navState.map;
+    if (!map || !ray.ray.intersectPlane(groundPlane, hit)) return;
+    // tapped a wall, a car, furniture...? stop in front of it instead of walking to the floor behind it
+    let nearest = ray.ray.origin.distanceTo(hit);
+    for (const c of [...map.props.map((p) => p.collider), ...solidColliders()]) {
+      if (!c || Math.max(Math.abs((c[0] + c[2]) / 2 - local.x), Math.abs((c[1] + c[3]) / 2 - local.z)) > 60) continue;
+      box3.min.set(c[0], 0, c[1]);
+      box3.max.set(c[2], c[4], c[3]);
+      if (!ray.ray.intersectBox(box3, wallHit)) continue;
+      const d = ray.ray.origin.distanceTo(wallHit);
+      if (d < nearest) {
+        nearest = d;
+        const back = Math.hypot(ray.ray.direction.x, ray.ray.direction.z) || 1;
+        hit.set(wallHit.x - (ray.ray.direction.x / back) * 0.45, 0, wallHit.z - (ray.ray.direction.z / back) * 0.45);
+      }
+    }
+    if (Math.hypot(hit.x - local.x, hit.z - local.z) > 45) return; // the horizon is not a destination
+    const gs = useGame.getState();
+    const insideId = local.insideHome;
+    const inside = insideId ? map.homes?.find((h) => h.id === insideId) : undefined;
+    if (inside && !inRect(inside.rect, hit.x, hit.z)) {
+      // indoors, taps stay indoors: you leave through the door like everyone else
+      if (gs.toasts.every((x) => !x.msg.includes("door"))) gs.toast("🚪 Walk out through the door to go outside");
+      return;
+    }
+    if (!inside) {
+      const target = map.homes?.find((h) => inRect(h.rect, hit.x, hit.z));
+      if (target && (lockedHomeAt(map, hit.x, hit.z) || local.drive)) {
+        // someone's house: go to their door (knock there) instead of walking into a wall
+        if (walkTo(target.door[0], target.door[1])) sound.play("pop");
+        return;
+      }
+    }
     if (walkTo(hit.x, hit.z)) sound.play("pop");
   });
   return null;

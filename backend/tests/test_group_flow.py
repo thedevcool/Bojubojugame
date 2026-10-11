@@ -106,10 +106,15 @@ async def test_full_game(db):
     g = a.group
     assert g.phase == "travel"
 
-    # A walks to the bus stop and boards a keke; B and C get auto-boarded on a danfo.
+    # Starting the game takes everyone to the motor park; walking away means you can't board.
+    stop = get_maps()["hub_plaza"].zones["bus_stop"]["rect"]
+    assert all(stop[0] <= s.x <= stop[2] + 1 and stop[1] - 1 <= s.z <= stop[3] + 1 for s in (a, b, c))
+    assert ca.last("tp")
+    a.x, a.z = 0.0, -40.0
     await send(world, a, t="g_board", fare="keke")
     assert ca.last("err")["msg"] == "Walk to the bus stop first"
     a.x, a.z = zone_point("bus_stop")
+    # A boards a keke; B and C get auto-boarded on a danfo.
     await send(world, a, t="g_board", fare="keke")
     assert a.room is g.arena and ca.last("ride")
     await advance(world, clock, get_config().game.travel_window_s + 0.5)
@@ -304,3 +309,31 @@ async def test_gather_times_out_and_walks_stragglers_in(db):
     await advance(world, clock, g.phase_end - clock.t + 0.2)
     assert g.phase == "dice"
     assert all(g.in_circle(p, clock.t) for p in g.active)
+
+
+async def test_live_games_list_and_spectator_map(db):
+    world, clock, players = await setup(db, 3)
+    (a, ca), (b, cb), (w, cw) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse", bots=1)
+    g = a.group
+    row = g.summary()
+    assert row["joinable"] and row["humans"] == 1 and row["bots"] == 1
+    await send(world, b, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse", public=False)
+    assert not b.group.summary()["joinable"]  # private: invite-only
+    await send(world, b, t="g_leave")
+
+    # w watches A's game from the hub, without moving
+    await send(world, w, t="watch", code=g.code)
+    await send(world, a, t="g_start")
+    await advance(world, clock, 61)
+    await gather_all(world, clock, g)
+    await until(world, clock, g, "hide")
+    scatter(world, g)
+    await advance(world, clock, 0.4)
+    snap = cw.last("wsnap")
+    assert snap["code"] == g.code and snap["phase"] == "hide"
+    shown = {p[0] for p in snap["players"]}
+    assert g.round.seeker in shown and not any(h in shown for h in g.round.hiders)  # no peeking for Boju's friends
+    assert w.room is not g.arena
+    await send(world, w, t="watch", code=None)
+    assert w.watching is None

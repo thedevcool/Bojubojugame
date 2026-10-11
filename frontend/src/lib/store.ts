@@ -40,6 +40,9 @@ interface GameStore {
   /** map pin: a spot in this area, or a place in Naija to travel to */
   pin: { kind: "here"; map: string; x: number; z: number; label: string } | { kind: "trip"; to: string; label: string } | null;
   mapOpen: boolean;
+  /** spectating a game from the map (Live games -> Watch) */
+  watching: string | null;
+  wsnap: { code: string; arena: string; phase: string; phase_end: number; found: number; hiding: number; players: [string, string, number, number, string, boolean][] } | null;
   driving: boolean;
   dmUnread: number;
   friendReqs: number;
@@ -115,6 +118,8 @@ export const useGame = create<GameStore>((set, get) => ({
   life: { phoneId: null, homeId: null, rentUntil: null, username: "", carId: null },
   pin: null,
   mapOpen: false,
+  watching: null,
+  wsnap: null,
   driving: false,
   dmUnread: 0,
   friendReqs: 0,

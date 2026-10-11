@@ -131,6 +131,13 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
         await push_wallet(pid)
         return {"ok": True, "phone_id": phone.id}
 
+    # ------------------------------------------------------------ live games (join or watch)
+    @r.get("/games/live")
+    async def live_games(pid: Me) -> dict[str, Any]:
+        rows = [g.summary() for g in world.groups.values() if g.phase != "over" and (g.public or pid in g.members)]
+        rows.sort(key=lambda x: (not x["joinable"], -x["humans"]))
+        return {"games": rows[:40]}
+
     # ------------------------------------------------------------ cars
     @r.post("/shop/car")
     async def buy_car(body: BuyCarIn, pid: Me) -> dict[str, Any]:
@@ -276,7 +283,7 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             await ses.execute(update(FurnitureItem).where(FurnitureItem.player_id == owner).values(placed=False))
 
     async def furnish(owner: str, home: dict[str, Any]) -> list[dict[str, Any]]:
-        """Moving in: first house comes with starter furniture; later moves keep your layout where it fits."""
+        """Moving in: houses come empty (you buy furniture); your own furniture moves with you where it fits."""
         lay, catalog = layout_of(home), cfg.furniture_by_id()
         async with db.sessions() as ses, ses.begin():
             mine = list(
@@ -286,21 +293,15 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
                     )
                 ).all()
             )
-            if not mine:
-                for item, lx, lz, rot in houses.starter_set(lay):
-                    ses.add(FurnitureItem(player_id=owner, item=item, placed=True, lx=lx, lz=lz, rot=rot))
-                await ses.flush()
-                mine = list((await ses.scalars(select(FurnitureItem).where(FurnitureItem.player_id == owner))).all())
-            else:
-                ok: list[houses.Placement] = []
-                for it in mine:
-                    if not it.placed:
-                        continue
-                    trial = [*ok, houses.Placement(it.id, it.item, it.lx, it.lz, it.rot)]
-                    if houses.check_layout(lay, trial, catalog) is None:
-                        ok = trial
-                    else:
-                        it.placed = False  # doesn't fit in the new house: back to your store room
+            ok: list[houses.Placement] = []
+            for it in mine:
+                if not it.placed:
+                    continue
+                trial = [*ok, houses.Placement(it.id, it.item, it.lx, it.lz, it.rot)]
+                if houses.check_layout(lay, trial, catalog) is None:
+                    ok = trial
+                else:
+                    it.placed = False  # doesn't fit in the new house: back to your store room
             return [furniture_row(it) for it in mine if it.placed]
 
     @r.get("/furniture")

@@ -121,6 +121,12 @@ class Net {
         g.set({ knock: { from: m.from as string, nick: m.nick as string, home: m.home as string, at: Date.now() } });
         sound.play("door");
         break;
+      case "wsnap":
+        if (!m.code) {
+          if (g.watching) g.toast("That game don finish 🏁");
+          g.set({ watching: null, wsnap: null });
+        } else if (g.watching === m.code) g.set({ wsnap: m as unknown as NonNullable<typeof g.wsnap> });
+        break;
       case "invite":
         g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
         sound.play("pop");
@@ -238,7 +244,7 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
   const seeker = gs.round?.seeker;
   const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
-    case "travel": g.toast("Game don start! Waka go the Motor Park and board a danfo.", "good"); break;
+    case "travel": g.toast("Game don start! You're at the Motor Park — board a ride 🚌", "good"); break;
     case "gather":
       if (gs.gather) g.set({ guide: { x: gs.gather.center[0], z: gs.gather.center[1], label: "⭕ The circle" } });
       if (!g.ride) g.toast("Oya, everybody gather inside the circle ⭕", "good");

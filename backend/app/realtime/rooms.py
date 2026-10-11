@@ -35,6 +35,7 @@ class Session:
     lie: bool = False
     car: str | None = None  # car model the player owns
     driving: bool = False
+    watching: str | None = None  # group code this player is spectating on their map
     room: Room | None = None
     group: GroupRoom | None = None
     x: float = 0.0

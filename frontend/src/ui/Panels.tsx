@@ -9,6 +9,7 @@ import { useGame, type Quality } from "@/lib/store";
 import AccountCard from "./AccountCard";
 import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
+import { LiveGamesList } from "./Live";
 import { useRole, useSecondsLeft } from "./hooks";
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
@@ -30,20 +31,38 @@ export function GroupPanel() {
   const arenaMap = maps?.[g?.settings.arena ?? arena];
   const safe = maps?.[arena]?.safe_houses[0]?.id ?? "";
   const close = useGame((s) => s.closePhone);
+  const [mode, setMode] = useState<null | "create">(null);
+  const pendingFor = useGame((s) => (s.pendingInvite ? Object.values(s.roster).find((r) => r.id === s.pendingInvite)?.nick ?? "your friend" : null));
   if (!cfg) return null;
 
   if (!g || g.phase === "over") {
     return (
       <Modal>
-        <div className="space-y-3">
-          <button className="choice anim-rise flex w-full items-center gap-3 p-3 text-left" data-on="false"
-            onClick={() => { net.send({ t: "g_create", arena, hide, search, safe, bots: 3 }); }}>
-            <span className="text-3xl">⚡</span>
-            <span><span className="block font-bold">Quick game vs 3 NPCs</span><span className="text-xs opacity-70">Jump straight in — default settings</span></span>
-          </button>
-          <div className="panel anim-rise p-3" style={{ animationDelay: "60ms" }}>
-            <CreateGame />
+        {pendingFor && (
+          <div className="anim-rise mb-2 rounded-2xl bg-[var(--accent)]/20 p-2.5 text-xs">📨 Pick how you want to play — <b>@{pendingFor}</b> gets your invite as soon as the game is ready.</div>
+        )}
+        {mode === "create" ? (
+          <div className="space-y-2">
+            <button className="text-sm text-[var(--accent)]" onClick={() => setMode(null)}>‹ All options</button>
+            <div className="panel anim-rise p-3"><CreateGame isPublic /></div>
           </div>
+        ) : (
+        <div className="space-y-3">
+          <div className="ios-group">
+            {[
+              { icon: "🌍", bg: "#2f7cf6", title: "Create a game for real players", text: "Anyone in Live games can join you", on: () => setMode("create") },
+              { icon: "📨", bg: "#30d158", title: "Play with friends", text: "Private game — invite friends or share the code", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 0, public: false }) },
+              { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
+              { icon: "📺", bg: "#ff375f", title: "Watch games live", text: "See games in progress on the map", on: () => useGame.getState().openApp("live") },
+            ].map((o) => (
+              <button key={o.title} className="ios-row" onClick={o.on}>
+                <span className="ios-glyph" style={{ background: o.bg }}>{o.icon}</span>
+                <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">{o.title}</span><span className="block truncate text-[12px] opacity-60">{o.text}</span></span>
+                <span className="ios-chevron">›</span>
+              </button>
+            ))}
+          </div>
+          <LiveGamesList only="join" />
           <div className="panel p-3">
             <div className="mb-2 font-bold">Join with a code</div>
             <div className="flex gap-2">
@@ -53,6 +72,7 @@ export function GroupPanel() {
             </div>
           </div>
         </div>
+        )}
       </Modal>
     );
   }

@@ -39,7 +39,7 @@ function Stopwatch({ seconds, icon }: { seconds: number; icon: string }) {
   );
 }
 
-export default function CreateGame() {
+export default function CreateGame({ isPublic = true }: { isPublic?: boolean }) {
   const cfg = useGame((s) => s.content?.config);
   const maps = useGame((s) => s.content?.maps);
   const arenas = Object.values(maps ?? {}).filter((m) => m.kind === "arena");
@@ -62,7 +62,7 @@ export default function CreateGame() {
 
   const safeRect = map.safe_houses.find((s) => s.id === safe)?.rect ?? null;
   const last = step === STEPS.length - 1;
-  const create = () => net.send({ t: "g_create", arena, hide, search, safe, bots });
+  const create = () => net.send({ t: "g_create", arena, hide, search, safe, bots, public: isPublic });
 
   return (
     <div>

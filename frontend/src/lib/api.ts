@@ -156,6 +156,9 @@ export const saveLayout = (acc: Account, items: OwnedItem[]) =>
 export const buyCar = (acc: Account, carId: string) =>
   send<{ ok: boolean; car_id: string }>(acc, "/api/shop/car", { car_id: carId, key: crypto.randomUUID() });
 
+export interface LiveGame { code: string; creator: string; arena: string; arena_name: string; phase: string; humans: number; bots: number; max: number; public: boolean; joinable: boolean; round: number }
+export const getLiveGames = (acc: Account) => get<{ games: LiveGame[] }>(acc, "/api/games/live");
+
 export interface Friend { id: string; username: string; online: boolean; unread: number }
 export const getFriends = (acc: Account) => get<{ friends: Friend[]; incoming: Friend[]; outgoing: Friend[] }>(acc, "/api/friends");
 export const requestFriend = (acc: Account, username: string) => send<{ ok: boolean; status: string }>(acc, "/api/friends/request", { username });

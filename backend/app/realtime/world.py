@@ -40,6 +40,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "g_invite": (0.5, 4),
     "knock": (0.3, 3),
     "trip": (0.5, 3),
+    "watch": (2, 6),
     "knock_answer": (2, 6),
     "default": (4, 10),
 }
@@ -72,6 +73,7 @@ class World:
         self.home_owners: dict[str, str] = {}
         self.guests: dict[str, set[str]] = {}
         # house id -> placed furniture (local coords) and the solid boxes it adds to the hub
+        self._watch_tick = 0
         self.explore: dict[str, ExploreRoom] = {}  # arena id -> open venue room for travellers
         self.furniture: dict[str, list[dict[str, Any]]] = {}
         self.furniture_boxes: dict[str, list[Box]] = {}
@@ -385,6 +387,10 @@ class World:
                 await self.on_buy(s, msg)
             elif isinstance(msg, P.Invite):
                 self.on_invite(s, msg)
+            elif isinstance(msg, P.Watch):
+                if msg.code is not None and msg.code.upper() not in self.groups:
+                    raise GroupError("That game has ended")
+                s.watching = msg.code.upper() if msg.code else None
             elif isinstance(msg, P.Trip):
                 await self.on_trip(s, msg)
             elif isinstance(msg, P.Knock):
@@ -611,6 +617,7 @@ class World:
             await db.flush()
             game_id = game.id
         g = GroupRoom(self, game_id, code, s, settings)
+        g.public = msg.public
         self.groups[code] = g
         g.add_member(s)
         for _ in range(min(msg.bots, self.cfg.game.max_players - 1)):
@@ -798,6 +805,21 @@ class World:
         rooms: list[Room] = [*self.shards, *(g.arena for g in self.groups.values()), *self.explore.values()]
         for room in rooms:
             room.snapshot(now_ms)
+        # spectators (Live games -> Watch) get a light map feed ~3 times a second
+        self._watch_tick += 1
+        if self._watch_tick % 3 == 0:
+            feeds: dict[str, dict[str, Any]] = {}
+            for s in self.sessions.values():
+                if not (s.watching and s.connected):
+                    continue
+                g = self.groups.get(s.watching)
+                if g is None:
+                    s.watching = None
+                    s.send({"t": "wsnap", "code": None})
+                    continue
+                if g.code not in feeds:
+                    feeds[g.code] = g.watch_msg()
+                s.send(feeds[g.code])
         # forget players who left without a group after a grace period
         for pid, s in list(self.sessions.items()):
             if s.sender is None and s.group is None and s.disconnected_at and now - s.disconnected_at > 60:

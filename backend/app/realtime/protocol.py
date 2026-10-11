@@ -35,6 +35,14 @@ class GroupCreate(_In):
     search: int
     safe: str = Field(max_length=40)
     bots: int = Field(default=0, ge=0, le=5)
+    public: bool = True  # listed in Live games so real players can join
+
+
+class Watch(_In):
+    """Watch a game from the map without going there (code=None stops)."""
+
+    t: Literal["watch"]
+    code: str | None = Field(default=None, max_length=8)
 
 
 class GroupSettings(_In):
@@ -127,6 +135,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_invite": Invite,
     "knock": Knock,
     "trip": Trip,
+    "watch": Watch,
     "knock_answer": KnockAnswer,
     "g_pick": Pick,
     "emote": Emote,

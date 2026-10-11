@@ -180,6 +180,9 @@ async def test_full_game(db):
     await until(world, clock, g, "over")
     assert g.final_results
     assert any(m["t"] == "g_over" for m in ca.msgs)
+    # whoever watched the last round from the stands (outside the field) is back inside to explore
+    bx0, bz0, bx1, bz1 = g.map.bounds
+    assert all(bx0 < s.x < bx1 and bz0 < s.z < bz1 and not s.spectator for s in (a, b, c))
 
     # Stay & explore: still in the arena and free to walk. Then ride home.
     assert a.room is g.arena and not a.frozen
@@ -190,6 +193,17 @@ async def test_full_game(db):
     for s in (a, b, c):
         wallet = [m for m in players[[a, b, c].index(s)][1].msgs if m["t"] == "wallet"][-1]
         assert wallet["balance"] == await world.economy.balance(s.pid)
+
+    # Play again: B makes the rematch (same settings, private) and C is invited; C tapping Play again joins it.
+    await send(world, b, t="g_rematch")
+    ng = b.group
+    assert ng is not g and ng.phase == "lobby" and not ng.public and ng.settings == g.settings
+    inv = cc.last("invite")
+    assert inv["code"] == ng.code and inv["rematch"]
+    await send(world, c, t="g_rematch")
+    assert c.group is ng and len(world.groups) >= 1
+    await send(world, a, t="g_rematch")
+    assert ca.last("err")["msg"] == "Finish this game first"  # A already rode home
 
 
 async def test_seeker_disconnect_skips_round(db):

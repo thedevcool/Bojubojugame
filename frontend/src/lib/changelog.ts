@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.7.0",
+    date: "2026-10-11",
+    title: "Rematch! 🔁",
+    items: [
+      { emoji: "🔁", title: "Play again", text: "After the final whistle, tap Play again: same arena, same settings, and everyone from the game gets a rematch invite." },
+      { emoji: "🚗", title: "Proper driving", text: "◀ ▶ to steer, ⛽ Gas and 🛑 Brake (hold it to reverse). The camera follows behind your car. The joystick and W/A/S/D work too." },
+      { emoji: "🧍🏾", title: "No more walking through people", text: "Players and NPCs are solid: you walk round them, and your car brakes for them." },
+      { emoji: "🏟️", title: "Explore after the game", text: "If you were caught in the last round you're brought back onto the field, so Stay & explore and the map work again." },
+    ],
+  },
+  {
     version: "2.6.0",
     date: "2026-10-11",
     title: "Lagos traffic with wahala 🚦",

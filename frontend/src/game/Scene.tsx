@@ -85,6 +85,11 @@ function LocalPlayer({ map }: { map: GameMap }) {
     if (k.has("KeyS") || k.has("ArrowDown")) iy -= 1;
     if (k.has("KeyA") || k.has("ArrowLeft")) ix -= 1;
     if (k.has("KeyD") || k.has("ArrowRight")) ix += 1;
+    if (local.drive) {
+      const pd = input.pedal;
+      iy += (pd.gas ? 1 : 0) - (pd.brake ? 1 : 0);
+      ix += (pd.right ? 1 : 0) - (pd.left ? 1 : 0);
+    }
     let mag = Math.min(1, Math.hypot(ix, iy));
     const manual = mag > 0.08;
     if (manual && local.path.length) stopWalking(); // the stick/keys always win over tap-to-move
@@ -130,15 +135,53 @@ function LocalPlayer({ map }: { map: GameMap }) {
     const st0g = useGame.getState();
     const myCar = local.drive ? st0g.content?.config.cars.find((c) => c.id === st0g.life.carId) : undefined;
     if (local.drive && !myCar) local.drive = false;
-    if (moving) {
-      speed = myCar ? myCar.speed * 0.97 * mag : (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
-      const vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
+    // Real driving (stick, pedals or keys): up = gas, down = brake then reverse, left/right = steer.
+    // Tap-to-go and "drive me there" still steer the car for you.
+    const driveManual = !!myCar && !local.path.length && !local.frozen && !local.insideHome;
+    if (!myCar) local.carV = 0;
+    if (driveManual) {
+      const thr = Math.max(-1, Math.min(1, iy)), steer = Math.max(-1, Math.min(1, ix)), max = myCar.speed * 0.97;
+      let v = local.carV;
+      const target = thr > 0.1 ? max * thr : thr < -0.1 ? (v > 0.3 ? 0 : -max * 0.35 * -thr) : 0;
+      const rate = Math.abs(thr) <= 0.1 ? 3.5 : target < v && v > 0 ? 16 : 7; // coast / brake hard / accelerate
+      v += Math.max(-rate * dt, Math.min(rate * dt, target - v));
+      if (Math.abs(v) > 0.2) local.ry -= steer * 1.8 * Math.min(1, Math.abs(v) / 5) * Math.sign(v) * dt;
+      const vx = Math.sin(local.ry) * v, vz = Math.cos(local.ry) * v;
       const [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
-      const locked = map.kind === "hub" && (lockedHomeAt(map, nx, nz) || (myCar && map.homes?.find((h) => inRect(h.rect, nx, nz))?.id));
-      // cars and people are solid: you can't walk through a danfo, and your car stops for people and cars
+      const others = otherPlayers();
+      const room = roomAt(nx, nz, local.ry, true, others);
+      const homeHit = map.kind === "hub" && map.homes?.some((h) => inRect(h.rect, nx, nz));
+      if ((room < 0 && room < roomAt(local.x, local.z, local.ry, true, others) - 1e-3) || homeHit) {
+        if (Math.abs(v) > 1.5 && performance.now() - lastHorn.current > 2200) { lastHorn.current = performance.now(); sound.play("horn", 0.9); }
+        v = 0; // brakes! nobody gets rammed
+      } else {
+        // scraping a wall slows you down
+        const moved = Math.hypot(nx - local.x, nz - local.z), wanted = Math.abs(v) * dt;
+        if (wanted > 0.01 && moved < wanted * 0.5) v *= 0.6;
+        local.x = nx;
+        local.z = nz;
+      }
+      local.carV = v;
+      speed = Math.abs(v);
+      local.moving = speed > 0.1;
+    } else if (moving) {
+      speed = myCar ? myCar.speed * 0.97 * mag : (local.crouch ? cfg.crouch_speed : local.run ? cfg.run_speed : cfg.walk_speed) * mag;
+      let vx = Math.sin(ang) * speed, vz = Math.cos(ang) * speed;
+      let [nx, nz] = resolveCollision(map, local.x + vx * dt, local.z + vz * dt, cfg.player_radius);
+      // cars and people are solid: you can't walk through a danfo or a person, and your car stops for people and cars
       const ry = Math.atan2(vx, vz), others = otherPlayers();
-      const room = roomAt(nx, nz, ry, !!myCar, others);
-      const blocked = room < 0 && room < roomAt(local.x, local.z, ry, !!myCar, others) - 1e-3;
+      const here = roomAt(local.x, local.z, ry, !!myCar, others);
+      const hits = (x: number, z: number, r: number) => { const m = roomAt(x, z, r, !!myCar, others); return m < 0 && m < here - 1e-3; };
+      let blocked = hits(nx, nz, ry);
+      if (blocked && !myCar) {
+        // on foot: slide round them instead of stopping dead
+        for (const turn of [0.6, -0.6, 1.2, -1.2]) {
+          const a = ang + turn, sx = Math.sin(a) * speed * 0.8, sz = Math.cos(a) * speed * 0.8;
+          const [tx, tz] = resolveCollision(map, local.x + sx * dt, local.z + sz * dt, cfg.player_radius);
+          if (!hits(tx, tz, a)) { [nx, nz, vx, vz, blocked] = [tx, tz, sx, sz, false]; break; }
+        }
+      }
+      const locked = map.kind === "hub" && (lockedHomeAt(map, nx, nz) || (myCar && map.homes?.find((h) => inRect(h.rect, nx, nz))?.id));
       if (blocked) {
         local.ry = ry;
         stuck.current.t = 0; // waiting for the road to clear isn't being stuck
@@ -153,7 +196,7 @@ function LocalPlayer({ map }: { map: GameMap }) {
         local.x = nx;
         local.z = nz;
       }
-      if (!blocked) local.ry = ry;
+      if (!blocked) local.ry = Math.atan2(vx, vz);
     }
     // sitting: snap to the nearest bed/bench, or sit on the floor
     const resting = local.sit || local.lie;
@@ -232,6 +275,13 @@ function LocalPlayer({ map }: { map: GameMap }) {
       camera.up.set(0, 1, 0);
       const inside = !!local.insideHome;
       if (onboarding) cam.yaw += dt * 0.22; // slow welcome orbit
+      if (local.drive && Math.abs(local.carV) > 1.2 && performance.now() - input.lookedAt > 1500) {
+        // driving: the camera swings round behind the car
+        let dy = (local.ry + Math.PI - cam.yaw) % (Math.PI * 2);
+        if (dy > Math.PI) dy -= Math.PI * 2;
+        if (dy < -Math.PI) dy += Math.PI * 2;
+        cam.yaw += dy * (1 - Math.exp(-dt * 2.5));
+      }
       // indoors you can still look all around the room, just from a closer, higher camera
       const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : local.drive ? cam.dist + 4 : cam.dist;
       const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : local.drive ? Math.max(cam.pitch, 0.5) : cam.pitch;
@@ -731,7 +781,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

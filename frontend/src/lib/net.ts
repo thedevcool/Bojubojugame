@@ -128,7 +128,7 @@ class Net {
         } else if (g.watching === m.code) g.set({ wsnap: m as unknown as NonNullable<typeof g.wsnap> });
         break;
       case "invite":
-        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
+        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now(), rematch: !!m.rematch } });
         sound.play("pop");
         break;
       case "dm":

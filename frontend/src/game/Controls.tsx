@@ -194,6 +194,7 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
         return;
       }
       cam.yaw -= dx * 0.008;
+      input.lookedAt = performance.now();
       cam.pitch = Math.min(1.2, Math.max(0.05, cam.pitch + dy * 0.005));
     }
   };

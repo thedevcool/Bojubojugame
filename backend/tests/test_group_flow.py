@@ -5,9 +5,22 @@ import random
 import msgpack
 
 from app.content import get_config, get_maps
+from app.engine.geometry import collides
 from app.realtime import protocol as P
 from app.realtime.world import World
 from tests.conftest import make_player
+
+
+def zone_point(zone_id):
+    """A standable point inside a hub zone (maps are data and may move)."""
+    m = get_maps()["hub_plaza"]
+    x0, z0, x1, z1 = m.zones[zone_id]["rect"]
+    for i in range(1, 10):
+        for j in range(1, 10):
+            x, z = x0 + (x1 - x0) * i / 10, z0 + (z1 - z0) * j / 10
+            if not collides(x, z, 0.35, m.boxes):
+                return x, z
+    raise AssertionError(zone_id)
 
 
 class Clock:
@@ -77,7 +90,7 @@ async def test_full_game(db):
     # A walks to the bus stop and boards a keke; B and C get auto-boarded on a danfo.
     await send(world, a, t="g_board", fare="keke")
     assert ca.last("err")["msg"] == "Walk to the bus stop first"
-    a.x, a.z = -6, -3
+    a.x, a.z = zone_point("bus_stop")
     await send(world, a, t="g_board", fare="keke")
     assert a.room is g.arena and ca.last("ride")
     await advance(world, clock, get_config().game.travel_window_s + 0.5)
@@ -173,7 +186,7 @@ async def test_hungry_player_cannot_start(db):
     # Buying food requires being at the food spot.
     await send(world, b, t="buy", item="suya", key="abcdefgh1")
     assert "Walk to" in cb.last("err")["msg"]
-    b.x, b.z = 11, 6.5
+    b.x, b.z = zone_point("suya")
     await send(world, b, t="buy", item="suya", key="abcdefgh1")
     assert cb.last("wallet")["hunger"] >= 20
 
@@ -188,3 +201,49 @@ async def test_movement_validation(db):
     clock.t += 0.1
     await send(world, a, t="mv", x=x0 + 0.3, z=z0, ry=0, s=2)
     assert a.x == x0 + 0.3
+
+
+async def test_game_with_npc_players(db):
+    from sqlalchemy import func, select
+
+    from app.db import LedgerEntry, RoundStat
+
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse", bots=3)
+    g = a.group
+    assert len(g.members) == 4 and len(g.bots) == 3
+    assert all(m["bot"] for m in ca.last("g_state")["members"][1:])
+    await send(world, a, t="g_add_bot")
+    await send(world, a, t="g_remove_bot", id=g.members[-1])
+    assert len(g.members) == 4
+    await send(world, a, t="g_start")
+    assert all(world.sessions[b].room is g.arena for b in g.bots)  # NPCs board instantly
+    a.x, a.z = zone_point("bus_stop")
+    await send(world, a, t="g_board", fare="danfo")
+    await until(world, clock, g, "reveal")
+    assert set(g.picks) == set(g.members)  # NPCs picked their own numbers
+    await until(world, clock, g, "seek")
+    r = g.round
+    spawn = get_maps()["arena_park"].spawn
+    moved = [
+        b
+        for b in r.hiders
+        if b in g.bots and abs(world.sessions[b].x - spawn[0]) + abs(world.sessions[b].z - spawn[1]) > 8
+    ]
+    assert moved, "NPC hiders should run off to hide"
+    await until(world, clock, g, "over", limit=3000)
+    assert g.final_results and g.rounds_played >= 1
+    total_finds = sum(row["finds"] for row in g.final_results)
+    assert total_finds >= 1, "somebody should get found across the game"
+    async with world.db() as s:
+        bot_rows = await s.scalar(
+            select(func.count()).select_from(LedgerEntry).where(LedgerEntry.player_id.like("bot_%"))
+        )
+        stat_players = set((await s.scalars(select(RoundStat.player_id))).all())
+    assert bot_rows == 0 and stat_players <= {a.pid}
+    assert ca.last("wallet")["balance"] == await world.economy.balance(a.pid)
+    # Leaving after the game drops the group and its NPCs.
+    await send(world, a, t="g_leave")
+    await advance(world, clock, 1)
+    assert not any(p.startswith("bot_") for p in world.sessions)

@@ -85,11 +85,13 @@ class World:
             {
                 "t": "hello",
                 "me": {"id": pid, "nick": s.nick, "n": s.net_id},
+                "home": self.maps[HUB_MAP_ID].home_for(pid),
                 "server_time": int(now * 1000),
             }
         )
         if s.room is None:
-            self.join_hub(s)
+            home = self.maps[HUB_MAP_ID].home_for(pid)
+            self.join_hub(s, at=(home["spawn"][0], home["spawn"][1]) if home else None)
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
         if s.group is not None:
@@ -109,7 +111,7 @@ class World:
             s.group.broadcast_state("player_offline")
 
     # ------------------------------------------------------------ hub
-    def join_hub(self, s: Session, prefer: HubShard | None = None) -> None:
+    def join_hub(self, s: Session, prefer: HubShard | None = None, at: tuple[float, float] | None = None) -> None:
         shard = prefer if prefer is not None and not prefer.full else None
         if shard is None and s.group is not None:
             for m in s.group.members:
@@ -128,11 +130,36 @@ class World:
             )
             self.shards.append(shard)
         x, z = shard.spawn_point(len(shard.sessions))
-        if isinstance(s.room, HubShard) and s.room is not shard:
+        if at is not None:
+            x, z = at
+        elif isinstance(s.room, HubShard) and s.room is not shard:
             x, z = s.x, s.z  # moving shards keeps your spot
         shard.add(s, x, z, self.now())
         s.frozen = False
         s.spectator = False
+
+    def arrival_point(self) -> tuple[float, float]:
+        ax, az = self.maps[HUB_MAP_ID].arrival
+        return ax + self.rng.uniform(-2, 2), az + self.rng.uniform(-1, 1)
+
+    # ------------------------------------------------------------ NPC players
+    def create_bot(self, name: str) -> Session:
+        pid = f"bot_{self.rng.getrandbits(64):016x}"
+        s = Session(
+            pid=pid,
+            nick=name,
+            net_id=next(self._net_ids),
+            avatar=[self.rng.randrange(8), self.rng.randrange(8), self.rng.randrange(8)],
+            bot=True,
+            last_move_at=self.now(),
+        )
+        self.sessions[pid] = s
+        return s
+
+    def drop_bot(self, pid: str) -> None:
+        s = self.sessions.pop(pid, None)
+        if s is not None and s.room is not None:
+            s.room.remove(s)
 
     # ------------------------------------------------------------ dispatch
     async def handle(self, s: Session, raw: bytes) -> None:
@@ -186,7 +213,7 @@ class World:
             tolerance=mv.speed_tolerance,
             radius=mv.player_radius,
             bounds=room.map.bounds,
-            boxes=room.map.boxes,
+            boxes=room.map.near(s.x, s.z, m.x, m.z),
         )
         if not check.ok:
             self._correct(s, m.s, now)
@@ -242,6 +269,10 @@ class World:
                 res = g.tag(s)
                 if res:
                     s.send(res)
+            elif msg.t == "g_add_bot":
+                g.add_bot(s)
+            elif isinstance(msg, P.RemoveBot):
+                g.remove_bot(s, msg.id)
             elif msg.t == "g_leave":
                 self.leave_group(s)
 
@@ -259,7 +290,7 @@ class World:
         return {"arena": arena.id, "hide": raw["hide"], "search": raw["search"], "safe": safe}
 
     async def create_group(self, s: Session, msg: P.GroupCreate) -> GroupRoom:
-        settings = self.validate_settings(msg.model_dump(exclude={"t"}))
+        settings = self.validate_settings(msg.model_dump(exclude={"t", "bots"}))
         if s.group is not None:
             self.leave_group(s)
         code = "".join(self.rng.choice(CODE_ALPHABET) for _ in range(6))
@@ -273,6 +304,8 @@ class World:
         g = GroupRoom(self, game_id, code, s, settings)
         self.groups[code] = g
         g.add_member(s)
+        for _ in range(min(msg.bots, self.cfg.game.max_players - 1)):
+            g.add_bot(s)
         await self.send_chat_history(s, g)
         log.info("group_created game=%s code=%s by=%s", game_id, code, s.pid)
         return g
@@ -283,7 +316,7 @@ class World:
             return
         g.leave(s)
         if not isinstance(s.room, HubShard):
-            self.join_hub(s)
+            self.join_hub(s, at=self.arrival_point())
         s.send({"t": "g_left"})
 
     # ------------------------------------------------------------ chat & emotes
@@ -390,8 +423,10 @@ class World:
         self, game_id: str, round_no: int, deltas: dict[str, int], outcome: rules.RoundOutcome, participants: list[str]
     ) -> dict[str, int]:
         applied: dict[str, int] = {}
+        bots = {p for p in deltas if (b := self.sessions.get(p)) is not None and b.bot}
+        participants = [p for p in participants if p not in bots]
         for pid, amount in deltas.items():
-            if amount == 0:
+            if pid in bots or amount == 0:  # NPC naira is for show; never touches the ledger
                 applied[pid] = 0
                 continue
             got, _ = await self.economy.post(
@@ -403,18 +438,19 @@ class World:
                 if pid not in outcome.idle:
                     await self.economy.change_hunger(pid, -self.cfg.game.hunger_per_round)
             async with self.db() as db, db.begin():
-                db.add(
-                    RoundStat(
-                        game_id=game_id,
-                        round_no=round_no,
-                        player_id=outcome.seeker,
-                        role="seeker",
-                        finds=len(outcome.found_order),
-                        earned=applied.get(outcome.seeker, 0),
+                if outcome.seeker not in bots:
+                    db.add(
+                        RoundStat(
+                            game_id=game_id,
+                            round_no=round_no,
+                            player_id=outcome.seeker,
+                            role="seeker",
+                            finds=len(outcome.found_order),
+                            earned=applied.get(outcome.seeker, 0),
+                        )
                     )
-                )
                 for h in outcome.hiders:
-                    if h in outcome.idle:
+                    if h in outcome.idle or h in bots:
                         continue
                     db.add(
                         RoundStat(
@@ -462,7 +498,7 @@ class World:
         self.shards = [h for h in self.shards if h.sessions] or self.shards[:1]
 
     def _group_expired(self, g: GroupRoom, now: float) -> bool:
-        online = [p for p in g.members if p not in g.left and (s := self.sessions.get(p)) and s.connected]
+        online = [p for p in g.members if p not in g.left and (s := self.sessions.get(p)) and s.connected and not s.bot]
         if g.phase == "over":
             return not online or now - g.phase_end > 600
         if g.phase == "lobby":
@@ -471,7 +507,7 @@ class World:
             not online
             and now - g.last_tick > 0
             and all(
-                (s := self.sessions.get(p)) is None or (s.disconnected_at and now - s.disconnected_at > 300)
+                (s := self.sessions.get(p)) is None or s.bot or (s.disconnected_at and now - s.disconnected_at > 300)
                 for p in g.members
             )
         )
@@ -480,10 +516,12 @@ class World:
         self.groups.pop(code, None)
         for p in g.members:
             s = self.sessions.get(p)
-            if s is not None and s.group is g:
+            if s is not None and s.bot:
+                self.drop_bot(p)
+            elif s is not None and s.group is g:
                 s.group = None
                 if s.room is g.arena:
-                    self.join_hub(s)
+                    self.join_hub(s, at=self.arrival_point())
         log.info("group_closed game=%s", g.id)
 
     async def run(self) -> None:

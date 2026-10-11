@@ -123,3 +123,33 @@ def validate_move(
         if segment_hits_box(from_x, from_z, to_x, to_z, b, pad=-0.05) and not (b.contains(from_x, from_z)):
             return MoveCheck(False, "wall")
     return MoveCheck(True)
+
+
+class BoxIndex:
+    """Uniform-grid spatial index so collision/LOS checks only touch nearby boxes."""
+
+    def __init__(self, boxes: list[Box], cell: float = 8.0) -> None:
+        self.cell = cell
+        self.boxes = boxes
+        self.grid: dict[tuple[int, int], list[Box]] = {}
+        for b in boxes:
+            for key in self._cells(b.min_x, b.min_z, b.max_x, b.max_z):
+                self.grid.setdefault(key, []).append(b)
+
+    def _cells(self, x0: float, z0: float, x1: float, z1: float) -> list[tuple[int, int]]:
+        c = self.cell
+        return [
+            (i, j)
+            for i in range(math.floor(x0 / c), math.floor(x1 / c) + 1)
+            for j in range(math.floor(z0 / c), math.floor(z1 / c) + 1)
+        ]
+
+    def query(self, x0: float, z0: float, x1: float, z1: float, pad: float = 0.0) -> list[Box]:
+        """Boxes whose cells overlap the padded bounding box of the two points."""
+        lo_x, hi_x = min(x0, x1) - pad, max(x0, x1) + pad
+        lo_z, hi_z = min(z0, z1) - pad, max(z0, z1) + pad
+        seen: dict[int, Box] = {}
+        for key in self._cells(lo_x, lo_z, hi_x, hi_z):
+            for b in self.grid.get(key, ()):
+                seen[id(b)] = b
+        return list(seen.values())

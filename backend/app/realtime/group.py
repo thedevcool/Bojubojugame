@@ -15,6 +15,7 @@ from app.content import GameConfig, MapData
 from app.economy import InsufficientFunds
 from app.engine import rules
 from app.engine.geometry import distance, has_line_of_sight, in_rect
+from app.realtime.bots import BOT_NAMES, BotBrain, drive_bots
 from app.realtime.rooms import ArenaRoom, Session
 
 if TYPE_CHECKING:
@@ -79,6 +80,7 @@ class GroupRoom:
         self.last_activity = world.now()
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
+        self.bots: dict[str, BotBrain] = {}
         self.arena = ArenaRoom(f"arena:{game_id}", self.map, self)
 
     # ------------------------------------------------------------ helpers
@@ -89,6 +91,34 @@ class GroupRoom:
     @property
     def active(self) -> list[str]:
         return [p for p in self.members if p not in self.retired and p not in self.left]
+
+    @property
+    def humans(self) -> list[str]:
+        return [p for p in self.active if p not in self.bots]
+
+    def is_bot(self, pid: str) -> bool:
+        return pid in self.bots
+
+    def add_bot(self, s: Session) -> None:
+        if s.pid != self.creator:
+            raise GroupError("Only the creator can add NPC players")
+        if self.phase != "lobby":
+            raise GroupError("Add NPCs before the game starts")
+        if len(self.active) >= self.cfg.game.max_players:
+            raise GroupError("Group is full (max 6)")
+        used = {self.nicks[p] for p in self.members}
+        name = next((n for n in self.world.rng.sample(BOT_NAMES, len(BOT_NAMES)) if n not in used), "Bot")
+        bot = self.world.create_bot(name)
+        self.bots[bot.pid] = BotBrain()
+        self.add_member(bot)
+
+    def remove_bot(self, s: Session, pid: str) -> None:
+        if s.pid != self.creator or self.phase != "lobby" or pid not in self.bots:
+            raise GroupError("Can't remove that NPC now")
+        self.members.remove(pid)
+        del self.bots[pid]
+        self.world.drop_bot(pid)
+        self.broadcast_state("player_left")
 
     def session(self, pid: str) -> Session | None:
         return self.world.sessions.get(pid)
@@ -123,6 +153,7 @@ class GroupRoom:
                     "retired": p in self.retired,
                     "left": p in self.left,
                     "pick": self.picks.get(p),
+                    "bot": p in self.bots,
                 }
                 for p in self.members
             ],
@@ -186,8 +217,10 @@ class GroupRoom:
         offline = [self.nicks[p] for p in players if not ((x := self.session(p)) and x.connected)]
         if offline:
             raise GroupError(f"Waiting for {', '.join(offline)} to come online")
+        if not self.humans:
+            raise GroupError("At least one real player is needed")
         hungry = []
-        for p in players:
+        for p in self.humans:
             if await self.world.economy.get_hunger(p) < self.cfg.game.min_hunger_to_play:
                 hungry.append(self.nicks[p])
         if hungry:
@@ -196,6 +229,10 @@ class GroupRoom:
             return
         self.broadcast({"t": "g_event", "e": "group_started"})
         self.set_phase("travel", self.cfg.game.travel_window_s, "travel_started")
+        for p in list(self.bots):  # NPCs take the first bus
+            if (b := self.session(p)) is not None:
+                self.boarded.add(p)
+                self.enter_arena(b, 0)
 
     async def board(self, s: Session, fare_id: str) -> None:
         if self.phase != "travel":
@@ -310,7 +347,9 @@ class GroupRoom:
         if distance(viewer.x, viewer.z, other.x, other.z) > rng:
             return False
         h = self.cfg.movement.crouch_height if other.crouch else self.cfg.movement.stand_height
-        return has_line_of_sight(viewer.x, viewer.z, other.x, other.z, h, self.map.boxes)
+        return has_line_of_sight(
+            viewer.x, viewer.z, other.x, other.z, h, self.map.near(viewer.x, viewer.z, other.x, other.z)
+        )
 
     def tag(self, s: Session) -> dict[str, Any]:
         r = self.round
@@ -336,7 +375,7 @@ class GroupRoom:
                 dist=d,
                 tag_range=self.cfg.game.tag_range_m,
                 line_of_sight=d <= self.cfg.game.tag_range_m * 2
-                and has_line_of_sight(s.x, s.z, hs.x, hs.z, height, self.map.boxes),
+                and has_line_of_sight(s.x, s.z, hs.x, hs.z, height, self.map.near(s.x, s.z, hs.x, hs.z)),
             )
             if ok and (best is None or d < best[0]):
                 best = (d, h)
@@ -359,7 +398,9 @@ class GroupRoom:
     async def update(self, now: float) -> None:
         dt = min(1.0, max(0.0, now - self.last_tick))
         self.last_tick = now
-        if self.phase in GAME_PHASES and len(self.active) < 2 and not self.game_over_pending:
+        if self.bots and self.phase != "lobby":
+            drive_bots(self, now, dt)
+        if self.phase in GAME_PHASES and (len(self.active) < 2 or not self.humans) and not self.game_over_pending:
             await self.finish_game()
             return
         if self.phase == "travel":
@@ -533,6 +574,6 @@ class GroupRoom:
             if self.round and self.round.state.get(s.pid) == "hiding":
                 self.round.state[s.pid] = "idle"
         s.group = None
-        if self.creator == s.pid and self.active:
-            self.creator = self.active[0]
+        if self.creator == s.pid and (self.humans or self.active):
+            self.creator = (self.humans or self.active)[0]
         self.broadcast_state("player_left")

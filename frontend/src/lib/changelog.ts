@@ -14,7 +14,7 @@ export const CHANGELOG: Release[] = [
     title: "Boju Boju v1: your life in Lagos 📱🏠",
     items: [
       { emoji: "📱", title: "Your own phone", text: "Buy any phone at the shop beside the park. Everything lives in it now: games, chats, houses, wallet, settings.", tryIt: "Tap the 📱 at the top right" },
-      { emoji: "🏠", title: "Rent a house & move in", text: "Pick a house on the street map, pay the rent and it's yours for 7 days. You wake up there every time.", tryIt: "📱 → Houses" },
+      { emoji: "🏠", title: "Rent a house & move in", text: "Pick a free house on the street map — one family per house, 17 to choose from. Pay the rent and it's yours for 7 days; friends can visit any time.", tryIt: "📱 → Houses" },
       { emoji: "💬", title: "Friends & messages", text: "Add friends by username, chat privately and invite them to your game in one tap.", tryIt: "📱 → Messages" },
       { emoji: "👆🏾", title: "Tap to go + real map view", text: "Choose joystick or tap-to-go. Pinch with two fingers to zoom; the aerial map glides like a real map app." },
       { emoji: "🪑", title: "Sit, look around, go home", text: "Sit on beds and benches, look all around your room, and after a match ride home or stay to explore." },

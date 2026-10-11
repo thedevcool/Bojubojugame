@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import msgpack
 import pytest
@@ -62,7 +62,7 @@ def test_phone_then_house_then_spawn_at_home(c):
     assert me["phone_id"] == "pro" and me["home_id"] == target["id"]
     spent = me0["balance"] - me["balance"]
     assert spent == 450000 + 2 * target["rent"]
-    assert c.get("/api/homes", headers=h).json()["homes"][2]["tenants"] == 1
+    assert c.get("/api/homes", headers=h).json()["mine"] == target["id"]
     # next login: you wake up inside your house
     world.sessions.clear()
     with c.websocket_connect(f"/ws?token={r['token']}") as ws:
@@ -106,3 +106,38 @@ def test_player_card_shows_points_and_relation(c):
     assert c.get(f"/api/players/{b['player_id']}/card", headers=ha).json()["relation"] == "requested"
     assert c.get(f"/api/players/{a['player_id']}/card", headers=hb).json()["relation"] == "incoming"
     assert c.get("/api/players/nope/card", headers=ha).status_code == 404
+
+
+def _give_phone(c, pid):
+    async def go():
+        from app.db import Player
+
+        async with c.app.state.db.sessions() as ses, ses.begin():
+            (await ses.get(Player, pid)).phone_id = "lite"
+
+    c.portal.call(go)
+
+
+def test_one_tenant_per_house_and_expired_rent_frees_it(c):
+    (a, ha), (b, hb) = reg(c, "owner_a"), reg(c, "renter_b")
+    _give_phone(c, a["player_id"])
+    _give_phone(c, b["player_id"])
+    house = get_maps()["hub_plaza"].homes[5]["id"]
+    assert c.post("/api/home/rent", json={"home_id": house, "key": "rent-a-0001"}, headers=ha).status_code == 200
+    bal_b = c.get("/api/me", headers=hb).json()["balance"]
+    r = c.post("/api/home/rent", json={"home_id": house, "key": "rent-b-0001"}, headers=hb)
+    assert r.status_code == 409 and "@owner_a" in r.json()["detail"]
+    row = next(x for x in c.get("/api/homes", headers=hb).json()["homes"] if x["id"] == house)
+    assert row["taken"] and row["owner"] == "owner_a"
+    assert bal_b == c.get("/api/me", headers=hb).json()["balance"]  # refused rent cost nothing
+
+    async def expire():
+        from app.db import Player
+
+        async with c.app.state.db.sessions() as ses, ses.begin():
+            (await ses.get(Player, a["player_id"])).rent_until = datetime(2020, 1, 1, tzinfo=UTC)
+
+    c.portal.call(expire)
+    assert c.post("/api/home/rent", json={"home_id": house, "key": "rent-b-0002"}, headers=hb).status_code == 200
+    assert c.get("/api/me", headers=ha).json()["home_id"] is None
+    assert c.get("/api/me", headers=hb).json()["home_id"] == house

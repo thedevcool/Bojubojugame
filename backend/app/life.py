@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.accounts import Me
 from app.content import HUB_MAP_ID, GameConfig
@@ -107,57 +108,94 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
     # ------------------------------------------------------------ houses
     @r.get("/homes")
     async def homes(pid: Me) -> dict[str, Any]:
+        now = datetime.now(UTC)
         async with db.sessions() as ses:
-            counts = dict(
-                (
+            tenants = {
+                home: (tid, name, _aware(until))
+                for tid, name, home, until in (
                     await ses.execute(
-                        select(Player.home_id, func.count()).where(Player.home_id.is_not(None)).group_by(Player.home_id)
+                        select(Player.id, Player.username, Player.home_id, Player.rent_until).where(
+                            Player.home_id.is_not(None)
+                        )
                     )
                 ).all()
-            )
+            }
             me = await ses.get(Player, pid)
-        return {
-            "days": cfg.rent.days,
-            "mine": me.home_id if me else None,
-            "rent_until": _aware(me.rent_until).isoformat() if me and me.rent_until else None,
-            "homes": [
+        out = []
+        for h in hub.homes:
+            t = tenants.get(h["id"])
+            # an expired tenant keeps the keys until someone else rents the house
+            taken = t is not None and t[0] != pid and t[2] is not None and t[2] > now
+            out.append(
                 {
                     "id": h["id"],
                     "name": h["name"],
                     "rent": rent_price(h),
-                    "tenants": int(counts.get(h["id"], 0)),
                     "duplex": rent_price(h) > cfg.rent.prices["bungalow"],
                     "door": h["door"],
+                    "owner": t[1] if t is not None and t[0] != pid else None,
+                    "owner_id": t[0] if t is not None and t[0] != pid else None,
+                    "taken": taken,
                 }
-                for h in hub.homes
-            ],
+            )
+        return {
+            "days": cfg.rent.days,
+            "mine": me.home_id if me else None,
+            "rent_until": _aware(me.rent_until).isoformat() if me and me.rent_until else None,  # type: ignore[union-attr]
+            "free": sum(1 for h in out if not h["taken"] and h["id"] != (me.home_id if me else None)),
+            "homes": out,
         }
 
     @r.post("/home/rent")
     async def rent(body: RentIn, pid: Me) -> dict[str, Any]:
+        """One tenant per house. Claim the house first (unique index), then pay; undo the claim if payment fails."""
         home = hub.home_by_id(body.home_id)
         if home is None:
             raise HTTPException(404, "Unknown house")
-        async with db.sessions() as ses:
-            p = await ses.get(Player, pid)
-        if p is None:
-            raise HTTPException(404, "Unknown player")
-        if not p.phone_id:
-            raise HTTPException(409, "Buy a phone first — you rent houses with the Houses app")
+        now = datetime.now(UTC)
+        evicted: str | None = None
+        try:
+            async with db.sessions() as ses, ses.begin():
+                p = await ses.get(Player, pid, with_for_update=True)
+                if p is None:
+                    raise HTTPException(404, "Unknown player")
+                if not p.phone_id:
+                    raise HTTPException(409, "Buy a phone first — you rent houses with the Houses app")
+                prev_home, prev_until = p.home_id, _aware(p.rent_until)
+                if p.home_id != home["id"]:
+                    holder = await ses.scalar(
+                        select(Player).where(Player.home_id == home["id"], Player.id != pid).with_for_update()
+                    )
+                    if holder is not None:
+                        until = _aware(holder.rent_until)
+                        if until is not None and until > now:
+                            raise HTTPException(409, f"@{holder.username} already lives here — pick another house")
+                        holder.home_id, holder.rent_until = None, None  # their rent ran out
+                        evicted = holder.id
+                        await ses.flush()
+                    p.home_id = home["id"]
+        except IntegrityError:
+            raise HTTPException(409, "Someone just rented this house — pick another one") from None
         price = rent_price(home)
         try:
             await world.economy.post(pid, -price, "rent", f"rent:{pid}:{body.key}", ref=home["id"])
         except InsufficientFunds:
+            async with db.sessions() as ses, ses.begin():
+                p = await ses.get(Player, pid, with_for_update=True)
+                if p is not None:
+                    p.home_id, p.rent_until = prev_home, prev_until
             raise HTTPException(402, "Omo, your money no reach for this rent") from None
-        now = datetime.now(UTC)
         async with db.sessions() as ses, ses.begin():
             p = await ses.get(Player, pid, with_for_update=True)
             assert p is not None
-            current = _aware(p.rent_until)
-            start = current if p.home_id == home["id"] and current and current > now else now
-            p.home_id = home["id"]
+            renew = prev_home == home["id"] and prev_until is not None and prev_until > now
+            start = prev_until if renew and prev_until is not None else now
             p.rent_until = start + timedelta(days=cfg.rent.days)
             until = p.rent_until
+        if evicted:
+            world.set_home(evicted, None)
+            if (s := world.sessions.get(evicted)) is not None:
+                s.send({"t": "toast", "msg": "Your rent ran out and someone new moved into your house 🏠"})
         world.set_home(pid, home["id"])
         await push_wallet(pid)
         return {"ok": True, "home": home, "rent_until": until.isoformat()}

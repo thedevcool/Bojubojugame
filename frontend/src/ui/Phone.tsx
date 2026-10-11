@@ -374,7 +374,7 @@ function DmThread({ id }: { id: string }) {
 
 // ------------------------------------------------------------------ Houses
 function HousesApp() {
-  const [data, setData] = useState<{ days: number; mine: string | null; rent_until: string | null; homes: HouseInfo[] } | null>(null);
+  const [data, setData] = useState<{ days: number; mine: string | null; rent_until: string | null; free: number; homes: HouseInfo[] } | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const balance = useGame((s) => s.balance);
@@ -382,7 +382,7 @@ function HousesApp() {
   const hub = useGame((s) => s.content?.maps.hub_plaza);
   const acc = loadAccount();
   useEffect(() => {
-    if (acc) getHomes(acc).then((d) => { setData(d); setSel((s) => s ?? d.mine ?? d.homes[0]?.id ?? null); }).catch(() => {});
+    if (acc) getHomes(acc).then((d) => { setData(d); setSel((s) => s ?? d.mine ?? d.homes.find((x) => !x.taken)?.id ?? d.homes[0]?.id ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (!data || !acc) return <div className="text-sm opacity-60">Loading houses…</div>;
@@ -398,7 +398,7 @@ function HousesApp() {
       const r = await rentHome(acc, h.id);
       const st = useGame.getState();
       st.set({ life: { ...st.life, homeId: h.id, rentUntil: r.rent_until } });
-      setData({ ...data, mine: h.id, rent_until: r.rent_until, homes: data.homes.map((x) => (x.id === h.id && data.mine !== h.id ? { ...x, tenants: x.tenants + 1 } : x)) });
+      setData({ ...data, mine: h.id, rent_until: r.rent_until, free: data.free - (mine ? 0 : 1), homes: data.homes.map((x) => (x.id === h.id ? { ...x, owner: null, owner_id: null, taken: false } : x)) });
       sound.play("coin");
       st.toast(mine ? `Rent renewed — ${data.days} more days 🏠` : `🔑 ${h.name} is yours for ${data.days} days!`, "good");
       if (!mine && homeGeo) {
@@ -413,6 +413,11 @@ function HousesApp() {
   };
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="opacity-75">One family per house — visit anyone, any time.</span>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 font-semibold">{data.free} of {data.homes.length} free</span>
+      </div>
+      {data.free === 0 && !data.mine && <div className="rounded-2xl bg-[var(--clay)]/25 p-2.5 text-xs">🏗️ Every house is taken right now — new streets are being built. Check back soon!</div>}
       {onboard === "rent" && <div className="anim-rise rounded-2xl bg-[var(--accent)]/20 p-2.5 text-xs">👇🏾 Pick a house on the map or the list, then pay the rent to move in.</div>}
       <HouseMap homes={data.homes} sel={sel} mine={data.mine} onSelect={setSel} />
       {h && (
@@ -420,7 +425,7 @@ function HousesApp() {
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="font-black">{h.name}</div>
-              <div className="text-xs opacity-70">{h.duplex ? "🏡 Duplex" : "🏠 Bungalow"} · 👥 {h.tenants} {h.tenants === 1 ? "tenant" : "tenants"}</div>
+              <div className="text-xs opacity-70">{h.duplex ? "🏡 Duplex" : "🏠 Bungalow"} · {mine ? "yours" : h.taken ? `🔑 @${h.owner} lives here` : "✨ available"}</div>
             </div>
             <div className="text-right">
               <div className="font-black text-[var(--accent)]">{naira(h.rent)}</div>
@@ -439,6 +444,15 @@ function HousesApp() {
                 <button className="btn btn-ghost py-2 text-sm" disabled={busy || balance < h.rent} onClick={rent}>Renew +{data.days}d</button>
               </div>
             </>
+          ) : h.taken ? (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="btn btn-primary py-2 text-sm" onClick={() => {
+                if (homeGeo && useGame.getState().mapId === "hub_plaza") { useGame.getState().set({ guide: { x: homeGeo.door[0], z: homeGeo.door[1], label: `🏠 @${h.owner}` } }); walkTo(homeGeo.door[0], homeGeo.door[1]); }
+                else useGame.getState().toast("Ride back to Lagos first 🚌");
+                useGame.getState().closePhone();
+              }}>🧭 Visit</button>
+              <button className="btn btn-ghost py-2 text-sm" onClick={() => { useGame.getState().closePhone(); useGame.getState().set({ card: h.owner_id }); }}>👤 @{h.owner}</button>
+            </div>
           ) : (
             <button className="btn btn-primary mt-3 w-full" disabled={busy || balance < h.rent} onClick={rent}>
               {balance < h.rent ? "Your money no reach" : data.mine ? `Move here · pay ${naira(h.rent)}` : `Rent & move in · ${naira(h.rent)}`}
@@ -450,11 +464,11 @@ function HousesApp() {
         {data.homes.map((x) => (
           <button key={x.id} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${x.id === sel ? "bg-[var(--accent)]/20" : ""}`} onClick={() => setSel(x.id)}>
             <span>{x.id === data.mine ? "🔑 " : x.duplex ? "🏡 " : "🏠 "}{x.name}</span>
-            <span className="text-xs opacity-75">{nairaShort(x.rent)}</span>
+            <span className="text-xs opacity-75">{x.id === data.mine ? "yours" : x.taken ? `@${x.owner}` : nairaShort(x.rent)}</span>
           </button>
         ))}
       </div>
-      <p className="text-[10px] opacity-50">In-game naira only. Rent lasts {data.days} days; renew any time. Houses can have more than one tenant.</p>
+      <p className="text-[10px] opacity-50">In-game naira only. Rent lasts {data.days} days; renew any time. If rent runs out, the house can go to someone new.</p>
     </div>
   );
 }
@@ -482,8 +496,8 @@ function HouseMap({ homes, sel, mine, onSelect }: { homes: HouseInfo[]; sel: str
       ctx.fillRect((z.rect[0] - x0) * S, (z.rect[1] - z0) * S, (z.rect[2] - z.rect[0]) * S, (z.rect[3] - z.rect[1]) * S);
     }
     for (const h of geo) {
-      const on = h.id === sel, own = h.id === mine;
-      ctx.fillStyle = on ? "#2f7cf6" : own ? "#39d353" : "#f2e6cf";
+      const on = h.id === sel, own = h.id === mine, taken = homes.find((x) => x.id === h.id)?.taken;
+      ctx.fillStyle = on ? "#2f7cf6" : own ? "#39d353" : taken ? "#8a8f96" : "#f2e6cf";
       ctx.strokeStyle = on ? "#ffffff" : "#6b4a2b";
       ctx.lineWidth = on ? 2.5 : 1;
       const r = h.rect;
@@ -510,7 +524,7 @@ function HouseMap({ homes, sel, mine, onSelect }: { homes: HouseInfo[]; sel: str
   return (
     <div className="relative overflow-hidden rounded-2xl">
       <canvas ref={ref} width={W} height={W} className="block aspect-square w-full" onPointerDown={pick} />
-      <div className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px]">🔴 you · 🟦 selected · 🟩 yours</div>
+      <div className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px]">🔴 you · 🟦 selected · 🟩 yours · ⬜ free · ◼️ taken</div>
     </div>
   );
 }

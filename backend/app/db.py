@@ -213,6 +213,25 @@ def _backfill_accounts(conn: Connection) -> None:
         )
 
 
+def _dedupe_homes(conn: Connection) -> None:
+    """Houses used to be shareable: keep the tenant with the latest rent, move the rest out."""
+    rows = conn.execute(text("SELECT id, home_id, rent_until FROM players WHERE home_id IS NOT NULL")).all()
+    keep: dict[str, tuple[str, str]] = {}
+    evict: list[str] = []
+    for pid, home, until in rows:
+        key = (str(until or ""), pid)
+        cur = keep.get(home)
+        if cur is None:
+            keep[home] = key
+        elif key > cur:
+            evict.append(cur[1])
+            keep[home] = key
+        else:
+            evict.append(pid)
+    for pid in evict:
+        conn.execute(text("UPDATE players SET home_id = NULL, rent_until = NULL WHERE id = :id"), {"id": pid})
+
+
 class Database:
     def __init__(self, url: str) -> None:
         kw: dict[str, Any] = {"pool_pre_ping": True}
@@ -226,7 +245,10 @@ class Database:
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(_add_missing_columns)
             await conn.run_sync(_backfill_accounts)
+            await conn.run_sync(_dedupe_homes)
             for ddl in (
+                # one tenant per house
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_home ON players (home_id) WHERE home_id IS NOT NULL",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_username ON players (lower(username))",
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_players_email ON players (lower(email)) WHERE email IS NOT NULL",
             ):

@@ -15,7 +15,9 @@ bought, sold, withdrawn or cashed out.
   Boju Boju, Messages, Houses, Wallet, Map, Rankings, Events (coming soon), Camera, What's new and Settings.
 - **Friends & DMs** (`/api/friends*`, `/api/dm/*`): add by username, private chat between friends
   only, one-tap game invites.
-- **Houses** (`/api/homes`, `/api/home/rent`): 7-day rent paid from the ledger; you respawn at home.
+- **Houses** (`/api/homes`, `/api/home/rent`): one tenant per house (unique index), 7-day rent paid
+  from the ledger, you respawn at home, anyone can walk in to visit. An expired house goes to the
+  next renter. More houses = add a street in `backend/tools/build_hub.py` and regenerate the map.
 - **Controls**: joystick or tap-to-go (client A* in `frontend/src/game/nav.ts`), two-finger pinch
   zoom, map-like aerial view with momentum; sit on beds, benches or the floor.
 - **After a match**: ride home (route map plays in reverse) or stay and explore; the arena bus stop

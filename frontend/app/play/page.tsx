@@ -17,7 +17,7 @@ import { MiniBridge } from "@/ui/LagosLife";
 import { CoachGuide, CoachMoments, HowToPlay } from "@/ui/Coach";
 import { BojuSong, SongCaptions } from "@/ui/BojuSong";
 import { Reveal } from "@/ui/Reveal";
-import { ActionButtons, BlindOverlay, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
+import { ActionButtons, BlindOverlay, BuildingWorld, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
@@ -173,6 +173,7 @@ export default function PlayPage() {
             {!decor && !onboarding && <MiniMapWidget />}
             {!decor && <ActionButtons />}
             <DriveControls />
+            <BuildingWorld />
             <DicePanel />
             <RoundResultPanel />
             <GameOverPanel />

@@ -5,7 +5,7 @@ import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Prop } from "@/lib/types";
-import { local } from "./state";
+import { local, staticWorld } from "./state";
 import { asphalt, concrete, grass, plaster, sand, tiles, zinc } from "./textures";
 
 /** Modular Lagos kit: every prop kind is assembled from shared primitives. */
@@ -606,41 +606,72 @@ const DECORATIVE = new Set(["bench", "tyres", "grill", "fan", "rug", "table"]);
 /**
  * Renders children once, then merges every static mesh into one mesh per
  * material (hundreds of props -> a few dozen draw calls on mobile).
+ * The merge is done in small slices across frames, never one long block: on a low-end phone a
+ * single block froze the page for seconds (and, inside LagosLife, their page with it).
+ * Shapes stay indexed (no toNonIndexed), which halves the work and the memory.
  */
+const SLICE_MS = 8;
 function StaticBatch({ children }: { children: React.ReactNode }) {
   const src = useRef<THREE.Group>(null);
   const [merged, setMerged] = useState<THREE.Mesh[] | null>(null);
   useLayoutEffect(() => {
     const root = src.current;
     if (!root) return;
+    let cancelled = false, done = false, timer = 0;
+    const out: THREE.Mesh[] = [];
+    staticWorld.building++;
     root.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-    const groups = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; shadow: boolean }>();
+    const meshes: THREE.Mesh[] = [];
     root.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (!m.isMesh || Array.isArray(m.material)) return;
-      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+      if (m.isMesh && !Array.isArray(m.material)) meshes.push(m);
+    });
+    const groups = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; shadow: boolean }>();
+    const tmp = new THREE.Matrix4();
+    let i = 0, k = 0;
+    let entries: [THREE.Material, { geos: THREE.BufferGeometry[]; shadow: boolean }][] = [];
+    const prepare = (m: THREE.Mesh) => {
+      const g = m.geometry.clone();
+      if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]); // merge needs all-or-none indexed
+      g.applyMatrix4(tmp.multiplyMatrices(inv, m.matrixWorld));
       const tile = (m.material as THREE.Material).userData.tile as number | undefined;
       if (tile) worldUV(g, tile);
-      for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(k)) g.deleteAttribute(k);
-      const e = groups.get(m.material) ?? { geos: [], shadow: false };
+      for (const key of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(key)) g.deleteAttribute(key);
+      const e = groups.get(m.material as THREE.Material) ?? { geos: [], shadow: false };
       e.geos.push(g);
       e.shadow ||= m.castShadow;
-      groups.set(m.material, e);
-    });
-    const out: THREE.Mesh[] = [];
-    for (const [material, { geos, shadow }] of groups) {
-      const g = mergeGeometries(geos, false);
-      geos.forEach((x) => x.dispose());
-      if (!g) continue;
-      const mesh = new THREE.Mesh(g, material);
-      mesh.castShadow = shadow;
-      mesh.receiveShadow = true;
-      out.push(mesh);
-    }
-    setMerged(out);
-    return () => out.forEach((m) => m.geometry.dispose());
+      groups.set(m.material as THREE.Material, e);
+    };
+    const step = () => {
+      if (cancelled) return;
+      const t0 = performance.now();
+      while (i < meshes.length && performance.now() - t0 < SLICE_MS) prepare(meshes[i++]);
+      if (i < meshes.length) { timer = window.setTimeout(step, 0); return; }
+      if (!entries.length) entries = [...groups];
+      while (k < entries.length && performance.now() - t0 < SLICE_MS) {
+        const [material, { geos, shadow }] = entries[k++];
+        const g = mergeGeometries(geos, false);
+        geos.forEach((x) => x.dispose());
+        if (!g) continue;
+        g.computeBoundingSphere();
+        const mesh = new THREE.Mesh(g, material);
+        mesh.castShadow = shadow;
+        mesh.receiveShadow = true;
+        out.push(mesh);
+      }
+      if (k < entries.length) { timer = window.setTimeout(step, 0); return; }
+      done = true;
+      staticWorld.building--;
+      setMerged(out);
+    };
+    timer = window.setTimeout(step, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (!done) staticWorld.building = Math.max(0, staticWorld.building - 1);
+      out.forEach((m) => m.geometry.dispose());
+    };
   }, []);
   if (merged) return <>{merged.map((m) => <primitive key={m.uuid} object={m} />)}</>;
   return <group ref={src} visible={false}>{children}</group>;

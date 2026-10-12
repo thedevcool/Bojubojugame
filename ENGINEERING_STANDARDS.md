@@ -128,6 +128,22 @@ exactly one copy of every number and every map.
 - Shadows only on High; Low uses DPR ≤ 1 and fog to cut draw distance.
 - Big downloads show their size first; static assets cached by a service worker.
 
+**The benchmark device is the lowest-end phone we support, never a laptop or a flagship.**
+Every performance check runs on this profile (Playwright + Chrome DevTools Protocol):
+
+| Benchmark profile | Value |
+|---|---|
+| Screen | 360 × 740, device pixel ratio 2, touch |
+| CPU / memory reported | 2 cores, 2 GB (`navigator.hardwareConcurrency` / `deviceMemory`) |
+| CPU speed | `Emulation.setCPUThrottlingRate` = 6 |
+| Graphics | software WebGL (no GPU) |
+| Also run | inside a cross-origin sandboxed iframe, like LagosLife's game player |
+
+- No main-thread task may block for more than ~1 s on that profile (Chrome shows
+  "Page unresponsive" after a long freeze, and inside LagosLife it freezes their page too).
+  Heavy one-time work (merging the city's meshes, building nav grids) is split into ≤ 8 ms slices.
+- The page must answer (a `frame.evaluate`) within 500 ms at any moment after load.
+
 ## 8. Testing
 
 - `app/engine` has unit tests for **every** rule in the spec: dice, scoring, next seeker,

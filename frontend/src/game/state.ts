@@ -48,6 +48,9 @@ export const cam = {
 /** The live camera + canvas, for DOM overlays that turn a screen point into a ground point (decorate mode). */
 export const sceneRefs = { camera: null as unknown as import("three").Camera | null, canvas: null as HTMLCanvasElement | null };
 
+/** How many static batches (merged buildings/props) are still being built; the HUD says "Building…". */
+export const staticWorld = { building: 0 };
+
 /** Short-lived screen effects (camera shake on a tag, etc.). */
 export const fx = { shake: 0 };
 

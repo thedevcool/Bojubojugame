@@ -141,7 +141,8 @@ Every performance check runs on this profile (Playwright + Chrome DevTools Proto
 
 - No main-thread task may block for more than ~1 s on that profile (Chrome shows
   "Page unresponsive" after a long freeze, and inside LagosLife it freezes their page too).
-  Heavy one-time work (merging the city's meshes, building nav grids) is split into ≤ 8 ms slices.
+  Heavy one-time work (merging the city's meshes, building nav grids, starting the sound engine) is split into short steps (≤ ~30 ms), and drawing pauses while the city builds.
+  Never time logic with R3F's `clock.elapsedTime`: it restarts when the frame loop mode changes. Use `performance.now()`.
 - The page must answer (a `frame.evaluate`) within 500 ms at any moment after load.
 
 ## 8. Testing

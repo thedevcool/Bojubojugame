@@ -97,7 +97,8 @@ type Limb = { upper: React.RefObject<THREE.Group | null>; lower: React.RefObject
  * Walk/run uses a proper gait (knee lifts on the swing leg); "bend down" is a
  * real squat: thighs forward, knees bent, back leaning, head up, feet planted.
  */
-export default function Avatar({ av, label, me, motion, tag }: { av: number[]; label?: string; me?: boolean; motion: { current: Motion }; tag?: string }) {
+/** ``lite``: skip the small face details (each is a draw call) — used for other people on low quality. */
+export default function Avatar({ av, label, me, motion, tag, lite }: { av: number[]; label?: string; me?: boolean; motion: { current: Motion }; tag?: string; lite?: boolean }) {
   const [s, t, b, gender = 0, style = 0] = av;
   const female = gender === 1;
   const skin = mat(SKIN[s % 8]);
@@ -199,19 +200,23 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
             <group position={[0, 0.22, 0]}>
               <mesh geometry={ball} material={skin} scale={female ? [0.255, 0.31, 0.28] : [0.27, 0.32, 0.29]} castShadow />
               <Hair female={female} style={style % 4} accent={top} />
-              {/* eyebrows */}
-              <mesh geometry={box} material={mat("#120d0a")} position={[-0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? 0.12 : 0.05]} />
-              <mesh geometry={box} material={mat("#120d0a")} position={[0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? -0.12 : -0.05]} />
-              {female && <mesh geometry={ball} material={mat("#c4a032")} position={[-0.135, -0.06, 0]} scale={0.03} />}
-              {female && <mesh geometry={ball} material={mat("#c4a032")} position={[0.135, -0.06, 0]} scale={0.03} />}
-              <mesh geometry={ball} material={mat("#ffffff")} position={[-0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
-              <mesh geometry={ball} material={mat("#ffffff")} position={[0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
-              <mesh geometry={ball} material={mat("#120d0a")} position={[-0.065, 0.03, 0.14]} scale={0.022} />
-              <mesh geometry={ball} material={mat("#120d0a")} position={[0.065, 0.03, 0.14]} scale={0.022} />
-              <mesh geometry={ball} material={skin} position={[0, -0.03, 0.15]} scale={[0.05, 0.06, 0.05]} />
-              <mesh geometry={box} material={mat(female ? "#6e2626" : "#5a2a22")} position={[0, -0.1, 0.135]} scale={female ? [0.085, 0.022, 0.025] : [0.08, 0.015, 0.02]} />
-              <mesh geometry={ball} material={skin} position={[-0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
-              <mesh geometry={ball} material={skin} position={[0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
+              {!lite && (
+                <>
+                {/* eyebrows */}
+                <mesh geometry={box} material={mat("#120d0a")} position={[-0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? 0.12 : 0.05]} />
+                <mesh geometry={box} material={mat("#120d0a")} position={[0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? -0.12 : -0.05]} />
+                {female && <mesh geometry={ball} material={mat("#c4a032")} position={[-0.135, -0.06, 0]} scale={0.03} />}
+                {female && <mesh geometry={ball} material={mat("#c4a032")} position={[0.135, -0.06, 0]} scale={0.03} />}
+                <mesh geometry={ball} material={mat("#ffffff")} position={[-0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
+                <mesh geometry={ball} material={mat("#ffffff")} position={[0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
+                <mesh geometry={ball} material={mat("#120d0a")} position={[-0.065, 0.03, 0.14]} scale={0.022} />
+                <mesh geometry={ball} material={mat("#120d0a")} position={[0.065, 0.03, 0.14]} scale={0.022} />
+                <mesh geometry={ball} material={skin} position={[0, -0.03, 0.15]} scale={[0.05, 0.06, 0.05]} />
+                <mesh geometry={box} material={mat(female ? "#6e2626" : "#5a2a22")} position={[0, -0.1, 0.135]} scale={female ? [0.085, 0.022, 0.025] : [0.08, 0.015, 0.02]} />
+                <mesh geometry={ball} material={skin} position={[-0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
+                <mesh geometry={ball} material={skin} position={[0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
+                </>
+              )}
             </group>
           </group>
         </group>

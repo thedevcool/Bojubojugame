@@ -126,9 +126,11 @@ function LocalPlayer({ map }: { map: GameMap }) {
       }
     }
     local.crouch = !local.sit && !local.lie && (input.crouchToggle || k.has("KeyC") || k.has("ControlLeft"));
-    const wantRun = (input.runHeld || input.joyRun || autoRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
+    if (local.crouch) input.runToggle = false; // bending down ends a run
+    const wantRun = (input.runHeld || input.runToggle || input.joyRun || autoRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
     local.run = wantRun && moving && local.stamina > 0;
     if (local.run) local.stamina = Math.max(0, local.stamina - dt);
+    if (local.stamina <= 0) input.runToggle = false; // out of breath: tap Run again once the ring refills
     else local.stamina = Math.min(cfg.stamina_max_s, local.stamina + cfg.stamina_regen_per_s * dt);
     local.moving = moving;
     let speed = 0;
@@ -366,6 +368,7 @@ function LocalPlayer({ map }: { map: GameMap }) {
 }
 
 function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
+  const lite = useGame((s) => s.quality === "low"); // other people: no tiny face details on slow phones
   const group = useRef<THREE.Group>(null);
   const motion = useRef<Motion>({ speed: 0, crouch: false, sit: false, seatY: 0 });
   const seat = useRef<Seat | null>(null);
@@ -404,7 +407,7 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   });
   return (
     <group ref={group} visible={false}>
-      <group ref={avatarRef}><Avatar av={r.av} motion={motion} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} /></group>
+      <group ref={avatarRef}><Avatar av={r.av} motion={motion} lite={lite} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} /></group>
       <group ref={carRef} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
     </group>
   );
@@ -791,6 +794,7 @@ function Sun({ shadows }: { shadows: boolean }) {
 
 function World({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
+  const mini = useGame((s) => !!s.mini);
   const catalog = useGame((s) => s.content?.config.furniture);
   useEffect(() => { setCatalog(catalog ?? [], map); }, [catalog, map]);
   const aerial = useGame((s) => s.aerial);
@@ -816,9 +820,10 @@ function World({ map }: { map: GameMap }) {
       <Markers map={map} />
       <GatherCircle />
       <AerialLabels map={map} />
-      {map.kind === "hub" && <Ambient map={map} />}
-      {map.kind === "hub" && map.homes && <FurnitureLayer homes={map.homes} />}
-      {map.kind === "hub" && map.homes && <DecorDraft homes={map.homes} />}
+      {/* LagosLife is only the Boju Boju game: no street crowd, traffic or house interiors to draw */}
+      {map.kind === "hub" && !mini && <Ambient map={map} />}
+      {map.kind === "hub" && !mini && map.homes && <FurnitureLayer homes={map.homes} />}
+      {map.kind === "hub" && !mini && map.homes && <DecorDraft homes={map.homes} />}
       <LocalPlayer map={map} />
       <Remotes map={map} />
       <TapMover />
@@ -861,7 +866,8 @@ export default function Scene({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
   const mini = useGame((s) => !!s.mini);
   const building = useGame((s) => s.building);
-  const dpr: [number, number] = quality === "low" ? [0.6, 1] : quality === "medium" ? [1, 1.5] : [1, 2];
+  // LagosLife on low: fewer pixels is the biggest single win on slow phones (~+50% frames on the low-end profile)
+  const dpr: [number, number] = quality === "low" ? (mini ? [0.6, 0.75] : [0.6, 1]) : quality === "medium" ? [1, 1.5] : [1, 2];
   return (
     <Canvas
       shadows={quality === "high" ? "soft" : quality === "medium"}

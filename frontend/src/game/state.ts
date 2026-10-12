@@ -28,6 +28,8 @@ export const input = {
   keys: new Set<string>(),
   joyRun: false,
   runHeld: false,
+  /** tapped Run: keep running until tapped again (or out of breath) */
+  runToggle: false,
   crouchToggle: false,
   /** on-screen driving pedals and steering (held) */
   pedal: { gas: false, brake: false, left: false, right: false },

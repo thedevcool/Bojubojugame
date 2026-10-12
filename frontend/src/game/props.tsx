@@ -138,7 +138,7 @@ function Windows({ w, d, h, floors }: { w: number; d: number; h: number; floors:
  * House wall: plaster in the house colour, a darker painted band at the foot
  * (rain splash), and on outside walls louvre windows with burglar-proof bars.
  */
-function HouseWall({ p }: { p: Prop }) {
+function HouseWall({ p, low }: { p: Prop; low?: boolean }) {
   const along = p.w >= p.d; // wall runs along x
   const len = along ? p.w : p.d, thick = along ? p.d : p.w;
   const color = p.color ?? "#e7d1a1";
@@ -153,8 +153,9 @@ function HouseWall({ p }: { p: Prop }) {
         <group key={`${i}${side}`} position={[x, 0, z]}>
           <B p={[0, 1.55, 0]} s={[1.12, 1.12, 0.03]} c="#f7f4ee" shadow={false} />
           <B p={[0, 1.55, side * 0.01]} s={[1.0, 1.0, 0.02]} c={mat("#3d5d73", { rough: 0.2 })} shadow={false} />
-          {[0.3, 0.55, 0.8, 1.05, 1.3].map((k) => <B key={k} p={[0, 1.05 + k * 0.8, side * 0.025]} s={[0.98, 0.025, 0.012]} c="#86a3b5" shadow={false} />)}
-          {side === 1 && [-0.4, -0.2, 0, 0.2, 0.4].map((bx) => <B key={bx} p={[bx, 1.55, 0.05]} s={[0.025, 1.08, 0.025]} c="#22262a" shadow={false} />)}
+          {/* louvre slats and burglar bars: ~half the city's triangles, so not on low quality */}
+          {!low && [0.3, 0.55, 0.8, 1.05, 1.3].map((k) => <B key={k} p={[0, 1.05 + k * 0.8, side * 0.025]} s={[0.98, 0.025, 0.012]} c="#86a3b5" shadow={false} />)}
+          {!low && side === 1 && [-0.4, -0.2, 0, 0.2, 0.4].map((bx) => <B key={bx} p={[bx, 1.55, 0.05]} s={[0.025, 1.08, 0.025]} c="#22262a" shadow={false} />)}
           {side === 1 && <B p={[0, 0.98, 0.06]} s={[1.25, 0.06, 0.1]} c="#e8e2d6" shadow={false} />}
         </group>,
       );
@@ -295,7 +296,7 @@ function Zebra({ p }: { p: Prop }) {
   );
 }
 
-function PropMesh({ p }: { p: Prop }) {
+function PropMesh({ p, low }: { p: Prop; low?: boolean }) {
   const c = p.color;
   switch (p.kind) {
     case "house": case "flat": case "duplex": {
@@ -325,7 +326,7 @@ function PropMesh({ p }: { p: Prop }) {
         </>
       );
     case "wall":
-      if (p.win || p.inner) return <HouseWall p={p} />;
+      if (p.win || p.inner) return <HouseWall p={p} low={low} />;
       return (
         <>
           <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={wallMat(c ?? "#c9b48a")} />
@@ -885,7 +886,7 @@ export const MapProps = memo(function MapProps({ props, lowDetail, city }: { pro
         city={city}
         items={statics.map((p, i) => (
           <group key={i} position={[p.x, 0, p.z]}>
-            <PropMesh p={p} />
+            <PropMesh p={p} low={lowDetail} />
           </group>
         ))}
       />

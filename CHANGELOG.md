@@ -15,6 +15,17 @@ register in the release that ships them.
 
 ---
 
+## 2.11.3 — 2026-10-12
+- Run works with tap-to-go: tap Run to keep running (tap again to walk), or hold it. A cyan ring shows your breath
+  and turns red when you're nearly out; out of breath, you slow to a walk.
+- Changes `P27`: Run is now tap-to-toggle as well as hold (the owner reported Run not working — a tap released it at once).
+- New control styling: round glass buttons with an icon and a small label, a gradient when on; glass steering pads, a
+  red brake and a green gas pedal.
+- LagosLife runs much smoother on slow phones (low-end profile: ~8 → ~13–14 fps, triangles 88k → 43k, longest task
+  < 0.8 s): no street crowd, traffic or house interiors there, fewer pixels, other players without tiny face details,
+  and on low quality the house windows skip their louvres and burglar bars.
+- Changes `P32`: the LagosLife version draws only what the Boju Boju game needs (no crowd, traffic or house interiors).
+
 ## 2.11.2 — 2026-10-12
 - New players get the guided tour again, and never the What's New sheet. Tour progress, tour
   completion and the first-game guide answer were kept per phone, so on a phone where someone had already
@@ -52,12 +63,12 @@ register in the release that ships them.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
 - `P25` **Map & travel** — minimap, full map with pins, real map of Naija, rides between cities and venues.
 - `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja.
-- `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run, Sit, emotes.
+- `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass control buttons.
 
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P32` **LagosLife mini version** (`/lagoslife`) — signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
+- `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
@@ -70,6 +81,7 @@ register in the release that ships them.
 
 | Version | Date | Title |
 |---|---|---|
+| 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |
 | 2.11.2 | 2026-10-12 | New players get the tour, not What's New; changelog gate |
 | 2.11.1 | 2026-10-12 | A fresh new look ✨ |
 | 2.11.0 | 2026-10-12 | Akobo, new looks, and a guide for your first game 🙈 |

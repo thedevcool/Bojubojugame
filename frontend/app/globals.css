@@ -230,3 +230,41 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
   border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.72rem; font-weight: 600; color: rgba(238, 243, 255, 0.85);
   background: rgba(148, 180, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(148, 180, 255, 0.18);
 }
+
+/* ---------- on-screen controls: round glass buttons, gradient when on, a stamina ring on Run ---------- */
+.ctl {
+  position: relative; display: grid; place-items: center; align-content: center;
+  width: 52px; height: 52px; border-radius: 999px; color: #fff;
+  background: rgba(10, 16, 34, 0.5);
+  -webkit-backdrop-filter: blur(12px) saturate(160%); backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: inset 0 0 0 1px rgba(148, 180, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 6px 18px rgba(2, 6, 20, 0.35);
+  transition: transform 0.35s var(--ease-spring), box-shadow 0.25s, background 0.25s;
+  -webkit-tap-highlight-color: transparent; user-select: none; touch-action: none;
+}
+.ctl:active { transform: scale(0.9); transition-duration: 0.08s; }
+.ctl .ic { font-size: 19px; line-height: 1; }
+.ctl .lb { margin-top: 3px; font: 600 8.5px/1 var(--font-display), system-ui, sans-serif; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.82; }
+.ctl[data-on="true"] { background: var(--grad); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.22), 0 8px 24px rgba(109, 92, 255, 0.55); }
+.ctl[data-on="true"] .lb { opacity: 1; }
+.ctl-lg { width: 64px; height: 64px; }
+.ctl-lg .ic { font-size: 23px; }
+/* the ring: how much run is left (cyan), drawn just outside the button */
+.ctl-ring::before {
+  content: ""; position: absolute; inset: -4px; border-radius: 999px; pointer-events: none;
+  background: conic-gradient(var(--cyan) calc(var(--p, 1) * 1turn), rgba(148, 180, 255, 0.14) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  transition: background 0.15s linear;
+}
+.ctl-ring[data-tired="true"]::before { background: conic-gradient(var(--clay) calc(var(--p, 0) * 1turn), rgba(255, 90, 79, 0.18) 0); }
+/* driving: glass steering pads, a red brake and a green gas pedal */
+.pedal {
+  display: grid; place-items: center; align-content: center; border-radius: 22px; color: #fff; user-select: none; touch-action: none;
+  background: rgba(10, 16, 34, 0.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px rgba(148, 180, 255, 0.22), 0 8px 22px rgba(2, 6, 20, 0.4);
+  transition: transform 0.3s var(--ease-spring), filter 0.15s;
+}
+.pedal:active { transform: scale(0.92); filter: brightness(1.15); }
+.pedal .lb { margin-top: 4px; font: 600 9px/1 var(--font-display), system-ui, sans-serif; letter-spacing: 0.09em; text-transform: uppercase; }
+.pedal-gas { background: var(--grad-leaf); box-shadow: 0 10px 26px rgba(16, 185, 129, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.pedal-brake { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 10px 26px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3); }

@@ -9,6 +9,16 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.11.3",
+    date: "2026-10-12",
+    title: "Run, Forrest, run 🏃🏾",
+    items: [
+      { emoji: "🏃🏾", title: "Run that works", text: "Tap Run to keep running and tap again to walk (or just hold it). The ring around it is your breath — when it runs out, you slow down." },
+      { emoji: "🎛️", title: "Cleaner controls", text: "New round glass buttons, and proper brake and gas pedals for your car." },
+      { emoji: "⚡", title: "Smoother in LagosLife", text: "The LagosLife version is now just the game — and runs much smoother on slower phones." },
+    ],
+  },
+  {
     version: "2.11.2",
     date: "2026-10-12",
     title: "Welcome, new players 👋🏾",

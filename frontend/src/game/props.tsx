@@ -15,6 +15,16 @@ const box = new THREE.BoxGeometry(1, 1, 1);
 const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 const cone = new THREE.ConeGeometry(0.5, 1, 4);
 const sphere = new THREE.IcosahedronGeometry(0.5, 1);
+const dome = new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+const wedge = (() => {
+  // a right-angled wedge (1 x 1 x 1), high at +x: the solid fill under a ramp
+  const g = new THREE.BufferGeometry();
+  const v = [-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5];
+  g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+  g.setIndex([0, 2, 1, 3, 4, 5, 0, 3, 5, 0, 5, 2, 1, 2, 5, 1, 5, 4, 0, 1, 4, 0, 4, 3]);
+  g.computeVertexNormals();
+  return g;
+})();
 const roofGeo = (() => {
   const g = new THREE.CylinderGeometry(0.0, 0.72, 1, 4, 1);
   g.rotateY(Math.PI / 4);
@@ -288,8 +298,13 @@ function Zebra({ p }: { p: Prop }) {
 function PropMesh({ p }: { p: Prop }) {
   const c = p.color;
   switch (p.kind) {
-    case "house": case "flat": case "duplex":
-      return <Building p={p} floors={p.kind === "flat" ? 3 : p.kind === "duplex" ? 2 : 1} />;
+    case "house": case "flat": case "duplex": {
+      const floors = p.kind === "flat" ? 3 : p.kind === "duplex" ? 2 : 1;
+      if (!p.face || p.face === "s") return <Building p={p} floors={floors} />;
+      const ry = p.face === "w" ? -Math.PI / 2 : p.face === "e" ? Math.PI / 2 : Math.PI;
+      const side = p.face === "w" || p.face === "e";
+      return <group rotation={[0, ry, 0]}><Building p={side ? { ...p, w: p.d, d: p.w } : p} floors={floors} /></group>;
+    }
     case "shop": {
       const ry = p.face === "w" ? -Math.PI / 2 : p.face === "e" ? Math.PI / 2 : p.face === "n" ? Math.PI : 0;
       const [w, d] = p.face === "w" || p.face === "e" ? [p.d, p.w] : [p.w, p.d];
@@ -429,7 +444,8 @@ function PropMesh({ p }: { p: Prop }) {
           {[-1, 1].map((sx) => <B key={sx} p={[sx * (p.w / 2 - 0.1), p.h / 2, -p.d / 2 + 0.1]} s={[0.12, p.h, 0.12]} c="#3a3f45" />)}
           <B p={[0, p.h, 0]} s={[p.w, 0.12, p.d]} c="#f2b705" />
           <B p={[0, 0.5, -p.d / 2 + 0.2]} s={[p.w * 0.8, 0.1, 0.5]} c="#8b5a2b" />
-          {p.text && <Label text={p.text} y={p.h + 0.45} w={3.2} bg="#1d1a16" fg="#f7c500" />}
+          {p.text && <Label text={p.text} y={p.h + 0.45} w={3.2} z={0.02} bg="#1d1a16" fg="#f7c500" />}
+          {p.text && <Label text={p.text} y={p.h + 0.45} w={3.2} z={-0.02} bg="#1d1a16" fg="#f7c500" ry={Math.PI} />}
         </>
       );
     case "sign":
@@ -597,6 +613,112 @@ function PropMesh({ p }: { p: Prop }) {
           {p.text && <group position={[0, 0, p.d / 2 + 0.12]}><Label text={p.text} y={3.2} w={p.w * 0.9} bg="#2f6db5" fg="#ffffff" /></group>}
         </>
       );
+    // ---- Ibadan streets (Akobo)
+    case "laterite": {
+      // untarred red-earth side street, with open concrete gutters on both edges
+      const alongX = (p.dir ?? (p.w >= p.d ? "x" : "z")) === "x";
+      const W = alongX ? p.d : p.w;
+      return (
+        <group rotation={[0, alongX ? 0 : Math.PI / 2, 0]}>
+          <B p={[0, 0.012, 0]} s={[alongX ? p.w : p.d, 0.02, W]} c={mat("#c4744a", { map: sand(), tile: 4 })} shadow={false} />
+          {[-1, 1].map((k) => <B key={k} p={[0, 0.02, k * (W / 2 - 0.2)]} s={[alongX ? p.w : p.d, 0.03, 0.35]} c="#6f6a62" shadow={false} />)}
+        </group>
+      );
+    }
+    case "median":
+      return (
+        <>
+          <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={mat("#ffffff", { map: concrete(), tile: 1.5 })} shadow={false} />
+          {[-1, 1].map((k) => <B key={k} p={[0, p.h / 2, k * (p.d / 2 + 0.02)]} s={[p.w, p.h, 0.05]} c="#e2b007" shadow={false} />)}
+        </>
+      );
+    case "flyover": {
+      // the deck overhead (its pillars and ramps are separate, solid props)
+      const alongX = (p.dir ?? (p.w >= p.d ? "x" : "z")) === "x";
+      const L = alongX ? p.w : p.d, W = alongX ? p.d : p.w;
+      return (
+        <group rotation={[0, alongX ? 0 : Math.PI / 2, 0]}>
+          <B p={[0, p.h - 0.45, 0]} s={[L, 0.9, W]} c={wallMat("#cfc8ba")} />
+          <B p={[0, p.h + 0.02, 0]} s={[L, 0.04, W - 0.6]} c={mat("#ffffff", { map: asphalt(), tile: 6 })} shadow={false} />
+          {[-1, 1].map((k) => <B key={k} p={[0, p.h + 0.45, k * (W / 2 - 0.15)]} s={[L, 0.9, 0.3]} c={wallMat("#e6e0d4")} />)}
+          {p.text && [-1, 1].map((k) => (
+            <group key={k} position={[0, 0, k * (W / 2 + 0.02)]} rotation={[0, k > 0 ? 0 : Math.PI, 0]}><Label text={p.text!} y={p.h - 0.45} w={Math.min(L * 0.4, 14)} bg="#2f9e57" fg="#ffffff" /></group>
+          ))}
+        </group>
+      );
+    }
+    case "ramp": {
+      // a solid embankment rising to the flyover
+      const alongX = (p.dir ?? (p.w >= p.d ? "x" : "z")) === "x";
+      const L = alongX ? p.w : p.d, W = alongX ? p.d : p.w;
+      const sign = p.up === "w" || p.up === "n" ? -1 : 1;
+      const slope = Math.atan2(p.h, L), len = Math.hypot(L, p.h);
+      return (
+        <group rotation={[0, alongX ? 0 : Math.PI / 2, 0]}>
+          <group position={[0, p.h / 2 - 0.45, 0]} rotation={[0, 0, sign * slope]}>
+            <B p={[0, 0, 0]} s={[len, 0.9, W]} c={wallMat("#cfc8ba")} />
+            <B p={[0, 0.47, 0]} s={[len, 0.04, W - 0.6]} c={mat("#ffffff", { map: asphalt(), tile: 4 })} shadow={false} />
+          </group>
+          <mesh geometry={wedge} material={wallMat("#d8d1c4")} position={[sign * L / 6, p.h / 3, 0]} scale={[L * 0.66, p.h * 0.66, W - 0.2]} rotation={[0, sign > 0 ? 0 : Math.PI, 0]} castShadow />
+        </group>
+      );
+    }
+    case "pump":
+      return (
+        <>
+          <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={mat("#d94f3d", { rough: 0.5 })} />
+          <B p={[0, p.h * 0.7, p.d / 2 + 0.01]} s={[p.w * 0.7, p.h * 0.3, 0.02]} c={mat("#1d1a16", { emissive: true })} shadow={false} />
+        </>
+      );
+    case "umbrella":
+      return (
+        <>
+          <B p={[0, 0.4, 0]} s={[p.w * 0.7, 0.8, p.d * 0.5]} c="#8b5a2b" />
+          <B p={[0, p.h / 2, 0]} s={[0.06, p.h, 0.06]} c="#3a3f45" />
+          <mesh geometry={cone} material={mat(c ?? "#2f6db5")} position={[0, p.h, 0]} scale={[p.w * 1.8, 0.6, p.d * 1.8]} rotation={[0, Math.PI / 4, 0]} castShadow />
+          {p.text && <Label text={p.text} y={0.6} w={p.w * 0.6} z={p.d * 0.26} bg="#f7c500" fg="#1d1a16" />}
+        </>
+      );
+    case "okada": {
+      const along = p.d >= p.w;
+      return (
+        <group rotation={[0, along ? 0 : Math.PI / 2, 0]}>
+          {[-1, 1].map((k) => <mesh key={k} geometry={cyl} material={mat("#1d1a16")} position={[0, 0.3, k * 0.62]} scale={[0.6, 0.12, 0.6]} rotation={[0, 0, Math.PI / 2]} castShadow />)}
+          <B p={[0, 0.62, 0]} s={[0.3, 0.3, 1.2]} c={c ?? "#d94f3d"} />
+          <B p={[0, 0.84, -0.15]} s={[0.32, 0.12, 0.7]} c="#1d1a16" />
+          <B p={[0, 1.0, 0.55]} s={[0.7, 0.05, 0.05]} c="#3a3f45" />
+        </group>
+      );
+    }
+    case "church": {
+      const ry = p.face === "n" ? Math.PI : p.face === "w" ? -Math.PI / 2 : p.face === "e" ? Math.PI / 2 : 0;
+      const [w, d] = p.face === "w" || p.face === "e" ? [p.d, p.w] : [p.w, p.d];
+      return (
+        <group rotation={[0, ry, 0]}>
+          <B p={[0, p.h / 2, 0]} s={[w, p.h, d]} c={wallMat(c ?? "#efe9dc")} />
+          <mesh geometry={roofGeo} material={mat("#7a3b2a", { map: zinc(), tile: 2 })} position={[0, p.h + 1.2, 0]} scale={[w * 1.06, 2.4, d * 1.06]} rotation={[0, Math.PI / 2, 0]} castShadow />
+          <B p={[0, p.h + 1.6, d / 2 - 0.8]} s={[1.8, p.h + 3.2, 1.8]} c={wallMat(c ?? "#efe9dc")} />
+          <B p={[0, 2 * p.h + 1.8, d / 2 - 0.8]} s={[0.15, 1.6, 0.15]} c="#c4a032" />
+          <B p={[0, 2 * p.h + 2.1, d / 2 - 0.8]} s={[0.8, 0.15, 0.15]} c="#c4a032" />
+          <B p={[0, 1.3, d / 2 + 0.04]} s={[1.8, 2.6, 0.08]} c="#5b3a22" shadow={false} />
+          {p.text && <Label text={p.text} y={p.h - 0.6} w={Math.min(w * 0.8, 8)} z={d / 2 + 0.06} bg="#1d1a16" fg="#fff8e7" />}
+        </group>
+      );
+    }
+    case "mosque": {
+      const ry = p.face === "n" ? Math.PI : p.face === "w" ? -Math.PI / 2 : p.face === "e" ? Math.PI / 2 : 0;
+      const [w, d] = p.face === "w" || p.face === "e" ? [p.d, p.w] : [p.w, p.d];
+      return (
+        <group rotation={[0, ry, 0]}>
+          <B p={[0, p.h / 2, 0]} s={[w, p.h, d]} c={wallMat(c ?? "#e7efe4")} />
+          <mesh geometry={dome} material={mat("#2f9e57")} position={[0, p.h, 0]} scale={Math.min(w, d) * 0.7} castShadow />
+          <mesh geometry={cyl} material={wallMat("#f4efe4")} position={[w / 2 - 0.6, p.h + 2.5, -d / 2 + 0.6]} scale={[0.9, p.h + 5, 0.9]} castShadow />
+          <mesh geometry={cone} material={mat("#2f9e57")} position={[w / 2 - 0.6, 2 * p.h + 5.6, -d / 2 + 0.6]} scale={[1.1, 1.4, 1.1]} castShadow />
+          <B p={[0, 1.2, d / 2 + 0.04]} s={[1.6, 2.4, 0.08]} c="#2f6b4a" shadow={false} />
+          {p.text && <Label text={p.text} y={p.h - 0.6} w={Math.min(w * 0.85, 8)} z={d / 2 + 0.06} bg="#2f9e57" fg="#ffffff" />}
+        </group>
+      );
+    }
     default:
       return <B p={[0, p.h / 2, 0]} s={[p.w, p.h, p.d]} c={c ?? "#aaaaaa"} />;
   }

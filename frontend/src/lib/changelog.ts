@@ -9,6 +9,18 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.11.0",
+    date: "2026-10-12",
+    title: "Akobo, new looks, and a guide for your first game 🙈",
+    items: [
+      { emoji: "🧭", title: "A guide for your first game", text: "First time playing? Say yes to the quick guide and play a practice game with NPCs while the guide shows you each step: invites, the bus, the circle, the dice, hiding or seeking, and how a round is won. Exit any time.", tryIt: "📱 → 🙈 Boju Boju → Guided practice game" },
+      { emoji: "👩🏾", title: "Male or female, and new hairstyles", text: "Pick your body and hair: low cut, afro, high-top or face cap; braids, afro puff, gele or bun. Women wear wrappers, and the streets are busier with market women too.", tryIt: "📱 → ⚙️ Settings → My look" },
+      { emoji: "🏙️", title: "Akobo, Ibadan", text: "Take the bus to Akobo: the Idi-Ape–Akobo–Odogbo road, the General Gas flyover, walled compounds on red-earth streets in Basorun and Akobo Estate, Ojurin market, and the Odogbo Barracks gate. Explore it or play Boju Boju there." },
+      { emoji: "⛪", title: "Church Street in Lagos", text: "A new street behind Adeniji: a cathedral, a mosque, a pharmacy, a barbing salon, mama-put, POS stands and an okada rank." },
+      { emoji: "🚗", title: "Cars don't drive through things", text: "Your car stops at stalls, parked cars and lamp posts, and shop menus wait until you park." },
+    ],
+  },
+  {
     version: "2.10.0",
     date: "2026-10-12",
     title: "A guide for new players 🧭",

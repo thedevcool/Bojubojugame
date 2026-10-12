@@ -206,6 +206,25 @@ for x, z in ((14, -30), (14, -60), (72, -60), (30, -72), (54, -72)):
     P("tree", x, z, 3, 3, 6.5)
 P("kiosk", 10, -12, 2.4, 2.4, 2.6, color="#d94f3d", text="PURE WATER")
 
+# ---------------------------------------------------------------- far N: Church Street (behind Adeniji)
+P("road", -42, 66.5, 76, 5, 0.02, dir="x", name="Church Street")
+P("sidewalk", -43, 70.2, 74, 2.2, 0.12)
+P("church", -66, 75.5, 14, 8, 6.5, color="#f4efe4", text="CHRIST GRACE CATHEDRAL", face="n")
+P("mosque", -48, 75.5, 10, 8, 4.5, color="#e7efe4", text="CENTRAL MOSQUE", face="n")
+P("shop", -35, 75, 9, 7, 3.8, face="n", text="ADEOLA PHARMACY", color="#2f9e57")
+P("kiosk", -27, 74.5, 2.6, 2.6, 2.7, color="#f2b705", text="BARBING SALON")
+P("kiosk", -23.5, 74.5, 2.6, 2.6, 2.7, color="#d94f3d", text="HAIR & NAILS")
+P("canopy", -15, 75.5, 9, 5, 2.6)  # a mama-put shed
+for x in (-18, -15, -12):
+    P("bench", x, 75.5, 2, 0.6, 0.5)
+for x in (-29.4, -20.6):
+    P("umbrella", x, 71.6, 1.4, 1.4, 2.3, color="#2f6db5", text="POS")
+for i, c in enumerate(("#d94f3d", "#1d1a16", "#2f6db5")):
+    P("okada", -9.5 - i * 1.4, 72.6, 0.7, 1.9, 1.1, color=c)
+P("sign", -9, 75.5, 3.2, 0.3, 2.6, text="OKADA")
+for x in range(-76, -8, 17):
+    P("pole", x, 63.3, 0.3, 0.3, 7.5, line="church-st")
+
 hub = {
     "id": "hub_plaza",
     "name": "Lagos Hub District",
@@ -217,6 +236,7 @@ hub = {
     "newcomer": [8.4, 20.5],  # brand-new players start here, right beside the phone shop
     "props": props,
     "sections": [
+        {"id": "church_st", "name": "Church Street", "rect": [-80, 63.5, -4, 80]},
         {"id": "adeniji", "name": "Adeniji Street", "rect": [-80, 14, -8, 66]},
         {"id": "estate", "name": "Palm View Estate", "rect": [-76, -76, -12, -14]},
         {"id": "market", "name": "Market & Motor Park", "rect": [8, 8, 80, 40]},
@@ -248,6 +268,7 @@ hub = {
         {"pts": [[-5.5, -9], [-5.5, -78]], "n": 2},
         {"pts": [[-78, 45.2], [-8, 45.2]], "n": 4},
         {"pts": [[-78, 34.8], [-8, 34.8]], "n": 3},
+        {"pts": [[-78, 70.2], [-6, 70.2]], "n": 3},
         {"pts": [[12, 9.6], [30, 9.6], [40, 19], [62, 19], [62, 34]], "n": 4},
         {"pts": [[-60, -44], [-40, -44], [-40, -40], [-60, -40], [-60, -44]], "n": 2},
         {"pts": [[25, -40], [55, -48], [40, -30], [30, -56]], "n": 4},
@@ -261,6 +282,8 @@ hub = {
         {"x": 56, "z": 16.5, "ry": 3.14, "say": "CMS! CMS! One chance!"},
         {"x": -18, "z": -21.5, "ry": 0, "say": "Welcome to Palm View, oga."},
         {"x": 68, "z": -19, "ry": -1.57, "say": "Your car go fine like new!"},
+        {"x": -15, "z": 73.6, "ry": 3.14, "say": "Amala and ewedu dey!"},
+        {"x": -34, "z": 71.2, "ry": 3.14, "say": "Paracetamol, vitamin C — wetin you need?"},
     ],
     "vehicles": [
         {"kind": "danfo", "pts": [[-90, -2.5], [90, -2.5]], "speed": 8, "n": 2},

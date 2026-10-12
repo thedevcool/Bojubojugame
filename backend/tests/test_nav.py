@@ -23,7 +23,7 @@ def test_path_goes_around_a_wall():
     assert max(abs(z) for _, z in path) > 9  # had to detour round the end of the wall
 
 
-@pytest.mark.parametrize("arena", ["arena_park", "arena_abuja", "arena_ibadan"])
+@pytest.mark.parametrize("arena", ["arena_park", "arena_abuja", "arena_ibadan", "arena_akobo"])
 def test_arena_nav_and_hide_spots(arena):
     m = get_maps()[arena]
     assert len(m.sections) == 5 and len(m.safe_houses) == 3

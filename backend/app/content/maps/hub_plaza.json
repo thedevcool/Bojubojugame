@@ -1515,9 +1515,214 @@
    "h": 2.6,
    "color": "#d94f3d",
    "text": "PURE WATER"
+  },
+  {
+   "kind": "road",
+   "x": -42,
+   "z": 66.5,
+   "w": 76,
+   "d": 5,
+   "h": 0.02,
+   "dir": "x",
+   "name": "Church Street"
+  },
+  {
+   "kind": "sidewalk",
+   "x": -43,
+   "z": 70.2,
+   "w": 74,
+   "d": 2.2,
+   "h": 0.12
+  },
+  {
+   "kind": "church",
+   "x": -66,
+   "z": 75.5,
+   "w": 14,
+   "d": 8,
+   "h": 6.5,
+   "color": "#f4efe4",
+   "text": "CHRIST GRACE CATHEDRAL",
+   "face": "n"
+  },
+  {
+   "kind": "mosque",
+   "x": -48,
+   "z": 75.5,
+   "w": 10,
+   "d": 8,
+   "h": 4.5,
+   "color": "#e7efe4",
+   "text": "CENTRAL MOSQUE",
+   "face": "n"
+  },
+  {
+   "kind": "shop",
+   "x": -35,
+   "z": 75,
+   "w": 9,
+   "d": 7,
+   "h": 3.8,
+   "face": "n",
+   "text": "ADEOLA PHARMACY",
+   "color": "#2f9e57"
+  },
+  {
+   "kind": "kiosk",
+   "x": -27,
+   "z": 74.5,
+   "w": 2.6,
+   "d": 2.6,
+   "h": 2.7,
+   "color": "#f2b705",
+   "text": "BARBING SALON"
+  },
+  {
+   "kind": "kiosk",
+   "x": -23.5,
+   "z": 74.5,
+   "w": 2.6,
+   "d": 2.6,
+   "h": 2.7,
+   "color": "#d94f3d",
+   "text": "HAIR & NAILS"
+  },
+  {
+   "kind": "canopy",
+   "x": -15,
+   "z": 75.5,
+   "w": 9,
+   "d": 5,
+   "h": 2.6
+  },
+  {
+   "kind": "bench",
+   "x": -18,
+   "z": 75.5,
+   "w": 2,
+   "d": 0.6,
+   "h": 0.5
+  },
+  {
+   "kind": "bench",
+   "x": -15,
+   "z": 75.5,
+   "w": 2,
+   "d": 0.6,
+   "h": 0.5
+  },
+  {
+   "kind": "bench",
+   "x": -12,
+   "z": 75.5,
+   "w": 2,
+   "d": 0.6,
+   "h": 0.5
+  },
+  {
+   "kind": "umbrella",
+   "x": -29.4,
+   "z": 71.6,
+   "w": 1.4,
+   "d": 1.4,
+   "h": 2.3,
+   "color": "#2f6db5",
+   "text": "POS"
+  },
+  {
+   "kind": "umbrella",
+   "x": -20.6,
+   "z": 71.6,
+   "w": 1.4,
+   "d": 1.4,
+   "h": 2.3,
+   "color": "#2f6db5",
+   "text": "POS"
+  },
+  {
+   "kind": "okada",
+   "x": -9.5,
+   "z": 72.6,
+   "w": 0.7,
+   "d": 1.9,
+   "h": 1.1,
+   "color": "#d94f3d"
+  },
+  {
+   "kind": "okada",
+   "x": -10.9,
+   "z": 72.6,
+   "w": 0.7,
+   "d": 1.9,
+   "h": 1.1,
+   "color": "#1d1a16"
+  },
+  {
+   "kind": "okada",
+   "x": -12.3,
+   "z": 72.6,
+   "w": 0.7,
+   "d": 1.9,
+   "h": 1.1,
+   "color": "#2f6db5"
+  },
+  {
+   "kind": "sign",
+   "x": -9,
+   "z": 75.5,
+   "w": 3.2,
+   "d": 0.3,
+   "h": 2.6,
+   "text": "OKADA"
+  },
+  {
+   "kind": "pole",
+   "x": -76,
+   "z": 63.3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 7.5,
+   "line": "church-st"
+  },
+  {
+   "kind": "pole",
+   "x": -59,
+   "z": 63.3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 7.5,
+   "line": "church-st"
+  },
+  {
+   "kind": "pole",
+   "x": -42,
+   "z": 63.3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 7.5,
+   "line": "church-st"
+  },
+  {
+   "kind": "pole",
+   "x": -25,
+   "z": 63.3,
+   "w": 0.3,
+   "d": 0.3,
+   "h": 7.5,
+   "line": "church-st"
   }
  ],
  "sections": [
+  {
+   "id": "church_st",
+   "name": "Church Street",
+   "rect": [
+    -80,
+    63.5,
+    -4,
+    80
+   ]
+  },
   {
    "id": "adeniji",
    "name": "Adeniji Street",
@@ -1767,6 +1972,19 @@
   {
    "pts": [
     [
+     -78,
+     70.2
+    ],
+    [
+     -6,
+     70.2
+    ]
+   ],
+   "n": 3
+  },
+  {
+   "pts": [
+    [
      12,
      9.6
     ],
@@ -1884,6 +2102,18 @@
    "z": -19,
    "ry": -1.57,
    "say": "Your car go fine like new!"
+  },
+  {
+   "x": -15,
+   "z": 73.6,
+   "ry": 3.14,
+   "say": "Amala and ewedu dey!"
+  },
+  {
+   "x": -34,
+   "z": 71.2,
+   "ry": 3.14,
+   "say": "Paracetamol, vitamin C — wetin you need?"
   }
  ],
  "vehicles": [

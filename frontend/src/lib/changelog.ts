@@ -9,6 +9,16 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.10.0",
+    date: "2026-10-12",
+    title: "A guide for new players 🧭",
+    items: [
+      { emoji: "🧭", title: "Show me around", text: "New here? A short guided tour shows you how to walk and look around, where to buy your phone and rent a house, how to walk home, the map, the 🛰️ Aerial view, and how hiding and seeking work. Skip it at any time." },
+      { emoji: "⚡", title: "Ready in seconds on slower phones", text: "The city now builds in a few seconds instead of up to a minute, and the first tap no longer freezes the game while the sound starts." },
+      { emoji: "🚶🏾", title: "No more snapping back", text: "On slower phones you could get pulled back to where you started after a long walk. Fixed." },
+    ],
+  },
+  {
     version: "2.9.2",
     date: "2026-10-12",
     title: "No more freezing on start 🧊",

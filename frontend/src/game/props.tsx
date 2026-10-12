@@ -1,11 +1,12 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Prop } from "@/lib/types";
-import { local, staticWorld } from "./state";
+import { useGame } from "@/lib/store";
+import { local } from "./state";
 import { asphalt, concrete, grass, plaster, sand, tiles, zinc } from "./textures";
 
 /** Modular Lagos kit: every prop kind is assembled from shared primitives. */
@@ -604,22 +605,41 @@ function PropMesh({ p }: { p: Prop }) {
 const DECORATIVE = new Set(["bench", "tyres", "grill", "fan", "rug", "table"]);
 
 /**
- * Renders children once, then merges every static mesh into one mesh per
+ * Mounts the props a few at a time, then merges every static mesh into one mesh per
  * material (hundreds of props -> a few dozen draw calls on mobile).
  * The merge is done in small slices across frames, never one long block: on a low-end phone a
  * single block froze the page for seconds (and, inside LagosLife, their page with it).
  * Shapes stay indexed (no toNonIndexed), which halves the work and the memory.
  */
-const SLICE_MS = 8;
-function StaticBatch({ children }: { children: React.ReactNode }) {
+const SLICE_MS = 30; // under the 50 ms "long task" line, so taps still get through
+const MOUNT_CHUNK = 40; // props mounted per step: mounting all of them at once was a ~2 s freeze
+function StaticBatch({ items, city }: { items: React.ReactNode[]; city?: boolean }) {
   const src = useRef<THREE.Group>(null);
+  const [shown, setShown] = useState(MOUNT_CHUNK);
   const [merged, setMerged] = useState<THREE.Mesh[] | null>(null);
+  const all = shown >= items.length;
+  const built = useRef(false);
+  const doneBuilding = () => {
+    if (built.current) return;
+    built.current = true;
+    if (city) useGame.getState().set({ building: false });
+  };
+  // the city is "building" from mount until it's merged (the Scene pauses drawing meanwhile)
+  useLayoutEffect(() => {
+    if (city) useGame.getState().set({ building: true });
+    return doneBuilding;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // mount the props a few at a time
+  useEffect(() => {
+    if (all) return;
+    const t = window.setTimeout(() => setShown((n) => n + MOUNT_CHUNK), 0);
+    return () => window.clearTimeout(t);
+  }, [shown, all]);
   useLayoutEffect(() => {
     const root = src.current;
-    if (!root) return;
-    let cancelled = false, done = false, timer = 0;
+    if (!all || !root) return;
+    let cancelled = false, timer = 0;
     const out: THREE.Mesh[] = [];
-    staticWorld.building++;
     root.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
     const meshes: THREE.Mesh[] = [];
@@ -661,20 +681,18 @@ function StaticBatch({ children }: { children: React.ReactNode }) {
         out.push(mesh);
       }
       if (k < entries.length) { timer = window.setTimeout(step, 0); return; }
-      done = true;
-      staticWorld.building--;
+      doneBuilding();
       setMerged(out);
     };
     timer = window.setTimeout(step, 0);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
-      if (!done) staticWorld.building = Math.max(0, staticWorld.building - 1);
       out.forEach((m) => m.geometry.dispose());
     };
-  }, []);
+  }, [all]); // eslint-disable-line react-hooks/exhaustive-deps
   if (merged) return <>{merged.map((m) => <primitive key={m.uuid} object={m} />)}</>;
-  return <group ref={src} visible={false}>{children}</group>;
+  return <group ref={src} visible={false}>{items.slice(0, shown)}</group>;
 }
 
 /** Roofs stay separate so the one over your head disappears when you go inside. */
@@ -736,17 +754,19 @@ function Wires({ props }: { props: Prop[] }) {
   return <lineSegments geometry={geo}><lineBasicMaterial color="#1d1a16" /></lineSegments>;
 }
 
-export const MapProps = memo(function MapProps({ props, lowDetail }: { props: Prop[]; lowDetail: boolean }) {
+/** ``city``: the main game world (its build shows "Building the city…" and pauses drawing). */
+export const MapProps = memo(function MapProps({ props, lowDetail, city }: { props: Prop[]; lowDetail: boolean; city?: boolean }) {
   const statics = props.filter((p) => p.kind !== "roof" && !(lowDetail && DECORATIVE.has(p.kind)));
   return (
     <>
-      <StaticBatch>
-        {statics.map((p, i) => (
+      <StaticBatch
+        city={city}
+        items={statics.map((p, i) => (
           <group key={i} position={[p.x, 0, p.z]}>
             <PropMesh p={p} />
           </group>
         ))}
-      </StaticBatch>
+      />
       {props.filter((p) => p.kind === "roof").map((p, i) => <Roof key={i} p={p} />)}
       <Wires props={props} />
     </>

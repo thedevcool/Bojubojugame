@@ -68,12 +68,12 @@ export default function Phone() {
   const device = useRef<HTMLDivElement>(null);
 
   // a tap anywhere outside the phone closes it (also the strips by the notch and home bar,
-  // and anything drawn above the backdrop)
+  // and anything drawn above the backdrop), except dialogs that sit over it on purpose (data-keep-phone)
   useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
       const t = e.target as Element | null;
-      if (!t || device.current?.contains(t) || t.closest?.("[aria-label=Phone]")) return;
+      if (!t || device.current?.contains(t) || t.closest?.("[aria-label=Phone], [data-keep-phone]")) return;
       close();
     };
     window.addEventListener("pointerdown", outside, true);
@@ -537,7 +537,7 @@ function HousesApp() {
       sound.play("coin");
       st.toast(mine ? `Rent renewed — ${data.days} more days 🏠` : `🔑 ${h.name} is yours for ${data.days} days!`, "good");
       if (!mine && homeGeo) {
-        st.set({ guide: { x: homeGeo.door[0], z: homeGeo.door[1], label: "🏠 Your house" }, ...(st.onboard ? { onboard: "home" } : {}) });
+        st.set({ guide: { x: homeGeo.door[0], z: homeGeo.door[1], label: "🏠 Your house" } });
         st.closePhone();
       }
     } catch (e) {
@@ -553,7 +553,7 @@ function HousesApp() {
         <span className="rounded-full bg-white/10 px-2 py-0.5 font-semibold">{data.free} of {data.homes.length} free</span>
       </div>
       {data.free === 0 && !data.mine && <div className="rounded-2xl bg-[var(--clay)]/25 p-2.5 text-xs">🏗️ Every house is taken right now — new streets are being built. Check back soon!</div>}
-      {onboard === "rent" && <div className="anim-rise rounded-2xl bg-[var(--accent)]/20 p-2.5 text-xs">👇🏾 Pick a house on the map or the list, then pay the rent to move in.</div>}
+      {onboard === "house" && <div className="anim-rise rounded-2xl bg-[var(--accent)]/20 p-2.5 text-xs">👇🏾 Pick a house on the map or the list, then pay the rent to move in.</div>}
       <HouseMap homes={data.homes} sel={sel} mine={data.mine} onSelect={setSel} />
       {h && (
         <div key={h.id} className="anim-pop rounded-2xl bg-white/7 p-3">

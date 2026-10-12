@@ -331,8 +331,8 @@ function LocalPlayer({ map }: { map: GameMap }) {
       if (sp) sound.heartbeat(Math.max(0, 1 - Math.hypot(sp.x - local.x, sp.z - local.z) / 14));
     }
     // ---- network (12 Hz, only when something changed)
-    const now = state.clock.elapsedTime;
-    const l = last.current;
+    const now = performance.now() / 1000; // not clock.elapsedTime: it restarts when the frame loop changes,
+    const l = last.current; // and moves then stopped until it caught up (the server snapped the player back)
     if (now - l.sent >= 1 / SEND_HZ && (l.x !== local.x || l.z !== local.z || l.c !== local.crouch || l.s !== (local.sit || local.lie) || now - l.sent > 1)) {
       l.sent = now;
       l.x = local.x;
@@ -433,11 +433,11 @@ function DecorDraft({ homes }: { homes: Home[] }) {
 }
 
 function DebugHook() {
-  const { scene, camera, gl } = useThree();
+  const { scene, camera, gl, get } = useThree();
   sceneRefs.camera = camera;
   sceneRefs.canvas = gl.domElement;
   const w = window as unknown as { __boju?: Record<string, unknown> };
-  if (w.__boju) Object.assign(w.__boju, { scene, camera });
+  if (w.__boju) Object.assign(w.__boju, { scene, camera, r3f: get });
   return null;
 }
 
@@ -802,7 +802,7 @@ function World({ map }: { map: GameMap }) {
         <planeGeometry args={[w, d]} />
         <meshStandardMaterial map={groundTex} color={groundTint} roughness={1} />
       </mesh>
-      <MapProps props={map.props} lowDetail={quality === "low"} />
+      <MapProps props={map.props} lowDetail={quality === "low"} city />
       <Markers map={map} />
       <GatherCircle />
       <AerialLabels map={map} />
@@ -850,11 +850,15 @@ function AutoQuality() {
 export default function Scene({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
   const mini = useGame((s) => !!s.mini);
+  const building = useGame((s) => s.building);
   const dpr: [number, number] = quality === "low" ? [0.6, 1] : quality === "medium" ? [1, 1.5] : [1, 2];
   return (
     <Canvas
       shadows={quality === "high" ? "soft" : quality === "medium"}
       dpr={dpr}
+      // while the city is being built, draw only when asked: on a slow phone every frame costs
+      // hundreds of ms, and the build took ~45 s instead of a few seconds
+      frameloop={building ? "demand" : "always"}
       camera={{ fov: 60, near: 0.1, far: 320, position: [0, 5, 10] }}
       // keeping every frame (for 📸 screenshots) costs speed; LagosLife has no screenshot button
       gl={{ antialias: quality !== "low", powerPreference: "high-performance", preserveDrawingBuffer: !mini }}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
-import { cam, input, local, remotes, sample, staticWorld } from "@/game/state";
+import { cam, input, local, remotes, sample } from "@/game/state";
 import { buyCar, buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
 import { ITEM_ICON } from "@/game/furniture";
 import { bedNear } from "@/game/seats";
@@ -24,6 +24,7 @@ export function TopBar() {
   const group = useGame((s) => s.group);
   const phoneId = useGame((s) => s.life.phoneId);
   const onboard = useGame((s) => s.onboard);
+  const phoneOpenNow = useGame((s) => s.phoneOpen);
   const phone = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
   const mini = useGame((s) => s.mini);
   useTicker(200);
@@ -54,7 +55,7 @@ export function TopBar() {
           <button className="btn btn-primary h-10 px-3 text-sm" onClick={() => openApp("boju")}>🙈 {group.code}</button>
         )}
         <button aria-label="Phone" onClick={() => openApp(null)}
-          className={`relative grid h-12 w-9 place-items-center rounded-[10px] border-2 bg-[#0a1324] text-lg shadow-lg transition active:scale-90 ${onboard === "launch" ? "phone-nudge" : ""}`}
+          className={`relative grid h-12 w-9 place-items-center rounded-[10px] border-2 bg-[#0a1324] text-lg shadow-lg transition active:scale-90 ${onboard === "house" && !phoneOpenNow ? "phone-nudge" : ""}`}
           style={{ borderColor: phone?.color ?? "rgba(255,255,255,.35)" }}>
           <span className="absolute top-1 h-1 w-3 rounded-full bg-white/30" />
           {phoneId || mini ? "📱" : "🎒"}
@@ -80,13 +81,13 @@ export function PhaseBar() {
   }, [left, g]);
   const map = useMap();
   const myHome = useGame((s) => s.home);
-  const onboarding = useGame((s) => s.onboard !== null);
+  const onboarding = useGame((s) => s.onboard !== null); // the tour card sits where the location pill goes
   const tip = useTip();
   const newPlayer = gamesPlayed() < 3;
   if (g?.phase === "over" && map?.kind === "arena") {
     return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · free to explore — 🚌 the bus stop takes you home</div>;
   }
-  if (!g && onboarding) return null; // the tour banner sits here
+  if (!g && onboarding) return null; // the tour's welcome orbit
   if (!g) {
     const inside = local.insideHome;
     const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
@@ -397,7 +398,7 @@ export function PhoneShop() {
     try {
       await buyPhone(acc, chosen.id);
       const st = useGame.getState();
-      st.set({ life: { ...st.life, phoneId: chosen.id }, ...(st.onboard === "phone" ? { onboard: "launch", guide: null } : {}) });
+      st.set({ life: { ...st.life, phoneId: chosen.id }, ...(st.onboard === "phone" ? { guide: null } : {}) });
       st.toast(`📱 ${chosen.name} is yours! Tap the phone (top right) to launch it.`, "good");
       sound.play("coin");
     } catch (e) {
@@ -642,8 +643,8 @@ export function DriveControls() {
 
 /** While the city's buildings are being put together (a second or two on slow phones). */
 export function BuildingWorld() {
-  useTicker(250);
-  if (staticWorld.building <= 0) return null;
+  const building = useGame((s) => s.building);
+  if (!building) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-40 z-20 flex justify-center">
       <div className="panel anim-fade px-3 py-1.5 text-xs font-semibold">🏗️ Building the city…</div>

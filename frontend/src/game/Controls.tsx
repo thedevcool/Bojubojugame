@@ -209,7 +209,8 @@ export default function Controls({ disabled }: { disabled?: boolean }) {
         if (performance.now() - l.lt > 80) cam.aerial.vx = cam.aerial.vz = 0; // finger rested before lifting: no flick
       } else if (e.type === "pointerup" && l.moved < 10 && performance.now() - l.t0 < 350) {
         // a quick tap: open a player's card if you tapped a person, else (tap-to-go) walk there
-        input.tap = { x: e.clientX, y: e.clientY, walk: mode === "tap" };
+        // a mouse has no joystick: a click always walks you there
+        input.tap = { x: e.clientX, y: e.clientY, walk: mode === "tap" || e.pointerType === "mouse" };
       }
     }
     fingers.current.delete(e.pointerId);

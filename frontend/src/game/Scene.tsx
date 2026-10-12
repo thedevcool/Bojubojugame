@@ -1,6 +1,6 @@
 "use client";
 
-import { Html, Sky } from "@react-three/drei";
+import { Html, PerformanceMonitor, Sky } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, N8AO, Vignette } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -832,16 +832,34 @@ if (typeof window !== "undefined" && new URLSearchParams(window.location.search)
   (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers, sound, net };
 }
 
+/** Smooth beats pretty: if frames stay slow, step graphics down (unless the player picked a quality). */
+function AutoQuality() {
+  const lowered = useRef(0);
+  const decline = () => {
+    let chosen: string | null = null;
+    try { chosen = localStorage.getItem("boju.quality"); } catch { /* ignore */ }
+    const st = useGame.getState();
+    if (chosen || st.quality === "low" || lowered.current >= 2) return;
+    lowered.current++;
+    st.set({ quality: st.quality === "high" ? "medium" : "low" });
+    st.toast("Graphics lowered for smoother play — change it in ⚙️ Settings");
+  };
+  return <PerformanceMonitor flipflops={2} bounds={() => [24, 50]} onDecline={decline} />;
+}
+
 export default function Scene({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
+  const mini = useGame((s) => !!s.mini);
   const dpr: [number, number] = quality === "low" ? [0.6, 1] : quality === "medium" ? [1, 1.5] : [1, 2];
   return (
     <Canvas
       shadows={quality === "high" ? "soft" : quality === "medium"}
       dpr={dpr}
       camera={{ fov: 60, near: 0.1, far: 320, position: [0, 5, 10] }}
-      gl={{ antialias: quality !== "low", powerPreference: "high-performance", preserveDrawingBuffer: true }}
+      // keeping every frame (for 📸 screenshots) costs speed; LagosLife has no screenshot button
+      gl={{ antialias: quality !== "low", powerPreference: "high-performance", preserveDrawingBuffer: !mini }}
     >
+      <AutoQuality />
       <World key={map.id} map={map} />
     </Canvas>
   );

@@ -9,6 +9,15 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.9.1",
+    date: "2026-10-12",
+    title: "Smoother, and tap to go 👆🏾",
+    items: [
+      { emoji: "👆🏾", title: "Tap to go is the default", text: "Tap (or click) the ground and you walk there. Prefer the joystick? Switch in ⚙️ Settings → Controls. On a laptop, a mouse click always walks." },
+      { emoji: "⚡", title: "Smoother on every device", text: "If your phone or laptop struggles, the game lowers its graphics by itself to keep things smooth (unless you picked a quality in Settings)." },
+    ],
+  },
+  {
     version: "2.9.0",
     date: "2026-10-11",
     title: "Oh no, I passed there! 👀",

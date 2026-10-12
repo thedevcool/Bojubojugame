@@ -52,7 +52,9 @@ export default function PlayPage() {
     }
     let stored: string | null = null;
     try { stored = localStorage.getItem("boju.quality"); } catch { /* ignore */ }
-    set({ quality: (stored as Quality | null) ?? detectQuality() });
+    const auto = detectQuality();
+    // inside LagosLife the game shares the page with their app: Medium at most unless the player chose
+    set({ quality: (stored as Quality | null) ?? (useGame.getState().mini && auto === "high" ? "medium" : auto) });
     (async () => {
       try {
         const fresh = await refreshToken(acc);
@@ -67,7 +69,10 @@ export default function PlayPage() {
           life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname, carId: profile.car_id },
         });
         const mini = !!useGame.getState().mini; // LagosLife: no phone, house or naira here — straight to the game
-        if (mini) markSeen();
+        if (mini) {
+          markSeen();
+          setTimeout(() => useGame.getState().toast("👆🏾 Tap the ground to walk · drag to look around", "good"), 1500);
+        }
         // first launch (or no phone/house yet): the welcome tour
         if (!mini && !onboardingDone() && (!profile.phone_id || !profile.home_id)) {
           set({ onboard: profile.phone_id ? "launch" : "welcome" });

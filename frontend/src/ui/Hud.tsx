@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
-import { cam, input, local, remotes, sample } from "@/game/state";
+import { cam, input, local, remotes, sample, staticWorld } from "@/game/state";
 import { buyCar, buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "@/lib/api";
 import { ITEM_ICON } from "@/game/furniture";
 import { bedNear } from "@/game/seats";
@@ -637,5 +637,16 @@ export function DriveControls() {
         <button aria-label="Gas" className={`${pad} h-20 w-14 bg-emerald-600/80 text-[11px]`} {...hold("gas")}>⛽<br />Gas</button>
       </div>
     </>
+  );
+}
+
+/** While the city's buildings are being put together (a second or two on slow phones). */
+export function BuildingWorld() {
+  useTicker(250);
+  if (staticWorld.building <= 0) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-40 z-20 flex justify-center">
+      <div className="panel anim-fade px-3 py-1.5 text-xs font-semibold">🏗️ Building the city…</div>
+    </div>
   );
 }

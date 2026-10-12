@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.9.2",
+    date: "2026-10-12",
+    title: "No more freezing on start 🧊",
+    items: [
+      { emoji: "⚡", title: "Starts without freezing", text: "The city used to be put together in one go, which froze slower phones for a few seconds as the game opened. Now it builds in tiny steps, so the game stays responsive from the first second." },
+    ],
+  },
+  {
     version: "2.9.1",
     date: "2026-10-12",
     title: "Smoother, and tap to go 👆🏾",

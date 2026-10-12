@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getFriends, loadAccount, naira, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { getFriends, loadAccount, naira, nairaShort, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
 import { sound } from "@/game/sound";
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
+import type { Standing } from "@/lib/types";
 import AccountCard from "./AccountCard";
 import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { LiveGamesList } from "./Live";
-import { useRole, useSecondsLeft } from "./hooks";
+import { useRole, useSecondsLeft, useTicker } from "./hooks";
+import { gamesPlayed } from "./Coach";
+import { getSongVoice, setSongVoice, type SongVoice } from "./BojuSong";
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
 function Modal({ children }: { children: React.ReactNode }) {
@@ -32,6 +35,7 @@ export function GroupPanel() {
   const safe = maps?.[arena]?.safe_houses[0]?.id ?? "";
   const close = useGame((s) => s.closePhone);
   const [mode, setMode] = useState<null | "create">(null);
+  const firstGame = gamesPlayed() === 0;
   const pendingFor = useGame((s) => (s.pendingInvite ? Object.values(s.roster).find((r) => r.id === s.pendingInvite)?.nick ?? "your friend" : null));
   if (!cfg) return null;
 
@@ -52,8 +56,9 @@ export function GroupPanel() {
             {[
               { icon: "🌍", bg: "#2f7cf6", title: "Create a game for real players", text: "Anyone in Live games can join you", on: () => setMode("create") },
               { icon: "📨", bg: "#30d158", title: "Play with friends", text: "Private game — invite friends or share the code", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 0, public: false }) },
-              { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
+              { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: firstGame ? "👍 Best for your first game — start now" : "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
               { icon: "📺", bg: "#ff375f", title: "Watch games live", text: "See games in progress on the map", on: () => useGame.getState().openApp("live") },
+              { icon: "❓", bg: "#64748b", title: "How to play", text: "The rules in 30 seconds", on: () => { useGame.getState().closePhone(); useGame.getState().set({ howTo: true }); } },
             ].map((o) => (
               <button key={o.title} className="ios-row" onClick={o.on}>
                 <span className="ios-glyph" style={{ background: o.bg }}>{o.icon}</span>
@@ -250,7 +255,8 @@ export function RoundResultPanel() {
   const me = useGame((s) => s.me?.id);
   const left = useSecondsLeft(g?.phase_end);
   const r = g?.last_result;
-  if (!g || g.phase !== "result" || !r) return null;
+  const touring = useGame((s) => !!s.reveal);
+  if (!g || g.phase !== "result" || !r || touring) return null; // the hiding-spot tour goes first
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const mine = me ? r.deltas[me] : undefined;
   return (
@@ -272,47 +278,146 @@ export function RoundResultPanel() {
   );
 }
 
+const AV_COLORS = ["#2f7cf6", "#30d158", "#ff9f0a", "#bf5af2", "#ff375f", "#64d2ff", "#ffd60a", "#ac8e68"];
+function Avatar({ nick, size = 44, ring }: { nick: string; size?: number; ring?: string }) {
+  let h = 0;
+  for (const ch of nick) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span className="grid shrink-0 place-items-center rounded-full font-black text-white shadow-lg"
+      style={{ width: size, height: size, fontSize: size * 0.4, background: `linear-gradient(140deg, ${AV_COLORS[h % 8]}, ${AV_COLORS[(h >> 3) % 8]})`, boxShadow: ring ? `0 0 0 3px ${ring}` : undefined }}>
+      {nick.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "🙈"}
+    </span>
+  );
+}
+
+function Confetti() {
+  const bits = Array.from({ length: 26 }, (_, i) => i);
+  return (
+    <div className="confetti pointer-events-none absolute inset-x-0 top-0 h-0" aria-hidden>
+      {bits.map((i) => (
+        <span key={i} style={{ left: `${(i * 37) % 100}%`, background: AV_COLORS[i % 8], animationDelay: `${(i % 7) * 0.12}s`, animationDuration: `${2.2 + (i % 5) * 0.25}s` }} />
+      ))}
+    </div>
+  );
+}
+
 export function GameOverPanel() {
   const over = useGame((s) => s.over);
   const g = useGame((s) => s.group);
+  const me = useGame((s) => s.me?.id);
   const set = useGame((s) => s.set);
   const stayed = useGame((s) => s.stayed);
   const mini = useGame((s) => !!s.mini);
-  if (!over || g?.phase !== "over" || stayed) return null;
+  const inArena = useGame((s) => !!s.mapId && s.content?.maps[s.mapId]?.kind === "arena");
+  // only at the venue of the game that just ended — never back in Lagos
+  if (!over || g?.phase !== "over" || stayed || !inArena) return null;
+  const res = over.results;
   const url = `${siteUrl()}/share/${over.gameId}`;
-  const winner = over.results[0];
-  const tweet = `I just played Boju Boju in Lagos! ${winner ? `${winner.nick} won ${naira(winner.earned)} 🏆` : ""} Come play:`;
+  const winner = res[0];
+  const pts = (n: number) => (mini ? `${n.toLocaleString("en-NG")} pts` : nairaShort(n));
+  const myRank = res.findIndex((x) => x.id === me);
+  const mine = myRank >= 0 ? res[myRank] : null;
+  const iWon = myRank === 0;
+  const tweet = `I just played Boju Boju in Lagos! ${winner ? `${iWon ? "I" : winner.nick} won ${naira(winner.earned)} 🏆` : ""} Come play:`;
+  // fun awards
+  const best = (k: "finds" | "survived") => res.reduce<Standing | null>((b, x) => (x[k] > (b?.[k] ?? 0) ? x : b), null);
+  const eyes = best("finds"), ninja = best("survived");
+  const podium = [res[1], res[0], res[2]].map((x, i) => (x ? { x, place: [2, 1, 3][i] } : null));
+  const explore = () => { set({ stayed: true }); if (!mini) useGame.getState().toast("Waka around! The 🚏 bus stop takes you home when you're ready.", "good"); };
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-[22rem] max-w-[94vw] -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4">
-      <div className="text-center text-2xl font-black text-[var(--accent)]">Game over! 🎉</div>
-      <div className="my-3 space-y-1">
-        {over.results.map((s, i) => (
-          <div key={s.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
-            <span>{["🥇", "🥈", "🥉"][i] ?? `${i + 1}.`} {s.nick}</span>
-            <span className="text-xs opacity-80">{s.finds} finds · {s.survived} hides</span>
-            <span className={s.earned >= 0 ? "text-green-400" : "text-red-400"}>{mini ? `${s.earned.toLocaleString("en-NG")} pts` : naira(s.earned)}</span>
+    <div className="anim-fade pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-3 backdrop-blur-[3px]" data-testid="game-over">
+      <div className="panel anim-pop relative max-h-[94%] w-[24rem] max-w-full overflow-y-auto overflow-x-hidden p-4">
+        <Confetti />
+        <div className="text-center text-[11px] font-bold uppercase tracking-[0.2em] opacity-60">🏁 Game over</div>
+
+        {/* winner hero */}
+        {winner && (
+          <div className="mt-6 flex flex-col items-center text-center">
+            <div className="relative">
+              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-2xl">👑</span>
+              <Avatar nick={winner.nick} size={68} ring="#ffd84f" />
+            </div>
+            <div className="mt-2 text-2xl font-black leading-tight">{iWon ? "You win! 🎉" : `${winner.nick} wins!`}</div>
+            <div className="mt-1 rounded-full bg-[#ffd84f]/15 px-3 py-0.5 text-sm font-black text-[#ffd84f]">{pts(winner.earned)}</div>
           </div>
-        ))}
-      </div>
-      <button className="btn btn-primary mb-2 w-full text-lg" data-testid="play-again"
-        onClick={() => { net.send({ t: "g_rematch" }); set({ phoneOpen: true, phoneApp: "boju" }); }}>🔁 Play again</button>
-      <div className="-mt-1 mb-2 text-center text-[11px] opacity-70">Same arena, same players — everyone gets a rematch invite</div>
-      {mini ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🚌 Motor Park</button>
-          <button className="btn btn-ghost" onClick={() => set({ stayed: true })}>🚶🏾 Stay & explore</button>
-          <div className="col-span-2 text-center text-[11px] opacity-70">Your score is on the LagosLife leaderboard. Going home? Tap ← at the top.</div>
+        )}
+
+        {/* podium */}
+        {res.length >= 3 && (
+          <div className="mt-4 grid grid-cols-3 items-end gap-2">
+            {podium.map((p, i) => p ? (
+              <div key={p.x.id} className="flex flex-col items-center text-center">
+                <Avatar nick={p.x.nick} size={p.place === 1 ? 40 : 34} ring={p.x.id === me ? "var(--accent)" : undefined} />
+                <div className="mt-1 w-full truncate text-[12px] font-bold">{p.x.id === me ? "You" : p.x.nick}</div>
+                <div className="text-[11px] opacity-70">{pts(p.x.earned)}</div>
+                <div className={`mt-1 grid w-full place-items-center rounded-t-xl text-xl font-black ${p.place === 1 ? "h-16 bg-[#ffd84f]/25" : p.place === 2 ? "h-12 bg-white/15" : "h-9 bg-[#c67c48]/25"}`}>
+                  {["🥇", "🥈", "🥉"][p.place - 1]}
+                </div>
+              </div>
+            ) : <div key={i} />)}
+          </div>
+        )}
+
+        {/* your game */}
+        {mine && !iWon && (
+          <div className="mt-3 rounded-2xl bg-[var(--accent)]/15 p-3">
+            <div className="flex items-baseline justify-between">
+              <div className="text-sm font-black">You finished #{myRank + 1} of {res.length}</div>
+              <div className={`text-sm font-black ${mine.earned >= 0 ? "text-green-400" : "text-red-400"}`}>{mine.earned >= 0 ? "+" : ""}{pts(mine.earned)}</div>
+            </div>
+          </div>
+        )}
+        {mine && (
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            {[["🔎", mine.finds, "finds"], ["🥷", mine.survived, "hides"], ["🙈", mine.rounds_as_seeker ?? 0, "as Boju"]].map(([icon, n, label]) => (
+              <div key={label as string} className="rounded-xl bg-white/5 py-2">
+                <div className="text-lg font-black leading-none">{icon} {n}</div>
+                <div className="mt-0.5 text-[10px] uppercase tracking-wide opacity-60">{label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* awards */}
+        {(eyes || ninja) && (
+          <div className="mt-2 flex flex-wrap justify-center gap-1.5 text-[11px] font-semibold">
+            {eyes && <span className="rounded-full bg-white/8 px-2.5 py-1">🔎 Sharpest eyes: {eyes.id === me ? "you" : eyes.nick} ({eyes.finds})</span>}
+            {ninja && <span className="rounded-full bg-white/8 px-2.5 py-1">🥷 Master hider: {ninja.id === me ? "you" : ninja.nick} ({ninja.survived})</span>}
+          </div>
+        )}
+
+        {/* everyone else */}
+        {(res.length > 3 || res.length === 2) && (
+          <div className="mt-3 space-y-1">
+            {res.slice(res.length === 2 ? 0 : 3).map((x, i) => (
+              <div key={x.id} className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-sm ${x.id === me ? "bg-[var(--accent)]/15" : "bg-white/5"}`}>
+                <span className="w-5 text-center text-xs font-bold opacity-60">{res.length === 2 ? ["🥇", "🥈"][i] : i + 4}</span>
+                <span className="min-w-0 flex-1 truncate">{x.id === me ? "You" : x.nick}</span>
+                <span className="text-xs opacity-70">{pts(x.earned)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* actions: one clear next step */}
+        <div className="mt-4">
+          <PlayAgain />
+          <div className="grid grid-cols-2 gap-2">
+            <button className="btn btn-ghost" onClick={explore}>🚶🏾 Explore</button>
+            <button className="btn btn-ghost" onClick={() => net.send({ t: "g_return" })}>{mini ? "🚌 Motor Park" : "🏠 Go home"}</button>
+          </div>
+          {mini ? (
+            <div className="mt-2 text-center text-[11px] opacity-60">Your best game is on the LagosLife leaderboard · going home? Tap ← at the top.</div>
+          ) : (
+            <div className="mt-2 flex justify-center gap-4 text-[13px] font-semibold">
+              <a className="opacity-80 hover:opacity-100" target="_blank" rel="noopener noreferrer"
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(url)}`}>𝕏 Share</a>
+              <button className="opacity-80 hover:opacity-100" onClick={() => screenshot()}>📸 Screenshot</button>
+            </div>
+          )}
         </div>
-      ) : (
-      <div className="grid grid-cols-2 gap-2">
-        <a className="btn btn-primary text-center" target="_blank" rel="noopener noreferrer"
-          href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(url)}`}>Share on X</a>
-        <button className="btn btn-ghost" onClick={() => screenshot()}>📸 Screenshot</button>
-        <button className="btn btn-leaf" onClick={() => net.send({ t: "g_return" })}>🏠 Go home</button>
-        <button className="btn btn-ghost" onClick={() => { set({ stayed: true }); useGame.getState().toast("Waka around! The 🚏 bus stop takes you home when you're ready.", "good"); }}>🚶🏾 Stay & explore</button>
       </div>
-      )}
-    </div></div>
+    </div>
   );
 }
 
@@ -462,6 +567,7 @@ export function SettingsPanel() {
   const [prefs, setPrefs] = useState({ ...sound.prefs });
   const [help, setHelp] = useState(false);
   const mini = useGame((s) => !!s.mini);
+  const [songVoice, setSongVoiceState] = useState<SongVoice>(() => getSongVoice());
   const flip = (k: "sound" | "music", v: boolean) => {
     const next = { ...prefs, [k]: v };
     setPrefs(next);
@@ -482,6 +588,12 @@ export function SettingsPanel() {
         <div className="ios-row"><span className="ios-glyph bg-[#ff375f]">🔊</span><span className="flex-1 text-[15px]">Sound effects</span><Switch label="Sound effects" on={prefs.sound} onChange={(v) => flip("sound", v)} /></div>
         <div className="ios-row"><span className="ios-glyph bg-[#bf5af2]">🎶</span><span className="flex-1 text-[15px]">Music</span><Switch label="Music" on={prefs.music} onChange={(v) => flip("music", v)} /></div>
       </div>
+      <div className="ios-section-title">Boju Boju song (while Boju counts)</div>
+      <div className="segmented" data-testid="song-voice">
+        {([["auto", "Take turns"], ["male", "Male"], ["female", "Female"], ["off", "Off"]] as [SongVoice, string][]).map(([v, label]) => (
+          <button key={v} data-on={songVoice === v} onClick={() => { setSongVoiceState(v); setSongVoice(v); }}>{label}</button>
+        ))}
+      </div>
       <div className="ios-section-title">Graphics</div>
       <div className="segmented">
         {(["low", "medium", "high"] as Quality[]).map((q) => <button key={q} data-on={quality === q} className="capitalize" onClick={() => choose(q)}>{q}</button>)}
@@ -491,7 +603,8 @@ export function SettingsPanel() {
       {!mini && <InstallApp className="mb-2" />}
       <div className="ios-group">
         <button className="ios-row" onClick={() => openApp("news")}><span className="ios-glyph bg-[#7b5cff]">✨</span><span className="text-[15px]">What&apos;s new</span><span className="ios-chevron">›</span></button>
-        <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>
+        <button className="ios-row" onClick={() => { useGame.getState().closePhone(); set({ howTo: true }); }}><span className="ios-glyph bg-[#2f7cf6]">❓</span><span className="text-[15px]">How to play</span><span className="ios-chevron">›</span></button>
+        <button className="ios-row" onClick={() => setHelp(!help)}><span className="ios-glyph bg-[#64748b]">🎮</span><span className="text-[15px]">Controls & tips</span><span className="ios-chevron">{help ? "⌄" : "›"}</span></button>
         {help && (
           <ul className="list-disc space-y-1 px-5 py-3 pl-9 text-[13px] opacity-85">
             <li>Joystick: left thumb moves, right thumb drags to look. Tap-to-go: tap the ground and you walk there.</li>
@@ -564,5 +677,28 @@ export function LeadersPanel() {
         </ol>
       )}
     </Modal>
+  );
+}
+
+/** Play again = ask the others for a rematch; it starts if at least one of them accepts. */
+function PlayAgain() {
+  const r = useGame((s) => s.rematch);
+  useTicker(500);
+  const left = r ? Math.max(0, Math.ceil((r.until - Date.now()) / 1000)) : 0;
+  if (r?.kind === "waiting") {
+    return (
+      <div className="mb-2 rounded-2xl bg-white/10 p-2.5 text-center text-sm" data-testid="rematch-wait">
+        ⏳ Rematch request sent to {r.n} player{r.n === 1 ? "" : "s"} — waiting {left}s
+        <div className="text-[11px] opacity-70">It starts if anyone accepts. No one? No rematch.</div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <button className="btn btn-primary mb-2 w-full text-lg" data-testid="play-again" onClick={() => net.send({ t: "g_rematch" })}>
+        {r?.kind === "asked" ? `✅ Accept @${r.nick}'s rematch` : "🔁 Play again"}
+      </button>
+      {!r && <div className="-mt-1 mb-2 text-center text-[11px] opacity-70">Asks the other players for a rematch — it&apos;s on if anyone accepts</div>}
+    </>
   );
 }

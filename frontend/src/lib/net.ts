@@ -72,6 +72,8 @@ class Net {
       case "hello": {
         clock.offset = (m.server_time as number) - Date.now();
         g.set({ me: m.me as { id: string; nick: string; n: number }, home: (m.home as Home | null) ?? null });
+        // the server says we're not in a game (it ended while we were away): drop any stale game screens
+        if (m.in_group === false && g.group) { g.set({ group: null, over: null, dice: null, stayed: false, rematch: null }); local.frozen = false; }
         break;
       }
       case "pong":
@@ -127,8 +129,18 @@ class Net {
           g.set({ watching: null, wsnap: null });
         } else if (g.watching === m.code) g.set({ wsnap: m as unknown as NonNullable<typeof g.wsnap> });
         break;
+      case "rematch_ask":
+        g.set({ rematch: { kind: "asked", from: m.from as string, nick: m.nick as string, until: Date.now() + (m.secs as number) * 1000 } });
+        sound.play("pop");
+        break;
+      case "rematch_wait":
+        g.set({ rematch: { kind: "waiting", n: m.n as number, until: Date.now() + (m.secs as number) * 1000 } });
+        break;
+      case "rematch_end":
+        g.set({ rematch: null });
+        break;
       case "invite":
-        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now(), rematch: !!m.rematch } });
+        g.set({ invite: { from: m.from as string, nick: m.nick as string, code: m.code as string, at: Date.now() } });
         sound.play("pop");
         break;
       case "dm":
@@ -227,6 +239,16 @@ class Net {
         g.toast(m.msg as string);
         break;
       case "err":
+        if (m.msg === "You are not in a group" && (g.group || Date.now() - staleClearedAt < 4000)) {
+          // our game already ended on the server: clear it instead of showing the error again and again
+          if (g.group) {
+            g.set({ group: null, over: null, dice: null, stayed: false, rematch: null });
+            local.frozen = false;
+            staleClearedAt = Date.now();
+            g.toast("That game has ended");
+          }
+          break;
+        }
         g.toast(m.msg as string, "error");
         sound.play("error");
         break;
@@ -238,24 +260,22 @@ class Net {
   }
 }
 
+let staleClearedAt = 0;
+
 function announce(gs: GroupState, prev: GroupState | null, me: string | undefined): void {
   const g = useGame.getState();
   if (prev?.phase === gs.phase) return;
   const seeker = gs.round?.seeker;
-  const nick = (id?: string | null) => gs.members.find((x) => x.id === id)?.nick ?? "?";
   switch (gs.phase) {
-    case "travel": g.toast("Game don start! You're at the Motor Park — board a ride 🚌", "good"); break;
+    // what to do at each step is said by the Coach (the timer bar) — no stacked toasts on top of it
     case "gather":
       if (gs.gather) g.set({ guide: { x: gs.gather.center[0], z: gs.gather.center[1], label: "⭕ The circle" } });
-      if (!g.ride) g.toast("Oya, everybody gather inside the circle ⭕", "good");
       break;
-    case "dice": g.set({ dice: null, guide: null }); g.toast("Everybody don gather! Pick your number 1–6 🎲"); break;
+    case "dice": g.set({ dice: null, guide: null }); break;
     case "hide":
-      g.toast(seeker === me ? "Na you dey Boju! Close your eyes…" : `Run! ${nick(seeker)} is counting!`, "good");
       if (seeker === me) { cam.aerial.on = false; g.set({ aerial: false }); }
       break;
     case "seek":
-      g.toast(seeker === me ? "Open your eyes — go find them!" : "Boju is coming… hide well!", "good");
       sound.play("whistle");
       break;
   }

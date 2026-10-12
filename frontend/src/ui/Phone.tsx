@@ -65,6 +65,20 @@ export default function Phone() {
   const mini = useGame((s) => !!s.mini);
   const hasPhone = !!model || mini;
   const inGroup = useGame((s) => !!s.group);
+  const device = useRef<HTMLDivElement>(null);
+
+  // a tap anywhere outside the phone closes it (also the strips by the notch and home bar,
+  // and anything drawn above the backdrop)
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || device.current?.contains(t) || t.closest?.("[aria-label=Phone]")) return;
+      close();
+    };
+    window.addEventListener("pointerdown", outside, true);
+    return () => window.removeEventListener("pointerdown", outside, true);
+  }, [open, close]);
 
   // launching "action" apps closes the phone and does the thing in the world
   useEffect(() => {
@@ -97,7 +111,7 @@ export default function Phone() {
     <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[4px] sm:items-center"
       onPointerDown={(e) => e.target === e.currentTarget && close()}>
       {/* device: metal band (phone colour) -> black bezel -> screen */}
-      <div className="anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
+      <div ref={device} className="anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
         style={{ background: `linear-gradient(145deg, ${shade(metal, 0.45)}, ${metal} 35%, ${shade(metal, -0.35)} 70%, ${shade(metal, 0.2)})` }}>
         {[["left", "18%", "2.2rem"], ["left", "27%", "3.4rem"], ["left", "37%", "3.4rem"], ["right", "30%", "5rem"]].map(([side, top, h]) => (
           <span key={`${side}${top}`} className="absolute w-[3px] rounded-full" style={{ [side]: "-3px", top, height: h, background: shade(metal, -0.2) } as React.CSSProperties} />

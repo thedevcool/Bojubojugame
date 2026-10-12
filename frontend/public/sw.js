@@ -1,8 +1,9 @@
 // Boju Boju service worker: installable PWA + fast repeat loads on costly mobile data.
-// - Hashed build assets (/_next/static) and icons: cache-first, kept forever (immutable).
+// - Hashed build assets (/_next/static), icons and the Boju song (/audio): cache-first, kept
+//   (a new recording gets a new file name).
 // - Pages: network-first, falling back to the cached page, then to /offline.html.
 // - API, WebSocket and other origins (game server, map tiles): never touched here.
-const VERSION = "boju-v3";
+const VERSION = "boju-v4";
 const STATIC = `${VERSION}-static`;
 const PAGES = `${VERSION}-pages`;
 const PRECACHE = ["/offline.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
@@ -24,7 +25,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/_next/static/") || PRECACHE.includes(url.pathname)) {
+  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/audio/") || PRECACHE.includes(url.pathname)) {
     e.respondWith(
       caches.open(STATIC).then(async (cache) => {
         const hit = await cache.match(req);

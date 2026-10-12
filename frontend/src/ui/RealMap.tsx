@@ -45,7 +45,6 @@ export function RideMap() {
     raf = requestAnimationFrame(tick);
     const done = setTimeout(() => {
       set({ ride: null });
-      if (useGame.getState().group?.phase === "gather") useGame.getState().toast("You don reach! Waka join the others inside the circle ⭕", "good");
     }, total + 900);
     return () => { cancelAnimationFrame(raf); clearTimeout(done); };
   }, [ride, set]);
@@ -55,7 +54,7 @@ export function RideMap() {
   return (
     <div className="anim-fade absolute inset-0 z-[55]">
       <WorldMap route={plan.pts} progress={progress} vehicle={MODE_ICON[ride.mode] ?? "🚌"} fit={plan.fit} interactive={false} className="absolute inset-0" />
-      <div className="panel anim-banner absolute left-3 right-3 top-3 mx-auto max-w-md p-3">
+      <div className="panel anim-banner absolute left-3 right-3 top-[max(env(safe-area-inset-top),12px)] mx-auto max-w-md p-3">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-2xl">{MODE_ICON[ride.mode] ?? "🚌"}</span>
           <div className="min-w-0 flex-1">

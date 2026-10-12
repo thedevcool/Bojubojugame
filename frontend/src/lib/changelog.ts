@@ -9,6 +9,42 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.9.0",
+    date: "2026-10-11",
+    title: "Oh no, I passed there! 👀",
+    items: [
+      { emoji: "👀", title: "Where were they hiding?", text: "When time runs out, the camera flies to every hider Boju never found — and shows how close Boju came. \"You passed just 2 m away!\"" },
+      { emoji: "🎤", title: "Sing along", text: "The words of the Boju Boju song appear while Boju counts: Boju Boju o! · Ṣé kí n ṣí?" },
+      { emoji: "🏆", title: "A proper finish", text: "A new game-over screen with the winner crowned, a podium, your stats, awards for sharpest eyes and master hider, and one tap to Play again." },
+    ],
+  },
+  {
+    version: "2.8.1",
+    date: "2026-10-11",
+    title: "Boju Boju, the song 🎤",
+    items: [
+      { emoji: "🎤", title: "The real Boju Boju song", text: "While Boju closes their eyes and counts, everyone hears the song, sung by real voices. Male and female voices take turns each round.", tryIt: "⚙️ Settings → Boju Boju song" },
+    ],
+  },
+  {
+    version: "2.8.0",
+    date: "2026-10-11",
+    title: "The game now teaches you 🧭",
+    items: [
+      { emoji: "❓", title: "How to play", text: "Six quick cards explain Boju Boju the first time you join a game. Open them again any time from 🙈 Boju Boju or ⚙️ Settings.", tryIt: "📱 → 🙈 Boju Boju → How to play" },
+      { emoji: "🧭", title: "Always know what to do", text: "The bar at the top tells you the one thing to do right now — board the bus, walk into the circle, RUN & HIDE, FIND THEM — with an arrow when you need to go somewhere." },
+      { emoji: "📣", title: "Big moments, big signs", text: "\"RUN & HIDE!\" and \"FIND THEM!\" flash on screen, and your phone closes so nothing is in the way." },
+    ],
+  },
+  {
+    version: "2.7.1",
+    date: "2026-10-11",
+    title: "Rematch, the proper way 🔁",
+    items: [
+      { emoji: "🔁", title: "Play again = rematch request", text: "Tap Play again and the other players get Accept / No. If anyone accepts, the rematch starts with everyone who said yes. No NPCs fill in, and if nobody accepts in 30 seconds, there's no rematch." },
+    ],
+  },
+  {
     version: "2.7.0",
     date: "2026-10-11",
     title: "Rematch! 🔁",

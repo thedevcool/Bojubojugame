@@ -250,6 +250,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       camera.position.lerp(want, 1 - Math.exp(-dt * 6));
       camera.up.set(hx - fx0, 0, hz - fz0).normalize();
       camera.lookAt(hx, 0, hz);
+    } else if (revealSpot()) {
+      // after a round: fly over each spot where a hider Boju never found was hiding
+      const sp = revealSpot()!;
+      camera.up.set(0, 1, 0);
+      want.set(sp.x + 4.5, 7.5, sp.z + 6.5);
+      camera.position.lerp(want, 1 - Math.exp(-dt * 2.2));
+      revealLook.lerp(lookTmp.set(sp.x, 0.9, sp.z), 1 - Math.exp(-dt * 3.5));
+      camera.lookAt(revealLook);
     } else if (cam.aerial.on) {
       camera.up.set(0, 1, 0);
       // map-app feel: targets move with your fingers, the camera glides after them, flicks keep coasting
@@ -591,6 +599,45 @@ function DestMarker() {
   );
 }
 
+/** The reveal tour's current hiding spot (or null): one spot every REVEAL_EACH seconds. */
+const REVEAL_EACH = 3; // keep in step with src/ui/Reveal.tsx and REVEAL_EACH_S on the server
+const revealLook = new THREE.Vector3(), lookTmp = new THREE.Vector3();
+function revealSpot() {
+  const rv = useGame.getState().reveal;
+  if (!rv) return null;
+  const i = Math.floor((Date.now() - rv.start) / (REVEAL_EACH * 1000));
+  return i >= 0 && i < rv.spots.length ? rv.spots[i] : null;
+}
+
+/** A glowing beam + pulsing ring on the spot being revealed. */
+function RevealMarker() {
+  const g = useRef<THREE.Group>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    const sp = revealSpot();
+    if (!g.current) return;
+    g.current.visible = !!sp;
+    if (!sp) return;
+    g.current.position.set(sp.x, 0, sp.z);
+    const k = 1 + ((clock.elapsedTime * 1.4) % 1) * 1.6;
+    ring.current?.scale.set(k, k, k);
+    const m = ring.current?.material as THREE.MeshBasicMaterial | undefined;
+    if (m) m.opacity = 0.9 * (1 - ((clock.elapsedTime * 1.4) % 1));
+  });
+  return (
+    <group ref={g} visible={false}>
+      <mesh position={[0, 3, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 6, 20, 1, true]} />
+        <meshBasicMaterial color="#ffd84f" transparent opacity={0.28} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]}>
+        <ringGeometry args={[0.6, 0.85, 36]} />
+        <meshBasicMaterial color="#ffd84f" transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
 /** Onboarding guide: a bobbing pin over the goal + an arrow at your feet pointing to it. */
 function GuideMarker() {
   const guide = useGame((s) => s.guide);
@@ -769,6 +816,7 @@ function World({ map }: { map: GameMap }) {
       <DebugHook />
       <DestMarker />
       <GuideMarker />
+      <RevealMarker />
       {quality === "high" && (
         <EffectComposer multisampling={0}>
           <N8AO aoRadius={1.6} intensity={2.2} distanceFalloff={1} quality="performance" />
@@ -781,7 +829,7 @@ function World({ map }: { map: GameMap }) {
 
 // ?debug=1 exposes client-only camera/player state for screenshots and QA (the server still validates movement).
 if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
-  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers };
+  (window as unknown as { __boju: unknown }).__boju = { local, cam, input, store: useGame, walkTo, navState, remotes, sample, furn, toWorld, findPath, traffic, sceneRefs, roomAt, otherPlayers, sound, net };
 }
 
 export default function Scene({ map }: { map: GameMap }) {

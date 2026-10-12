@@ -10,6 +10,7 @@ import random
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -50,6 +51,21 @@ def furniture_row(it: FurnitureItem) -> dict[str, Any]:
     return {"id": it.id, "item": it.item, "lx": round(it.lx, 2), "lz": round(it.lz, 2), "rot": it.rot % 4}
 
 
+REMATCH_WAIT_S = 30
+
+
+@dataclass
+class RematchAsk:
+    old: GroupRoom
+    by: str
+    nick: str
+    invited: set[str]
+    until: float
+    yes: set[str] = field(default_factory=set)
+    no: set[str] = field(default_factory=set)
+    code: str | None = None  # the rematch game, once someone said yes
+
+
 class World:
     def __init__(
         self,
@@ -82,6 +98,7 @@ class World:
         self.mini: set[str] = set()
         # called with (game_id, final_results) when a game ends (LagosLife match results)
         self.game_over_hooks: list[Callable[[str, list[dict[str, Any]]], Awaitable[None]]] = []
+        self.rematches: dict[str, RematchAsk] = {}  # finished game id -> open "play again" request
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
@@ -121,6 +138,7 @@ class World:
                 "me": {"id": pid, "nick": s.nick, "n": s.net_id},
                 "home": self.maps[HUB_MAP_ID].home_by_id(s.home_id),
                 "server_time": int(now * 1000),
+                "in_group": s.group is not None,
             }
         )
         s.send(self.doors_msg())
@@ -393,7 +411,7 @@ class World:
             elif isinstance(msg, P.Invite):
                 self.on_invite(s, msg)
             elif isinstance(msg, P.Rematch):
-                await self.on_rematch(s)
+                await self.on_rematch(s, msg.answer)
             elif isinstance(msg, P.Watch):
                 if msg.code is not None and msg.code.upper() not in self.groups:
                     raise GroupError("That game has ended")
@@ -543,34 +561,77 @@ class World:
         t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": g.code})
         s.send({"t": "toast", "msg": f"Invite sent to {t.nick} 📨"})
 
-    async def on_rematch(self, s: Session) -> None:
-        """Play again with the same people: the first to ask creates the game, the rest are invited
-        (and anyone else who taps Play again just joins it)."""
+    async def on_rematch(self, s: Session, answer: str | None) -> None:
+        """Play again = a rematch request. The other players get Accept / No; if at least one accepts,
+        a new private game (same settings, no NPCs) starts with everyone who said yes. Nobody: no rematch."""
         g = s.group
         if g is None or g.phase != "over":
             raise GroupError("Finish this game first")
-        old_humans = [p for p in g.members if p not in g.bots and p != s.pid]
-        bots = len(g.bots)
-        ng = self.groups.get(g.rematch) if g.rematch else None
-        if ng is not None and ng.phase == "lobby":
-            await self.on_group(s, P.GroupJoin(t="g_join", code=ng.code))
+        ask = self.rematches.get(g.id)
+        if ask is None:
+            if answer == "no":
+                return
+            others = [
+                p for p in g.members
+                if p != s.pid and p not in g.bots and (t := self.sessions.get(p)) and t.connected and t.group is g
+            ]  # fmt: skip
+            if not others:
+                raise GroupError("Nobody from this game is still here for a rematch")
+            ask = RematchAsk(old=g, by=s.pid, nick=s.nick, invited=set(others), until=self.now() + REMATCH_WAIT_S)
+            self.rematches[g.id] = ask
+            for p in others:
+                self.sessions[p].send({"t": "rematch_ask", "from": s.pid, "nick": s.nick, "secs": REMATCH_WAIT_S})
+            s.send({"t": "rematch_wait", "n": len(others), "secs": REMATCH_WAIT_S})
             return
-        ng = await self.create_group(
-            s,
-            P.GroupCreate(
-                t="g_create", arena=g.settings["arena"], hide=g.settings["hide"], search=g.settings["search"],
-                safe=g.settings["safe"], bots=bots, public=False,
-            ),
-        )  # fmt: skip
-        g.rematch = ng.code
-        sent = 0
-        for pid in old_humans:
-            t = self.sessions.get(pid)
-            if t is not None and t.connected and not t.bot:
-                t.send({"t": "invite", "from": s.pid, "nick": s.nick, "code": ng.code, "rematch": True})
-                sent += 1
-        who = f" — {sent} player{'s' if sent != 1 else ''} invited" if sent else ""
-        s.send({"t": "toast", "msg": f"New game ready{who} 🔁"})
+        if s.pid == ask.by or s.pid in ask.yes or s.pid in ask.no:
+            return
+        if s.pid not in ask.invited:
+            raise GroupError("That rematch is only for the last game's players")
+        asker = self.sessions.get(ask.by)
+        if answer == "no":
+            ask.no.add(s.pid)
+            if asker is not None:
+                asker.send({"t": "toast", "msg": f"{s.nick} no wan rematch 🙅🏾"})
+            return
+        ask.yes.add(s.pid)
+        if ask.code is None:
+            # the first yes: the rematch game exists now (the asker is its creator)
+            if asker is None or not asker.connected or asker.group is not g:
+                self.rematches.pop(g.id, None)
+                raise GroupError("The rematch was cancelled")
+            ng = await self.create_group(
+                asker,
+                P.GroupCreate(
+                    t="g_create", arena=g.settings["arena"], hide=g.settings["hide"], search=g.settings["search"],
+                    safe=g.settings["safe"], bots=0, public=False,
+                ),
+            )  # fmt: skip
+            ask.code = ng.code
+        await self.on_group(s, P.GroupJoin(t="g_join", code=ask.code))
+        if asker is not None:
+            asker.send({"t": "toast", "msg": f"{s.nick} accepted the rematch! 🔁"})
+
+    async def settle_rematches(self) -> None:
+        """Start a rematch once everyone answered (or time ran out); with no yes, it's off."""
+        now = self.now()
+        for gid, ask in list(self.rematches.items()):
+            if now < ask.until and not ask.invited <= ask.yes | ask.no:
+                continue
+            del self.rematches[gid]
+            asker = self.sessions.get(ask.by)
+            ng = self.groups.get(ask.code) if ask.code else None
+            for p in ask.invited | {ask.by}:
+                if (t := self.sessions.get(p)) is not None:
+                    t.send({"t": "rematch_end"})
+            if ng is None or asker is None or ng.phase != "lobby":
+                if asker is not None:
+                    asker.send({"t": "toast", "msg": "Nobody accepted — no rematch this time 😅"})
+                continue
+            try:
+                async with ng.lock:
+                    await ng.start(asker)
+            except GroupError as e:
+                asker.send({"t": "err", "msg": f"Rematch couldn't start: {e}"})
 
     def _correct(self, s: Session, seq: int, now: float) -> None:
         if now - s.last_corr_at > 0.2:
@@ -829,6 +890,8 @@ class World:
     # ------------------------------------------------------------ tick
     async def tick(self) -> None:
         now = self.now()
+        if self.rematches:
+            await self.settle_rematches()
         for code, g in list(self.groups.items()):
             try:
                 async with g.lock:
@@ -889,6 +952,7 @@ class World:
                 self.drop_bot(p)
             elif s is not None and s.group is g:
                 s.group = None
+                s.send({"t": "g_left"})  # or the phone keeps showing that game (e.g. a stuck game-over box)
                 if s.room is g.arena:
                     # still looking around the venue: keep exploring it, now as a traveller
                     self.explore_room(g.settings["arena"]).add(s, s.x, s.z, self.now())

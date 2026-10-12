@@ -167,6 +167,11 @@ async def test_full_game(db):
     sc = get_config().scoring
     assert deltas[seeker.pid] == sc.seeker_find_one and deltas[hiders[0].pid] == 0
     assert deltas[hiders[1].pid] == sc.hider_not_found
+    # the reveal tour: where the unfound hider was, and how close Boju came (seeker ~33 m away at (-3,-30))
+    spots = g.last_result["hidden_at"]
+    assert [x["id"] for x in spots] == [hiders[1].pid] and (spots[0]["x"], spots[0]["z"]) == (hiders[1].x, hiders[1].z)
+    assert spots[0]["closest"] is not None and spots[0]["closest"] > 30
+    assert g.phase_end - clock.t > get_config().game.result_s  # the result phase makes room for the tour
     assert seeker.pid in g.retired
 
     # Final round between the remaining two; first found seeks next.
@@ -194,14 +199,26 @@ async def test_full_game(db):
         wallet = [m for m in players[[a, b, c].index(s)][1].msgs if m["t"] == "wallet"][-1]
         assert wallet["balance"] == await world.economy.balance(s.pid)
 
-    # Play again: B makes the rematch (same settings, private) and C is invited; C tapping Play again joins it.
+    # Play again is a rematch request: C says no -> nothing happens, B is told.
     await send(world, b, t="g_rematch")
-    ng = b.group
-    assert ng is not g and ng.phase == "lobby" and not ng.public and ng.settings == g.settings
-    inv = cc.last("invite")
-    assert inv["code"] == ng.code and inv["rematch"]
+    assert cb.last("rematch_wait")["n"] == 1 and cc.last("rematch_ask")["nick"] == b.nick
+    await send(world, c, t="g_rematch", answer="no")
+    await advance(world, clock, 0.2)
+    assert b.group is g and c.group is g and cc.last("rematch_end")
+    assert "no rematch" in cb.last("toast")["msg"]
+    # Asked again, nobody answers in time -> still no rematch.
+    await send(world, b, t="g_rematch")
+    await advance(world, clock, 31)
+    assert b.group is g and "no rematch" in cb.last("toast")["msg"]
+    # Asked again and C accepts (tapping Play again counts as yes): a new private game, same settings,
+    # no NPCs, and it starts straight away once everyone answered.
+    await send(world, b, t="g_rematch")
     await send(world, c, t="g_rematch")
-    assert c.group is ng and len(world.groups) >= 1
+    ng = b.group
+    assert ng is not g and c.group is ng and not ng.public and ng.settings == g.settings and not ng.bots
+    assert "accepted" in cb.last("toast")["msg"]
+    await advance(world, clock, 0.2)
+    assert ng.phase == "travel"
     await send(world, a, t="g_rematch")
     assert ca.last("err")["msg"] == "Finish this game first"  # A already rode home
 
@@ -356,3 +373,23 @@ async def test_live_games_list_and_spectator_map(db):
     assert w.room is not g.arena
     await send(world, w, t="watch", code=None)
     assert w.watching is None
+
+
+async def test_closed_game_tells_players_and_reconnect_clears_it(db):
+    """A finished game the server closes must not leave a stuck game-over screen on anyone's phone."""
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, cb) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
+    g = a.group
+    # B's phone sleeps (disconnects) while the game is still on
+    world.disconnect(b, b.sender)
+    # the game ends; nobody is exploring the venue (both are in Lagos), so the server closes it
+    g.phase, g.phase_end = "over", clock.t
+    await advance(world, clock, 0.3)
+    assert a.group is None and b.group is None and g.code not in world.groups
+    assert ca.last("g_left") is not None  # A's phone is told straight away
+    # B comes back: hello says "not in a game", so the phone drops the old game screens
+    cb2 = Client()
+    await world.connect(b.pid, b.nick, cb2)
+    assert cb2.last("hello")["in_group"] is False

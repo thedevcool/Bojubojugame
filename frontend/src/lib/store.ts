@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { input, local } from "@/game/state";
-import type { ChatMsg, Content, GroupState, Home, RosterEntry, Standing } from "./types";
+import type { ChatMsg, Content, GroupState, HiddenSpot, Home, RosterEntry, Standing } from "./types";
 
 export type Quality = "low" | "medium" | "high";
 
@@ -63,7 +63,13 @@ interface GameStore {
   /** player card open for this player id (tap a person in the world) */
   card: string | null;
   /** live invite to someone's lobby */
-  invite: { from: string; nick: string; code: string; at: number; rematch?: boolean } | null;
+  invite: { from: string; nick: string; code: string; at: number } | null;
+  /** Play again: someone asked me for a rematch, or I'm waiting for answers */
+  /** after a round: the camera tours where the unfound hiders were hiding */
+  reveal: { spots: HiddenSpot[]; start: number; round: number } | null;
+  /** "How to play" cards open */
+  howTo: boolean;
+  rematch: { kind: "asked"; from: string; nick: string; until: number } | { kind: "waiting"; n: number; until: number } | null;
   /** invite this player as soon as our new lobby exists */
   pendingInvite: string | null;
   /** house id -> tenant id; houses whose owner let me in; someone knocking at my door */
@@ -141,6 +147,9 @@ export const useGame = create<GameStore>((set, get) => ({
   seatAsk: false,
   card: null,
   invite: null,
+  rematch: null,
+  howTo: false,
+  reveal: null,
   pendingInvite: null,
   doorOwners: {},
   openDoors: [],
@@ -166,6 +175,7 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ bend: on, ...(on ? { sitting: false } : {}) });
   },
   toast: (msg, kind = "info") => {
+    if (get().toasts.some((t) => t.msg === msg)) return; // the same message is already on screen
     const id = ++toastId;
     set({ toasts: [...get().toasts.slice(-3), { id, msg, kind }] });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), 3500);

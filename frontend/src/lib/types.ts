@@ -134,9 +134,13 @@ export interface RoundResult {
   retired: string[];
   next_seeker: string | null;
   game_over: boolean;
+  /** hiders Boju never found: where they were, and how close Boju came (the reveal tour) */
+  hidden_at?: HiddenSpot[];
 }
 
-export interface Standing { id: string; nick: string; earned: number; finds: number; survived: number }
+export interface HiddenSpot { id: string; nick: string; x: number; z: number; safe: boolean; closest: number | null }
+
+export interface Standing { id: string; nick: string; earned: number; finds: number; survived: number; rounds_as_seeker?: number }
 
 export type Phase = "lobby" | "travel" | "gather" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
 

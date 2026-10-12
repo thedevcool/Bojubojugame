@@ -14,12 +14,15 @@ import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
 import { MiniBridge } from "@/ui/LagosLife";
+import { CoachGuide, CoachMoments, HowToPlay } from "@/ui/Coach";
+import { BojuSong, SongCaptions } from "@/ui/BojuSong";
+import { Reveal } from "@/ui/Reveal";
 import { ActionButtons, BlindOverlay, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
 
 import { WhatsNew, markSeen } from "@/ui/WhatsNew";
 import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
-import { InviteBanner, PlayerCard } from "@/ui/PlayerCard";
+import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
 import Onboarding, { onboardingDone } from "@/ui/Onboarding";
 
@@ -73,7 +76,11 @@ export default function PlayPage() {
         getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});
         if (!mini && profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
         if (!mini && profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");
-        if (!mini && !profile.email) setTimeout(() => useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"), 60000);
+        if (!mini && !profile.email) {
+          // a gentle reminder, but never in the middle of a game
+          const nag = () => (useGame.getState().group ? setTimeout(nag, 60000) : useGame.getState().toast("✉️ Add an email in 📱 Settings so you can reset your password"));
+          setTimeout(nag, 60000);
+        }
         net.start(fresh);
       } catch (e) {
         setError((e as Error).message || "Can't connect");
@@ -143,14 +150,19 @@ export default function PlayPage() {
   }
 
   return (
-    <main className="game-root fixed inset-0 overflow-hidden">
+    <main className="game-root overflow-hidden">
       {map ? (
         <>
           <div className="absolute inset-0"><Scene map={map} /></div>
           <Controls disabled={decor} />
-          <div className="pointer-events-none absolute inset-0">
+          <div className="pointer-events-none absolute safe-inset">
             <TopBar />
             <PhaseBar />
+            <CoachGuide />
+            <CoachMoments />
+            <BojuSong />
+            <SongCaptions />
+            <Reveal />
             <ZonePanel />
             <SafeCompass />
             {!decor && !onboarding && <MiniMapWidget />}
@@ -164,6 +176,8 @@ export default function PlayPage() {
             <Phone />
             <PlayerCard />
             <InviteBanner />
+            <RematchBanner />
+            <HowToPlay />
             <DoorPanel />
             <SeatAsk />
             <KnockPrompt />

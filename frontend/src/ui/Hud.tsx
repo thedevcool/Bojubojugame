@@ -7,6 +7,7 @@ import { buyCar, buyFurniture, buyPhone, loadAccount, naira, nairaShort } from "
 import { ITEM_ICON } from "@/game/furniture";
 import { bedNear } from "@/game/seats";
 import { startDecorating } from "./decorStart";
+import { gamesPlayed, useTip } from "./Coach";
 import dynamic from "next/dynamic";
 const FurniturePreview = dynamic(() => import("@/game/Previews").then((m) => m.FurniturePreview), { ssr: false });
 const CarPreview = dynamic(() => import("@/game/Previews").then((m) => m.CarPreview), { ssr: false });
@@ -69,7 +70,6 @@ export function PhaseBar() {
   const me = useGame((s) => s.me?.id);
   const left = useSecondsLeft(g?.phase_end);
   const { section } = useWhere();
-  const { isSeeker } = useRole();
   // last-10-seconds countdown ticks while hiding/seeking
   const lastTick = useRef(-1);
   useEffect(() => {
@@ -81,11 +81,13 @@ export function PhaseBar() {
   const map = useMap();
   const myHome = useGame((s) => s.home);
   const onboarding = useGame((s) => s.onboard !== null);
+  const tip = useTip();
+  const newPlayer = gamesPlayed() < 3;
   if (g?.phase === "over" && map?.kind === "arena") {
     return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · free to explore — 🚌 the bus stop takes you home</div>;
   }
   if (!g && onboarding) return null; // the tour banner sits here
-  if (!g || g.phase === "lobby") {
+  if (!g) {
     const inside = local.insideHome;
     const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
     const label = homeLabel ?? (section ? `📍 ${section.name}` : null);
@@ -93,30 +95,28 @@ export function PhaseBar() {
   }
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
-  const labels: Record<string, string> = {
-    travel: "Travel to the arena", gather: "Gather inside the circle", dice: "Pick a number", reveal: "Dice don talk!", hide: "Hide!", seek: "Seek!", result: "Round result", over: "Game over",
-  };
   const hiding = r ? Object.values(r.state).filter((s) => s === "hiding").length : 0;
   const safeTotal = useGame.getState().content?.config.game.safe_house_total_s ?? 20;
   const safeLeft = r && me && r.safe.includes(me) ? Math.max(0, safeTotal - (r.safe_used[me] ?? 0)) : null;
-  const safeName = map?.safe_houses.find((s) => s.id === g.settings.safe)?.name;
+  const timed = g.phase !== "over" && g.phase !== "lobby";
+  const live = r && ["hide", "seek"].includes(g.phase);
+  // the timer bar is also the Coach: what to do right now, for your role (more detail for new players)
+  const detail = newPlayer || live || g.phase === "lobby";
   return (
-    <div className="panel absolute left-1/2 top-[3.9rem] z-10 w-max max-w-[92vw] -translate-x-1/2 px-4 py-1.5 text-center">
-      <div className="text-sm font-bold">
-        {labels[g.phase]} {g.phase !== "over" && <span className="tabular-nums text-[var(--accent)]">{fmtTime(left)}</span>}
-      </div>
-      {g.phase === "gather" && g.gather && (
-        <div className="text-[11px] opacity-90">⭕ {g.gather.in.length}/{g.members.filter((m) => !m.left && !m.retired).length} in the circle — the dice roll when everybody is in</div>
-      )}
-      {isSeeker && g.phase === "seek" && <div className="text-[11px] font-semibold text-[var(--accent)]">Reach a hider to catch them — no button needed</div>}
-      {r && ["hide", "seek"].includes(g.phase) && (
-        <div className="text-[11px] opacity-90">
-          Round {r.no}{r.final ? " (final)" : ""} · Boju: {nick(r.seeker)} · Found {r.found.length} · Hiding {hiding}
-          {safeName && <> · Safe: {safeName}</>}
+    <div className="panel absolute left-1/2 top-[3.9rem] z-10 flex w-[min(26rem,calc(100vw-1rem))] -translate-x-1/2 items-center gap-2.5 px-3 py-2" data-testid="coach">
+      {tip && <span key={tip.key} className="anim-pop grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/25 text-2xl leading-none">{tip.icon}</span>}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-[15px] font-black leading-tight">{tip?.text ?? g.phase}</span>
+          {timed && <span className="shrink-0 font-black tabular-nums text-[var(--accent)]">{fmtTime(left)}</span>}
         </div>
-      )}
-      {safeLeft !== null && <div className="text-xs font-bold text-green-400">🏠 Safe — {safeLeft.toFixed(0)}s left</div>}
-      {section && <div className="text-[10px] opacity-70">📍 {section.name}</div>}
+        {tip?.sub && detail && <div className="line-clamp-2 text-[12px] leading-snug opacity-80">{tip.sub}</div>}
+        {g.phase === "gather" && g.gather && (
+          <div className="text-[11px] opacity-70">⭕ {g.gather.in.length}/{g.members.filter((m) => !m.left && !m.retired).length} in the circle</div>
+        )}
+        {live && <div className="truncate text-[10.5px] opacity-60">Round {r.no}{r.final ? " (final)" : ""} · Boju: {nick(r.seeker)} · Found {r.found.length} · Hiding {hiding}</div>}
+        {safeLeft !== null && <div className="text-xs font-bold text-green-400">🟢 Safe — {safeLeft.toFixed(0)}s left</div>}
+      </div>
     </div>
   );
 }

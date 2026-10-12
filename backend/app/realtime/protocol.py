@@ -68,9 +68,10 @@ class RemoveBot(_In):
 
 
 class Rematch(_In):
-    """Play again: a new private game with the same settings, everyone from the last one invited."""
+    """Play again: ask the other players for a rematch (no answer = ask, or accept if someone asked)."""
 
     t: Literal["g_rematch"]
+    answer: Literal["yes", "no"] | None = None
 
 
 class Invite(_In):

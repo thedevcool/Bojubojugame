@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("boju.group")
 
+REVEAL_EACH_S = 3.0  # the "here's where they were hiding" tour shows each unfound hider this long
+REVEAL_MAX = 4
 GAME_PHASES = {"gather", "dice", "reveal", "hide", "seek", "result"}
 GATHER_RADIUS = 4.5  # the circle everyone stands in before the dice
 SEEN_GRACE_S = 1.2  # Boju keeps seeing a hider this long after losing sight (no popping out of view)
@@ -53,6 +55,7 @@ class RoundState:
     in_safe: set[str] = field(default_factory=set)
     safe_used: dict[str, float] = field(default_factory=dict)
     skipped: bool = False
+    closest: dict[str, float] = field(default_factory=dict)  # nearest Boju came to each hider while seeking
 
 
 class GroupRoom:
@@ -84,7 +87,6 @@ class GroupRoom:
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
         self.bots: dict[str, BotBrain] = {}
-        self.rematch: str | None = None  # code of the "play again" game made from this one
         self.arrive_at: dict[str, float] = {}
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
@@ -577,6 +579,10 @@ class GroupRoom:
                 r.state[h] = "idle"
                 r.in_safe.discard(h)
                 continue
+            if hs is not None and seeker is not None and self.phase == "seek":
+                d = distance(seeker.x, seeker.z, hs.x, hs.z)
+                if d < r.closest.get(h, 1e9):
+                    r.closest[h] = d
             if hs is None or safe is None or self.phase != "seek":
                 continue
             inside = in_rect(safe["rect"], hs.x, hs.z)
@@ -656,8 +662,11 @@ class GroupRoom:
             "retired": sorted(plan.retired),
             "next_seeker": plan.next_seeker,
             "game_over": self.game_over_pending,
+            # where the hiders Boju never found were hiding (+ how close Boju came) — the reveal tour
+            "hidden_at": self.hidden_spots(r, outcome),
         }
-        self.set_phase("result", self.cfg.game.result_s, "round_result")
+        tour = len(self.last_result["hidden_at"]) * REVEAL_EACH_S
+        self.set_phase("result", self.cfg.game.result_s + tour, "round_result")
         # ---- I/O after the state is consistent
         applied = await self.world.apply_round(self.id, r.no, deltas, outcome, participants=[r.seeker, *r.hiders])
         for p, amount in applied.items():
@@ -671,6 +680,21 @@ class GroupRoom:
                 self.standings[h].survived += 1
         self.last_result["deltas"] = applied
         self.broadcast_state("round_result")
+
+    def hidden_spots(self, r: RoundState, outcome: rules.RoundOutcome) -> list[dict[str, Any]]:
+        if r.skipped:
+            return []
+        out = []
+        for h in r.hiders:
+            s = self.session(h)
+            if s is None or h in r.found_order or h in outcome.idle:
+                continue
+            near = r.closest.get(h)
+            out.append({
+                "id": h, "nick": self.nicks.get(h, "?"), "x": round(s.x, 2), "z": round(s.z, 2),
+                "safe": h in outcome.safe_at_end, "closest": round(near, 1) if near is not None else None,
+            })  # fmt: skip
+        return out[:REVEAL_MAX]
 
     async def finish_game(self) -> None:
         if self.phase == "over":

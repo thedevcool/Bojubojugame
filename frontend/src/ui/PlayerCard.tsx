@@ -5,6 +5,7 @@ import { getCard, loadAccount, requestFriend, respondFriend, type PlayerCard as 
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import { SKIN } from "@/game/palette";
+import { useTicker } from "./hooks";
 
 /** Tap a real player in the world: their Boju points, add friend, invite to Boju. */
 export function PlayerCard() {
@@ -106,15 +107,33 @@ export function InviteBanner() {
     <div className="pointer-events-auto absolute left-1/2 top-[7.5rem] z-[61] w-[min(24rem,94vw)] -translate-x-1/2">
       <div className="panel anim-banner flex items-center gap-3 p-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-xl">🙈</span>
-        <div className="min-w-0 flex-1 text-sm">
-          {inv.rematch ? <><b>@{inv.nick}</b> wants a rematch! 🔁</> : <><b>@{inv.nick}</b> invited you to play Boju · <span className="font-mono">{inv.code}</span></>}
-        </div>
+        <div className="min-w-0 flex-1 text-sm"><b>@{inv.nick}</b> invited you to play Boju · <span className="font-mono">{inv.code}</span></div>
         <button className="btn btn-primary px-3 py-1.5 text-sm" onClick={() => {
           if (group && group.phase !== "over") net.send({ t: "g_leave" });
           net.send({ t: "g_join", code: inv.code });
           set({ invite: null, phoneOpen: true, phoneApp: "boju" });
-        }}>{inv.rematch ? "Play again" : "Join"}</button>
+        }}>Join</button>
         <button className="btn btn-ghost px-2 py-1.5 text-sm" onClick={() => set({ invite: null })}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+/** "@tolu wants a rematch!" — Accept or No (it only happens if at least one person accepts). */
+export function RematchBanner() {
+  const r = useGame((s) => s.rematch);
+  const set = useGame((s) => s.set);
+  useTicker(500);
+  if (!r || r.kind !== "asked") return null;
+  const left = Math.max(0, Math.ceil((r.until - Date.now()) / 1000));
+  const answer = (a: "yes" | "no") => { net.send({ t: "g_rematch", answer: a }); set({ rematch: null }); };
+  return (
+    <div className="pointer-events-auto absolute left-1/2 top-[7.5rem] z-[62] w-[min(24rem,94vw)] -translate-x-1/2" data-testid="rematch-ask">
+      <div className="panel anim-banner flex items-center gap-3 p-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-xl">🔁</span>
+        <div className="min-w-0 flex-1 text-sm"><b>@{r.nick}</b> wants a rematch! <span className="opacity-60">· {left}s</span></div>
+        <button className="btn btn-leaf px-3 py-1.5 text-sm" onClick={() => answer("yes")}>Accept</button>
+        <button className="btn btn-ghost px-2.5 py-1.5 text-sm" onClick={() => answer("no")}>No</button>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { cam, local } from "@/game/state";
+import { serverFlags, setFlag } from "@/lib/api";
 import { useGame, type TourStep } from "@/lib/store";
 import { goToShop } from "./Phone";
 import { useTicker } from "./hooks";
@@ -15,16 +16,22 @@ const DONE_KEY = "boju.onboarded";
 const STEP_KEY = "boju.tourStep";
 export const TOUR: TourStep[] = ["welcome", "move", "look", "phone", "house", "home", "map", "aerial", "roles", "play"];
 
+/** LagosLife has no phone, house or home to walk to (those live in LagosLife itself). */
+const MINI_SKIP: TourStep[] = ["phone", "house", "home"];
+const steps = (): TourStep[] => (useGame.getState().mini ? TOUR.filter((s) => !MINI_SKIP.includes(s)) : TOUR);
+
 export function onboardingDone(): boolean {
+  if (serverFlags.tour === "done") return true;
   try { return localStorage.getItem(DONE_KEY) === "1"; } catch { return false; }
 }
 export function savedTourStep(): TourStep | null {
-  try {
-    const s = localStorage.getItem(STEP_KEY) as TourStep | null;
-    return s && TOUR.includes(s) ? s : null;
-  } catch { return null; }
+  let s: string | null = null;
+  try { s = localStorage.getItem(STEP_KEY); } catch { /* storage blocked */ }
+  s ??= serverFlags.tour ?? null;
+  return s && steps().includes(s as TourStep) ? (s as TourStep) : null;
 }
 function save(step: TourStep | null): void {
+  setFlag("tour", step ?? "done");
   try {
     if (step) localStorage.setItem(STEP_KEY, step);
     else { localStorage.removeItem(STEP_KEY); localStorage.setItem(DONE_KEY, "1"); }
@@ -41,10 +48,11 @@ export function finishTour(msg?: string): void {
 function next(from: TourStep): void {
   const st = useGame.getState();
   const life = st.life;
-  let i = TOUR.indexOf(from) + 1;
+  const list = steps();
+  let i = list.indexOf(from) + 1;
   // skip what the player already has (e.g. a phone bought before the tour reached it)
-  while (i < TOUR.length && ((TOUR[i] === "phone" && life.phoneId) || (TOUR[i] === "house" && life.homeId))) i++;
-  const step = TOUR[i] ?? null;
+  while (i < list.length && ((list[i] === "phone" && life.phoneId) || (list[i] === "house" && life.homeId))) i++;
+  const step = list[i] ?? null;
   if (!step) { finishTour("🎉 You're ready! Have fun — and hide well 🙈"); return; }
   save(step);
   st.set({ onboard: step });
@@ -63,6 +71,7 @@ export default function Onboarding() {
   const group = useGame((s) => !!s.group);
   const username = useGame((s) => s.life.username || s.me?.nick || "");
   const building = useGame((s) => s.building);
+  const guide = useGame((s) => s.gameGuide);
   useTicker(300);
   const mark = useRef<{ step: TourStep | null; x: number; z: number; yaw: number; turned: number; seenOn: boolean }>({ step: null, x: 0, z: 0, yaw: 0, turned: 0, seenOn: false });
 
@@ -81,7 +90,7 @@ export default function Onboarding() {
     (step === "home" && !!home && local.insideHome === home.id) ||
     (step === "map" && mapOpen) ||
     (step === "aerial" && m.seenOn && !aerial) ||
-    (step === "play" && group);
+    (step === "play" && (group || guide === "on"));
   useEffect(() => {
     if (!step || !done) return;
     if (step === "play") { finishTour("🎉 That's it — you're ready! Have fun and hide well 🙈"); return; }
@@ -102,9 +111,9 @@ export default function Onboarding() {
     if (step === "map" || step === "roles") set({ guide: null });
   }, [step, set]);
 
-  if (!step) return null;
+  if (!step || guide) return null; // the first-game guide takes over from here
   const skip = () => finishTour("Tour skipped — 📱 ⚙️ Settings → How to play has the rules any time");
-  const n = TOUR.indexOf(step);
+  const n = steps().indexOf(step), total = steps().length - 1;
 
   // ---- the invitation (small, at the bottom, nothing blocked)
   if (step === "welcome") {
@@ -139,20 +148,20 @@ export default function Onboarding() {
     map: { icon: "🗺️", title: "See every place", text: "Tap the round MAP (top left): Lagos up close, and every city in Naija. Pin a place to walk, ride or drive there." },
     aerial: { icon: "🛰️", title: "Look from above", text: "Tap 🛰️ Aerial (bottom right) to see the area from the sky — great for scouting hiding spots. Tap it again to come back." },
     roles: { icon: "🙈", title: "Hiding vs seeking", text: "", action: { label: "Got it", on: () => next("roles") } },
-    play: { icon: "🎉", title: "Start your first Boju Boju", text: "📱 → 🙈 Boju Boju → “Quick game with NPCs” is perfect for a first try. Friends can join with your code.", action: { label: "Open Boju Boju", on: () => useGame.getState().openApp("boju") } },
+    play: { icon: "🎉", title: "Start your first Boju Boju", text: "Open 🙈 Boju Boju on your phone — I'll guide you through a practice game with NPCs.", action: { label: "Open Boju Boju", on: () => useGame.getState().openApp("boju") } },
   };
   const s = STEPS[step];
   // at the top like the in-game coach: the bottom stays free for shop panels and buttons
   const top = phoneOpen || mapOpen; // the phone / map fill the screen: sit small at the very top
   return (
     <div className={`pointer-events-none absolute inset-x-0 z-[56] flex justify-center px-3 ${top ? "top-2" : "top-[3.9rem]"}`} data-testid="tour" data-keep-phone>
-      <div key={step} className="panel anim-banner pointer-events-auto w-full max-w-md p-3">
+      <div key={step} className="panel anim-banner pointer-events-auto w-full max-w-md p-3" style={top ? { background: "rgba(14, 22, 40, 0.97)" } : undefined}>
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/25 text-2xl leading-none">{s.icon}</span>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <div className="text-[15px] font-black leading-tight">{s.title}</div>
-              <span className="shrink-0 text-[10px] font-bold tabular-nums opacity-50">{n}/{TOUR.length - 1}</span>
+              <span className="shrink-0 text-[10px] font-bold tabular-nums opacity-50">{n}/{total}</span>
             </div>
             {step === "roles" ? (
               <div className="mt-1 grid grid-cols-2 gap-2 text-[12px] leading-snug">

@@ -112,7 +112,7 @@ export function MiniMapWidget() {
   const pin = useGame((s) => s.pin);
   const { inGame, isSeeker } = useRole();
   const inGroup = useGame((s) => !!s.group); // the Coach bar is taller during a game
-  const touring = useGame((s) => (s.onboard === "welcome" ? null : s.onboard)); // the tour card sits at the top
+  const touring = useGame((s) => (s.gameGuide === "on" ? "guide" : s.onboard === "welcome" ? null : s.onboard)); // the tour / guide card sits at the top
   useEffect(() => {
     if (!map) return;
     const id = setInterval(() => {

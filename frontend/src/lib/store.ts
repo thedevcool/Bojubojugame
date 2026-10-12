@@ -72,6 +72,8 @@ interface GameStore {
   reveal: { spots: HiddenSpot[]; start: number; round: number } | null;
   /** "How to play" cards open */
   howTo: boolean;
+  /** first-game guide: "ask" = the small "want a quick guide?" card, "on" = coaching a game */
+  gameGuide: "ask" | "on" | null;
   rematch: { kind: "asked"; from: string; nick: string; until: number } | { kind: "waiting"; n: number; until: number } | null;
   /** invite this player as soon as our new lobby exists */
   pendingInvite: string | null;
@@ -153,6 +155,7 @@ export const useGame = create<GameStore>((set, get) => ({
   invite: null,
   rematch: null,
   howTo: false,
+  gameGuide: null,
   reveal: null,
   pendingInvite: null,
   doorOwners: {},

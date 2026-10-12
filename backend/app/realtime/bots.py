@@ -41,6 +41,7 @@ BOT_NAMES = [
     "Kunle",
     "Halima",
 ]
+FEMALE_NAMES = {"Bisi", "Kemi", "Ngozi", "Aisha", "Yemi", "Bola", "Ifeoma", "Zainab", "Amaka", "Sade", "Halima"}
 
 HIDE_SPEED = 5.0
 WALK_SPEED = 3.0

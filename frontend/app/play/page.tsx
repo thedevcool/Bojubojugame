@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { getContent, getFriends, getMe, loadAccount, naira, refreshToken, type Account } from "@/lib/api";
+import { getContent, getFriends, getMe, loadAccount, naira, refreshToken, type Account, serverFlags } from "@/lib/api";
 import { NewPasswordForm } from "@/ui/AuthForms";
 import { net } from "@/lib/net";
 import { detectQuality, useGame, type Quality } from "@/lib/store";
@@ -24,6 +24,7 @@ import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
+import { GameGuide } from "@/ui/GameGuide";
 import Onboarding, { onboardingDone, savedTourStep } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -68,14 +69,12 @@ export default function PlayPage() {
           content, balance: profile.balance, hunger: profile.hunger, homeArea: profile.home_area,
           life: { phoneId: profile.phone_id, homeId: profile.home_id, rentUntil: profile.rent_until, username: profile.username ?? profile.nickname, carId: profile.car_id },
         });
-        const mini = !!useGame.getState().mini; // LagosLife: no phone, house or naira here — straight to the game
-        if (mini) {
-          markSeen();
-          setTimeout(() => useGame.getState().toast("👆🏾 Tap the ground to walk · drag to look around", "good"), 1500);
-        }
-        // first launch (or no phone/house yet): the welcome tour
-        // the guided tour, for new players (or carry on where they left off)
-        if (!mini && !onboardingDone() && (savedTourStep() || !profile.phone_id || !profile.home_id)) {
+        Object.assign(serverFlags, profile.flags ?? {}); // tour / guide progress, kept per account
+        const mini = !!useGame.getState().mini; // LagosLife: no phone, house or naira here
+        if (mini) markSeen();
+        // the guided tour, for new players (or carry on where they left off). LagosLife players get
+        // the short version (no phone, house or walk home: those live in LagosLife itself)
+        if (!onboardingDone() && (mini || savedTourStep() || !profile.phone_id || !profile.home_id)) {
           set({ onboard: savedTourStep() ?? "welcome" });
           markSeen(); // the tour is the "what's new" for them — don't stack a second sheet on top
         }
@@ -185,6 +184,7 @@ export default function PlayPage() {
             <InviteBanner />
             <RematchBanner />
             <HowToPlay />
+            <GameGuide />
             <DoorPanel />
             <SeatAsk />
             <KnockPrompt />

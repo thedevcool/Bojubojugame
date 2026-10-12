@@ -60,7 +60,9 @@ export function WhatsNew() {
   useEffect(() => {
     let seen: string | null = null;
     try { seen = localStorage.getItem(KEY); } catch { /* storage blocked */ }
-    if (seen !== LATEST.version) setOpen(true);
+    // first visit on this device: nothing is "new" to a new player (the tour shows them around)
+    if (seen === null) markSeen();
+    else if (seen !== LATEST.version) setOpen(true);
   }, []);
   if (!open || onboarding) return null;
   const close = () => {

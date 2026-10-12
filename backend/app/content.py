@@ -211,7 +211,6 @@ NON_SOLID = {
     "road",
     "bus_shelter",
     "sign",
-    "lamp",
     "roof",
     "rug",
     "fan",
@@ -230,7 +229,7 @@ NON_SOLID = {
     "door_frame",
     "ac",
 }
-TRUNK = {"tree": 0.7, "big_tree": 1.6, "palm": 0.5}
+TRUNK = {"tree": 0.7, "big_tree": 1.6, "palm": 0.5, "lamp": 0.3}  # lamp posts: a thin solid post
 WALL_T = 0.3
 DOOR_W = 2.0
 

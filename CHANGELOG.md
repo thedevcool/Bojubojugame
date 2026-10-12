@@ -21,15 +21,18 @@ logging them out… replace them with an npc… (generally, for LagosLife and ou
 user should sit it out, he is still able to move within the field", "the phone should have a close at the top", "the
 controls should be round, not listed like that, and should be hideable", "when the player is hiding, highlight the
 Aerial".
-- **Stand-ins.** Minimising or closing the app no longer takes you out of anything. You stay standing where you were,
-  in Lagos, in LagosLife and in a game, looking like any other player (no "offline" or "NPC" label).
-  - In a game, after 3 s offline a quiet stand-in takes your turn. As a hider it stays hidden exactly where you left
-    it, and Boju can still find it. As Boju it seeks. In the circle and at the dice it does what's needed.
-  - When you come back you take over from where it is.
-  - Out of a game, you stay standing in the world for 2 hours; after that the server remembers your spot, so you
-    still come back there.
-  - Coming back reconnects at once. Phones often hand back a dead socket after a minimise; it's now detected and
-    replaced, with no long retry wait.
+- **Stand-ins.** Minimising or closing the app no longer takes you out of anything. Your stand-in stays exactly where
+  you last were, in Lagos, in LagosLife and in a game, looking like any other player (no "offline" or "NPC" label).
+  - **It never moves, and every rule applies to it.** A hider's stand-in stays hidden and can be found. A Boju's
+    stand-in stays put, so the round runs out on the timer as usual. The circle and dice go ahead on their timers.
+  - **When you come back** you carry on from there. Coming back reconnects at once: phones often hand back a dead
+    socket after a minimise, and that's now detected and replaced.
+  - **Away for 30 minutes**, you go offline.
+    - In a game, you're taken out of it and everyone sees "<name> was away too long and left the game".
+    - In a two-player game that ends the game, and the player who stayed wins (anyone who left ranks below everyone
+      who stayed). With more players, the game carries on.
+    - When you're back, you're told "You were away for over 30 minutes, so you were taken out of game <code>".
+    - Out of a game, you go offline after 30 minutes, and the server remembers your spot so you come back there.
   - This replaces 2.11.4's "offline 45 s = left the game". Pressing Leave still leaves, and a game with only one
     person left still ends.
 - **Sitting out means sitting out.** Anyone out of the round can't walk around the field and waits in the stands
@@ -128,7 +131,7 @@ keep saying I can follow the arrows but none is indicative".
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games); in a game a quiet stand-in plays your turn until you're back; no NPC/offline label.
+- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back.
 - `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance

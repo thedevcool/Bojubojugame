@@ -59,7 +59,6 @@ class BotBrain:
     last_seen: tuple[float, float] | None = None
     visited: set[int] = field(default_factory=set)
     phase_seen: str = ""
-    stay: bool = False  # a stand-in for an offline human: hides right where they are, doesn't wander
 
 
 def _step(s: Session, b: BotBrain, dt: float, now: float) -> None:
@@ -107,7 +106,7 @@ def _pick_spot(
 def drive_bots(g: GroupRoom, now: float, dt: float) -> None:
     rng = g.world.rng
     r = g.round
-    for pid, b in [*g.bots.items(), *g.standins.items()]:
+    for pid, b in g.bots.items():
         s = g.session(pid)
         if s is None or s.room is not g.arena:
             continue
@@ -136,10 +135,7 @@ def drive_bots(g: GroupRoom, now: float, dt: float) -> None:
                 if g.phase == "seek":
                     _seek(g, s, b, now, rng)
             elif r.state.get(pid) == "hiding":
-                if b.stay:
-                    s.crouch = g.phase == "seek"  # stays exactly where the player left them
-                else:
-                    _hide(g, s, b, now, rng)
+                _hide(g, s, b, now, rng)
         _step(s, b, dt, now)
 
 

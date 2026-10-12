@@ -68,7 +68,7 @@ class RematchAsk:
     code: str | None = None  # the rematch game, once someone said yes
 
 
-STANDIN_KEEP_S = 2 * 3600.0  # how long someone who closed the app keeps standing in the world
+STANDIN_KEEP_S = 30 * 60.0  # someone who closed the app keeps standing in the world this long, then goes offline
 
 
 class World:
@@ -105,6 +105,7 @@ class World:
         self.game_over_hooks: list[Callable[[str, list[dict[str, Any]]], Awaitable[None]]] = []
         self.rematches: dict[str, RematchAsk] = {}  # finished game id -> open "play again" request
         self.last_spots: dict[str, tuple[float, float, float]] = {}  # pid -> where they were in Lagos (x, z, when)
+        self.timed_out: dict[str, str] = {}  # pid -> code of the game they were taken out of for being away too long
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
@@ -154,6 +155,8 @@ class World:
             self.join_hub(s, at=self.free_spot((spot[0], spot[1]), exclude=pid) if spot else self.home_spawn(s))
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
+        if (code := self.timed_out.pop(pid, None)) is not None:
+            s.send({"t": "toast", "msg": f"You were away for over 30 minutes, so you were taken out of game {code}."})
         if s.group is not None:
             s.send(s.group.state_msg("reconnected"))
             await self.send_chat_history(s, s.group)
@@ -935,8 +938,8 @@ class World:
                 if g.code not in feeds:
                     feeds[g.code] = g.watch_msg()
                 s.send(feeds[g.code])
-        # someone who closed the app stays standing where they were (a quiet stand-in) for a good while; then we
-        # remember the spot, so they still come back exactly there
+        # someone who closed the app stays standing where they were (their stand-in) for 30 minutes, then goes
+        # offline; we remember the spot, so they still come back exactly there
         for pid, s in list(self.sessions.items()):
             if s.sender is None and s.group is None and s.disconnected_at and now - s.disconnected_at > STANDIN_KEEP_S:
                 if isinstance(s.room, HubShard):

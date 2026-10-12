@@ -223,8 +223,9 @@ async def test_full_game(db):
     assert ca.last("err")["msg"] == "Finish this game first"  # A already rode home
 
 
-async def test_offline_boju_gets_a_stand_in(db):
-    """Boju minimises the app mid-round: a stand-in seeks for them, and they take over again when back."""
+async def test_offline_boju_stand_in_stays_put(db):
+    """Boju minimises the app mid-round: their stand-in stays exactly where they were (no moving, no finding),
+    the round runs out normally, and they carry on when back."""
     world, clock, players = await setup(db, 3)
     (a, ca), (b, _), (c, _) = players
     await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
@@ -240,20 +241,47 @@ async def test_offline_boju_gets_a_stand_in(db):
     sender = seeker.sender
     world.disconnect(seeker, sender)
     await until(world, clock, g, "seek")
-    start = (seeker.x, seeker.z)
-    await advance(world, clock, 8)
-    assert seeker.pid in g.standins and not g.round.skipped
-    assert (seeker.x, seeker.z) != start  # the stand-in is out looking
+    spot = (seeker.x, seeker.z)
+    await advance(world, clock, 30)
+    assert (seeker.x, seeker.z) == spot and g.phase == "seek" and not g.round.skipped
     await world.connect(seeker.pid, seeker.nick, sender)
     await advance(world, clock, 0.2)
-    assert seeker.pid not in g.standins and seeker.pid in g.active
+    assert seeker.pid in g.active and g.phase == "seek"
 
 
 async def test_offline_hider_keeps_their_spot(db):
-    """Two players; the hider closes the app mid-round. They stay hidden right there — Boju can still find them."""
-    world, clock, players = await setup(db, 2)
-    (a, ca), (b, _) = players
+    """The hider closes the app mid-round: they stay hidden right there, and Boju can still find them."""
+    world, clock, players = await setup(db, 3)
+    (a, ca), (b, _), (c, _) = players
     await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    for s in (b, c):
+        await send(world, s, t="g_join", code=ca.last("g_state")["code"])
+    await send(world, a, t="g_start")
+    g = a.group
+    await advance(world, clock, 61)
+    await gather_all(world, clock, g)
+    await until(world, clock, g, "hide")
+    scatter(world, g)
+    hider = world.sessions[g.round.hiders[0]]
+    spot = (hider.x, hider.z)
+    world.disconnect(hider, hider.sender)
+    await advance(world, clock, 40)
+    assert g.phase == "seek" and g.round.state[hider.pid] == "hiding" and (hider.x, hider.z) == spot
+    boju = world.sessions[g.round.seeker]
+    boju.x, boju.z = hider.x + 0.5, hider.z
+    await advance(world, clock, 0.3)
+    assert g.round.state[hider.pid] == "found"
+
+
+async def test_away_too_long_two_players_the_other_wins(db, monkeypatch):
+    """Two players; one is gone past the limit (30 minutes; 60 s here, as a game rarely lasts 30 minutes): taken
+    out of the game, it ends, the one who stayed wins, and the one who was away is told when they come back."""
+    from app.realtime import group as group_mod
+
+    monkeypatch.setattr(group_mod, "AWAY_LIMIT_S", 60.0)
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, cb) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=30, search=180, safe="gatehouse")
     await send(world, b, t="g_join", code=ca.last("g_state")["code"])
     await send(world, a, t="g_start")
     g = a.group
@@ -261,17 +289,15 @@ async def test_offline_hider_keeps_their_spot(db):
     await gather_all(world, clock, g)
     await until(world, clock, g, "hide")
     scatter(world, g)
-    hider = world.sessions[next(p for p in g.round.hiders)]
-    spot = (hider.x, hider.z)
-    world.disconnect(hider, hider.sender)
-    await advance(world, clock, 40)
-    assert g.phase == "seek" and g.round.state[hider.pid] == "hiding"
-    assert (hider.x, hider.z) == spot and hider.pid in g.standins
-    # Boju walks up to the stand-in and catches it like anyone else
-    boju = world.sessions[g.round.seeker]
-    boju.x, boju.z = hider.x + 0.5, hider.z
-    await advance(world, clock, 0.3)
-    assert g.round is None or g.round.state.get(hider.pid) == "found" or g.phase in ("result", "over")
+    code = g.code
+    world.disconnect(b, b.sender)
+    await advance(world, clock, 50)
+    assert g.phase != "over" and b.pid not in g.left  # away a while: still in, as their stand-in
+    await advance(world, clock, 15)
+    assert g.phase == "over" and b.pid in g.left
+    assert g.final_results[0]["id"] == a.pid
+    s = await world.connect(b.pid, b.nick, cb)
+    assert any(m["t"] == "toast" and code in m["msg"] for m in cb.msgs[-8:]) and s.group is None
 
 
 async def test_retired_boju_goes_to_the_stands(db):
@@ -446,7 +472,8 @@ async def test_closed_game_tells_players_and_reconnect_clears_it(db):
 
 
 async def test_closing_the_app_keeps_you_where_you_were(db):
-    """In Lagos too: close the app and you stay standing there; come back (even hours later) to the same spot."""
+    """In Lagos too: close the app and you stay standing there; after 30 minutes you go offline, and coming back
+    puts you on the same spot."""
     world, clock, players = await setup(db, 1)
     ((a, ca),) = players
     a.x, a.z = zone_point("suya")
@@ -455,7 +482,7 @@ async def test_closing_the_app_keeps_you_where_you_were(db):
     world.disconnect(a, sender)
     await advance(world, clock, 120)
     assert a.pid in world.sessions and a.room is not None and (a.x, a.z) == spot  # still standing there
-    await advance(world, clock, 2 * 3600)
+    await advance(world, clock, 30 * 60)
     assert a.pid not in world.sessions
     s = await world.connect(a.pid, a.nick, Client())
     assert abs(s.x - spot[0]) < 1.5 and abs(s.z - spot[1]) < 1.5

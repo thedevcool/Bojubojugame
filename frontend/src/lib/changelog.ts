@@ -13,7 +13,7 @@ export const CHANGELOG: Release[] = [
     date: "2026-10-13",
     title: "Your spot is safe 📌",
     items: [
-      { emoji: "📌", title: "Minimise without worry", text: "Close or minimise the app and you stay right where you were — even mid-game. Come back and carry on." },
+      { emoji: "📌", title: "Minimise without worry", text: "Close or minimise the app and you stay right where you were — even mid-game (you can still be found!). Come back within 30 minutes and carry on." },
       { emoji: "🧼", title: "A cleaner screen", text: "The top card tucks into a small ⓘ once you've read it (tap to open it again). Controls sit round the Run button — tap ✕ to fold them away." },
       { emoji: "🛰️", title: "Is Boju close?", text: "While you hide, Aerial glows: tap it to watch where Boju is going." },
       { emoji: "🍿", title: "Sitting out", text: "When you're out of the round you wait in the stands until the next one." },

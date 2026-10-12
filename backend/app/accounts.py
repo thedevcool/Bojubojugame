@@ -16,13 +16,14 @@ import logging
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 
 from app import auth
+from app.avatar import clean_avatar
 from app.content import GameConfig
 from app.db import Database, Device, PasswordReset, Player
 from app.mailer import send_email
@@ -92,12 +93,21 @@ def clean_email(raw: str | None) -> str | None:
     return email
 
 
+class AvatarIn(BaseModel):
+    avatar: list[int] = Field(min_length=3, max_length=5)
+
+
+class FlagIn(BaseModel):
+    key: Literal["tour", "guide"]
+    value: str = Field(min_length=1, max_length=16, pattern=r"^[a-z_]+$")
+
+
 class RegisterIn(BaseModel):
     username: str = Field(min_length=3, max_length=16)
     password: str = Field(min_length=1, max_length=128)
     email: str | None = Field(default=None, max_length=254)
     home_area: str = Field(max_length=40)
-    avatar: list[int] = Field(default_factory=lambda: [0, 0, 0], min_length=3, max_length=3)
+    avatar: list[int] = Field(default_factory=lambda: [0, 0, 0, 0, 0], min_length=3, max_length=5)
 
 
 class LoginIn(BaseModel):
@@ -169,7 +179,7 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
                 password_hash=auth.hash_password(body.password),
                 must_change_password=False,
                 email=email,
-                avatar=[max(0, min(7, int(v))) for v in body.avatar],
+                avatar=clean_avatar(body.avatar),
                 home_area=body.home_area,
                 device_secret_hash=hashed,
                 hunger=float(cfg.economy.starting_hunger),
@@ -316,6 +326,27 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             "car_id": p.car_id,
             "home_id": p.home_id,
             "rent_until": _aware(p.rent_until).isoformat() if p.rent_until else None,  # type: ignore[union-attr]
+            "flags": p.flags or {},
         }
+
+    @r.post("/me/avatar")
+    async def set_avatar(body: AvatarIn, pid: MeAny) -> dict[str, Any]:
+        av = clean_avatar(body.avatar)
+        async with db.sessions() as s, s.begin():
+            p = await s.get(Player, pid, with_for_update=True)
+            if p is None:
+                raise HTTPException(404, "Unknown player")
+            p.avatar = av
+        world.set_avatar(pid, av)  # everyone around sees the new look straight away
+        return {"ok": True, "avatar": av}
+
+    @r.post("/me/flag")
+    async def set_flag(body: FlagIn, pid: MeAny) -> dict[str, Any]:
+        async with db.sessions() as s, s.begin():
+            p = await s.get(Player, pid, with_for_update=True)
+            if p is None:
+                raise HTTPException(404, "Unknown player")
+            p.flags = {**(p.flags or {}), body.key: body.value}
+        return {"ok": True}
 
     return r

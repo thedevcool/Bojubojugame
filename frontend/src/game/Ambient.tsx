@@ -70,6 +70,8 @@ function pose(w: Walker, t: number): { x: number; z: number; ry: number; moving:
 const box = new THREE.BoxGeometry(1, 1, 1);
 const head = new THREE.SphereGeometry(0.5, 10, 8);
 const hair = new THREE.SphereGeometry(0.52, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+const skirt = new THREE.CylinderGeometry(0.21, 0.31, 1, 12); // market women wear a wrapper
+const isWoman = (i: number) => i % 2 === 1;
 const tmpM = new THREE.Matrix4(), rootM = new THREE.Matrix4(), partM = new THREE.Matrix4(), scaleM = new THREE.Matrix4();
 const q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -78,20 +80,22 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
   const n = walkers.length;
   const legs = useRef<THREE.InstancedMesh>(null), arms = useRef<THREE.InstancedMesh>(null);
   const torso = useRef<THREE.InstancedMesh>(null), heads = useRef<THREE.InstancedMesh>(null), hairs = useRef<THREE.InstancedMesh>(null);
+  const skirts = useRef<THREE.InstancedMesh>(null);
   const [bubble, setBubble] = useState<{ x: number; z: number; text: string } | null>(null);
   const lastBubble = useRef(0);
 
-  const setColors = (mesh: THREE.InstancedMesh | null, pick: (w: Walker) => string, per = 1) => {
+  const setColors = (mesh: THREE.InstancedMesh | null, pick: (w: Walker, i: number) => string, per = 1) => {
     if (!mesh || mesh.instanceColor) return;
     const c = new THREE.Color();
-    walkers.forEach((w, i) => { for (let k = 0; k < per; k++) mesh.setColorAt(i * per + k, c.set(pick(w))); });
+    walkers.forEach((w, i) => { for (let k = 0; k < per; k++) mesh.setColorAt(i * per + k, c.set(pick(w, i))); });
     const colors = mesh.instanceColor as THREE.InstancedBufferAttribute | null;
     if (colors) colors.needsUpdate = true;
   };
 
   useFrame((state) => {
     const t = serverNow() / 1000;
-    setColors(legs.current, (w) => BOTTOMS[w.colors[2]], 2);
+    setColors(legs.current, (w, i) => (isWoman(i) ? SKIN[w.colors[0]] : BOTTOMS[w.colors[2]]), 2);
+    setColors(skirts.current, (w) => BOTTOMS[w.colors[2]]);
     setColors(arms.current, (w) => TOPS[w.colors[1]], 2);
     setColors(torso.current, (w) => TOPS[w.colors[1]]);
     setColors(heads.current, (w) => SKIN[w.colors[0]]);
@@ -103,7 +107,7 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
       const far = Math.hypot(p.x - local.x, p.z - local.z) > VIEW;
       if (!far) traffic.peds.push({ x: p.x, z: p.z });
       if (far) {
-        for (const [m, per] of [[legs, 2], [arms, 2], [torso, 1], [heads, 1], [hairs, 1]] as const)
+        for (const [m, per] of [[legs, 2], [arms, 2], [torso, 1], [heads, 1], [hairs, 1], [skirts, 1]] as const)
           for (let k = 0; k < per; k++) m.current?.setMatrixAt(i * per + k, HIDDEN);
         return;
       }
@@ -125,9 +129,12 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
       part(arms.current, i * 2 + 1, 0.29, 1.47, sw * 0.8, -0.32, [0.12, 0.64, 0.13]);
       part(torso.current, i, 0, 1.22, 0, 0, [0.44, 0.62, 0.26]);
       part(heads.current, i, 0, 1.78, 0, 0, [0.27, 0.32, 0.29]);
-      part(hairs.current, i, 0, 1.81, 0, 0, [0.29, 0.31, 0.31]);
+      const woman = isWoman(i);
+      part(hairs.current, i, 0, woman ? 1.84 : 1.81, 0, 0, woman ? [0.3, 0.38, 0.33] : [0.29, 0.31, 0.31]);
+      if (woman) part(skirts.current, i, 0, 0.62, 0, 0, [1, 0.62, 0.86]);
+      else skirts.current?.setMatrixAt(i, HIDDEN);
     });
-    for (const m of [legs, arms, torso, heads, hairs]) if (m.current) m.current.instanceMatrix.needsUpdate = true;
+    for (const m of [legs, arms, torso, heads, hairs, skirts]) if (m.current) m.current.instanceMatrix.needsUpdate = true;
     const now = performance.now() / 1000; // not clock.elapsedTime: it restarts when the frame loop changes
     if (now - lastBubble.current > 0.25) {
       lastBubble.current = now;
@@ -144,6 +151,7 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
       <instancedMesh ref={torso} args={[box, material, n]} castShadow frustumCulled={false} />
       <instancedMesh ref={heads} args={[head, material, n]} castShadow frustumCulled={false} />
       <instancedMesh ref={hairs} args={[hair, material, n]} frustumCulled={false} />
+      <instancedMesh ref={skirts} args={[skirt, material, n]} castShadow frustumCulled={false} />
       {bubble && (
         <Html position={[bubble.x, 2.4, bubble.z]} center distanceFactor={9} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded-xl bg-white px-2 py-1 text-xs font-bold text-black shadow">{bubble.text}</div>

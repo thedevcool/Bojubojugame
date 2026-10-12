@@ -198,8 +198,16 @@ export function MyAdsApp() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    const acc = loadAccount();
-    if (acc) getMyAds(acc).then((r) => setAds(r.ads)).catch(() => setAds([]));
+    // refresh while open, so an approval shows up without leaving the app
+    const load = () => {
+      const acc = loadAccount();
+      if (!acc) { setErr("Sign-in lost — close and reopen Boju Boju from LagosLife"); setAds([]); return; }
+      getMyAds(acc).then((r) => { setAds(r.ads); setErr((e) => (e.startsWith("Couldn't load") ? "" : e)); })
+        .catch((e) => { setErr(`Couldn't load your ads (${e instanceof Error ? e.message : "network"}) — trying again…`); setAds((a) => a ?? []); });
+    };
+    load();
+    const id = setInterval(load, 10_000);
+    return () => clearInterval(id);
   }, [version]);
   const pay = async (a: MyAd) => {
     const v = vatar();

@@ -1,19 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { getFriends, loadAccount, naira, nairaShort, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
+import { getFriends, loadAccount, saveAvatar, naira, nairaShort, reportPlayer, getLeaderboard, getWallet, sendDm, type Friend, type LeaderRow, type WalletEntry } from "@/lib/api";
 import { sound } from "@/game/sound";
 import { siteUrl } from "@/lib/env";
 import { net } from "@/lib/net";
 import { useGame, type Quality } from "@/lib/store";
 import type { Standing } from "@/lib/types";
 import AccountCard from "./AccountCard";
+import AvatarEditor, { fullAvatar } from "./AvatarEditor";
 import InstallApp from "./InstallApp";
 import CreateGame from "./CreateGame";
 import { LiveGamesList } from "./Live";
 import { useRole, useSecondsLeft, useTicker } from "./hooks";
 import { gamesPlayed } from "./Coach";
+import { startGuidedPractice } from "./GameGuide";
 import { getSongVoice, setSongVoice, type SongVoice } from "./BojuSong";
+
+const AvatarPreview = dynamic(() => import("@/game/Previews").then((m) => m.AvatarPreview), { ssr: false });
 
 /** Phone apps render their content straight into the phone screen (the phone draws the title bar). */
 function Modal({ children }: { children: React.ReactNode }) {
@@ -57,6 +62,7 @@ export function GroupPanel() {
               { icon: "🌍", bg: "#2f7cf6", title: "Create a game for real players", text: "Anyone in Live games can join you", on: () => setMode("create") },
               { icon: "📨", bg: "#30d158", title: "Play with friends", text: "Private game — invite friends or share the code", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 0, public: false }) },
               { icon: "🤖", bg: "#bf5af2", title: "Quick game with 3 NPCs", text: firstGame ? "👍 Best for your first game — start now" : "Start now — real players can still join", on: () => net.send({ t: "g_create", arena, hide, search, safe, bots: 3, public: true }) },
+              { icon: "🧭", bg: "#ffb020", title: "Guided practice game", text: "Learn by playing — I'll guide you step by step", on: () => { startGuidedPractice(); } },
               { icon: "📺", bg: "#ff375f", title: "Watch games live", text: "See games in progress on the map", on: () => useGame.getState().openApp("live") },
               { icon: "❓", bg: "#64748b", title: "How to play", text: "The rules in 30 seconds", on: () => { useGame.getState().closePhone(); useGame.getState().set({ howTo: true }); } },
             ].map((o) => (
@@ -94,7 +100,7 @@ export function GroupPanel() {
   const active = g.members.filter((m) => !m.left);
   return (
     <Modal>
-      <div className="anim-pop mb-3 rounded-2xl bg-gradient-to-br from-[#2f7cf6] to-[#1d4fb0] p-3 text-center">
+      <div data-guide="code" className="anim-pop mb-3 rounded-2xl bg-gradient-to-br from-[#2f7cf6] to-[#1d4fb0] p-3 text-center">
         <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">Your game code</div>
         <button className="my-1 font-mono text-4xl font-black tracking-[0.3em]" title="Tap to copy" onClick={async () => {
           try { await navigator.clipboard.writeText(g.code); useGame.getState().toast(`Code ${g.code} copied`, "good"); } catch { /* clipboard blocked */ }
@@ -130,7 +136,7 @@ export function GroupPanel() {
             <button className="btn btn-ghost mt-3 w-full" disabled={active.length >= cfg.game.max_players} onClick={() => net.send({ t: "g_add_bot" })}>
               + Add NPC player
             </button>
-            <button className="btn btn-leaf mt-2 w-full text-lg" disabled={active.length < cfg.game.min_players} onClick={() => net.send({ t: "g_start" })}>Start game</button>
+            <button data-guide="start" className="btn btn-leaf mt-2 w-full text-lg" disabled={active.length < cfg.game.min_players} onClick={() => net.send({ t: "g_start" })}>Start game</button>
             <p className="mt-2 text-xs opacity-70">Everyone needs belle at least {cfg.game.min_hunger_to_play}% — chop before you start!</p>
           </>
         ) : (
@@ -226,7 +232,7 @@ export function DicePanel() {
       <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4 text-center">
         <div className="text-lg font-black">Who go dey Boju? 🎲</div>
         <div className="mb-3 text-xs opacity-80">{inPool ? "Pick your number — if the dice lands on it, you seek!" : "Others are picking…"} ({left}s)</div>
-        <div className="grid grid-cols-3 gap-2">
+        <div data-guide="dice" className="grid grid-cols-3 gap-2">
           {[1, 2, 3, 4, 5, 6].map((n) => (
             <button key={n} disabled={!inPool || (taken.has(n) && mine !== n)} onClick={() => net.send({ t: "g_pick", n })}
               className={`btn text-3xl ${mine === n ? "btn-primary" : "btn-ghost"}`}>{DICE[n]}</button>
@@ -560,6 +566,45 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
   );
 }
 
+/** Change your look any time: male or female, hair, skin and clothes (everyone sees it at once). */
+function MyLook() {
+  const mine = useGame((s) => (s.me ? Object.values(s.roster).find((r) => r.id === s.me?.id)?.av : undefined));
+  const [open, setOpen] = useState(false);
+  const [av, setAv] = useState<number[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const cur = av ?? fullAvatar(mine ?? [2, 0, 0]);
+  const save = async () => {
+    const acc = loadAccount();
+    if (!acc) return;
+    setBusy(true);
+    try {
+      await saveAvatar(acc, cur);
+      useGame.getState().toast("New look saved 🔥", "good");
+      setOpen(false);
+    } catch (e) {
+      useGame.getState().toast((e as Error).message, "error");
+    }
+    setBusy(false);
+  };
+  return (
+    <>
+      <div className="ios-section-title">My look</div>
+      <div className="ios-group">
+        <button className="ios-row" onClick={() => setOpen(!open)} data-testid="my-look">
+          <span className="ios-glyph bg-[#ff9f0a]">👤</span><span className="flex-1 text-left text-[15px]">Change how you look</span><span className="ios-chevron">{open ? "⌄" : "›"}</span>
+        </button>
+        {open && (
+          <div className="anim-fade space-y-3 p-3">
+            <AvatarPreview av={cur} className="mx-auto h-48 w-36" />
+            <AvatarEditor av={cur} onChange={setAv} />
+            <button className="btn btn-primary w-full" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save my look"}</button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function SettingsPanel() {
   const set = useGame((s) => s.set);
   const openApp = useGame((s) => s.openApp);
@@ -581,6 +626,7 @@ export function SettingsPanel() {
   return (
     <div className="anim-fade">
       {mini ? <p className="px-1 pb-1 text-[12px] opacity-70">Signed in with LagosLife. Your money, home and friends live there.</p> : <AccountCard />}
+      <MyLook />
       <div className="ios-section-title">Controls</div>
       <ControlModePicker bare />
       <div className="ios-section-title">Sound</div>

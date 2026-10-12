@@ -9,13 +9,13 @@ import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
 import type { GameMap, Home, RosterEntry } from "@/lib/types";
 import { adFaceAt, AdsLayer } from "./Ads";
-import { otherPlayers, roomAt, traffic } from "./traffic";
+import { MY_CAR, otherPlayers, roomAt, traffic } from "./traffic";
 import Ambient from "./Ambient";
 import Avatar, { type Motion } from "./Avatar";
 import { setCatalog, toWorld, worldRotY, furn, checkLayout, solidColliders } from "./furniture";
 import { FurnitureLayer, FurnitureMesh } from "./FurnitureMeshes";
 import { findPath, navState, stopWalking, walkTo } from "./nav";
-import { inRect, resolveCollision } from "./physics";
+import { carRoom, inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
 import { MapProps, Vehicle } from "./props";
 import { sound } from "./sound";
@@ -151,7 +151,10 @@ function LocalPlayer({ map }: { map: GameMap }) {
       const others = otherPlayers();
       const room = roomAt(nx, nz, local.ry, true, others);
       const homeHit = map.kind === "hub" && map.homes?.some((h) => inRect(h.rect, nx, nz));
-      if ((room < 0 && room < roomAt(local.x, local.z, local.ry, true, others) - 1e-3) || homeHit) {
+      // the car's whole body, not just its middle: no driving through stalls, parked cars or poles
+      const body = carRoom(map, nx, nz, local.ry, MY_CAR.half, MY_CAR.r * 0.9);
+      const bodyHit = body < 0 && body < carRoom(map, local.x, local.z, local.ry, MY_CAR.half, MY_CAR.r * 0.9) - 1e-3;
+      if ((room < 0 && room < roomAt(local.x, local.z, local.ry, true, others) - 1e-3) || homeHit || bodyHit) {
         if (Math.abs(v) > 1.5 && performance.now() - lastHorn.current > 2200) { lastHorn.current = performance.now(); sound.play("horn", 0.9); }
         v = 0; // brakes! nobody gets rammed
       } else {
@@ -171,7 +174,14 @@ function LocalPlayer({ map }: { map: GameMap }) {
       // cars and people are solid: you can't walk through a danfo or a person, and your car stops for people and cars
       const ry = Math.atan2(vx, vz), others = otherPlayers();
       const here = roomAt(local.x, local.z, ry, !!myCar, others);
-      const hits = (x: number, z: number, r: number) => { const m = roomAt(x, z, r, !!myCar, others); return m < 0 && m < here - 1e-3; };
+      const hereBody = myCar ? carRoom(map, local.x, local.z, ry, MY_CAR.half, MY_CAR.r * 0.9) : 0;
+      const hits = (x: number, z: number, r: number) => {
+        const m = roomAt(x, z, r, !!myCar, others);
+        if (m < 0 && m < here - 1e-3) return true;
+        if (!myCar) return false;
+        const b = carRoom(map, x, z, r, MY_CAR.half, MY_CAR.r * 0.9); // a car can't squeeze past a stall like a person
+        return b < 0 && b < hereBody - 1e-3;
+      };
       let blocked = hits(nx, nz, ry);
       if (blocked && !myCar) {
         // on foot: slide round them instead of stopping dead

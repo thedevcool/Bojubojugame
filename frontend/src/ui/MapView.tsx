@@ -24,7 +24,7 @@ export interface Dot { x: number; z: number; color: string; label?: string }
 export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null, people?: Dot[]) {
   const X = (x: number) => (x - v.cx) * v.s + w / 2, Z = (z: number) => (z - v.cz) * v.s + h / 2;
   const R = (x0: number, z0: number, x1: number, z1: number) => ctx.fillRect(X(x0), Z(z0), (x1 - x0) * v.s, (z1 - z0) * v.s);
-  ctx.fillStyle = map.kind === "hub" ? "#e9dcc4" : "#cfe3b8";
+  ctx.fillStyle = map.kind === "hub" || map.id === "arena_akobo" ? "#e9dcc4" : "#cfe3b8"; // towns on paper, parks green
   ctx.fillRect(0, 0, w, h);
   for (const p of map.props) {
     const x0 = p.x - p.w / 2, z0 = p.z - p.d / 2, x1 = p.x + p.w / 2, z1 = p.z + p.d / 2;
@@ -37,7 +37,12 @@ export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: nu
     R(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2);
   }
   for (const p of map.props) {
-    if (p.kind !== "road") continue;
+    if (p.kind !== "laterite") continue; // untarred red-earth streets (Ibadan)
+    ctx.fillStyle = "#c98a63";
+    R(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2);
+  }
+  for (const p of map.props) {
+    if (p.kind !== "road" && p.kind !== "flyover") continue;
     ctx.fillStyle = "#ffffff";
     R(p.x - p.w / 2 - 0.4, p.z - p.d / 2 - 0.4, p.x + p.w / 2 + 0.4, p.z + p.d / 2 + 0.4);
     ctx.fillStyle = "#9aa3ad";
@@ -112,7 +117,7 @@ export function MiniMapWidget() {
   const pin = useGame((s) => s.pin);
   const { inGame, isSeeker } = useRole();
   const inGroup = useGame((s) => !!s.group); // the Coach bar is taller during a game
-  const touring = useGame((s) => (s.onboard === "welcome" ? null : s.onboard)); // the tour card sits at the top
+  const touring = useGame((s) => (s.gameGuide === "on" ? "guide" : s.onboard === "welcome" ? null : s.onboard)); // the tour / guide card sits at the top
   useEffect(() => {
     if (!map) return;
     const id = setInterval(() => {

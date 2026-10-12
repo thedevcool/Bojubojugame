@@ -14,6 +14,60 @@ const box = new THREE.BoxGeometry(1, 1, 1);
 const cap = new THREE.CapsuleGeometry(0.5, 1, 3, 8);
 const ball = new THREE.SphereGeometry(0.5, 14, 10);
 const hairCap = new THREE.SphereGeometry(0.52, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
+const skirtGeo = new THREE.CylinderGeometry(0.21, 0.31, 1, 16); // a wrapper (iro) / skirt, wider at the hem
+const brim = new THREE.CylinderGeometry(0.5, 0.5, 1, 16, 1, false, -Math.PI / 2, Math.PI);
+
+/** Hair (and headwear) per style: men 0 low cut, 1 afro, 2 high-top, 3 cap; women 0 braids, 1 afro puff, 2 gele, 3 bun. */
+function Hair({ female, style, accent }: { female: boolean; style: number; accent: THREE.Material }) {
+  const hair = mat("#15100c");
+  if (!female) {
+    if (style === 1) return <mesh geometry={ball} material={hair} position={[0, 0.08, -0.02]} scale={[0.36, 0.33, 0.36]} />;
+    if (style === 2) return (
+      <>
+        <mesh geometry={hairCap} material={hair} position={[0, 0.03, -0.01]} scale={[0.285, 0.3, 0.3]} />
+        <mesh geometry={cyl} material={hair} position={[0, 0.16, -0.01]} scale={[0.27, 0.11, 0.27]} />
+      </>
+    );
+    if (style === 3) return (
+      <>
+        <mesh geometry={hairCap} material={accent} position={[0, 0.05, -0.01]} scale={[0.3, 0.3, 0.31]} />
+        <mesh geometry={brim} material={accent} position={[0, 0.06, 0.16]} scale={[0.26, 0.02, 0.3]} />
+      </>
+    );
+    return <mesh geometry={hairCap} material={hair} position={[0, 0.03, -0.01]} scale={[0.285, 0.3, 0.3]} />;
+  }
+  if (style === 1) return (
+    <>
+      <mesh geometry={hairCap} material={hair} position={[0, 0.03, -0.01]} scale={[0.29, 0.31, 0.31]} />
+      <mesh geometry={ball} material={hair} position={[0, 0.25, -0.12]} scale={0.26} />
+      <mesh geometry={cyl} material={accent} position={[0, 0.15, -0.1]} scale={[0.13, 0.04, 0.13]} rotation={[-0.6, 0, 0]} />
+    </>
+  );
+  if (style === 2) return (
+    <>
+      {/* gele: wrapped round the head, puffed up on top, fanned out behind */}
+      <mesh geometry={hairCap} material={accent} position={[0, 0.05, -0.01]} scale={[0.31, 0.33, 0.33]} />
+      <mesh geometry={ball} material={accent} position={[0, 0.2, -0.04]} scale={[0.46, 0.2, 0.38]} rotation={[-0.25, 0, 0]} />
+      <mesh geometry={brim} material={accent} position={[0, 0.26, -0.14]} scale={[0.62, 0.025, 0.42]} rotation={[-1.15, Math.PI, 0]} />
+    </>
+  );
+  if (style === 3) return (
+    <>
+      <mesh geometry={hairCap} material={hair} position={[0, 0.03, -0.01]} scale={[0.29, 0.31, 0.31]} />
+      <mesh geometry={ball} material={hair} position={[0, 0.2, -0.17]} scale={0.15} />
+    </>
+  );
+  // braids: a cap of hair and long box braids down the back
+  return (
+    <>
+      <mesh geometry={hairCap} material={hair} position={[0, 0.03, -0.01]} scale={[0.3, 0.32, 0.32]} />
+      {[-0.16, -0.08, 0, 0.08, 0.16].map((x, i) => (
+        <mesh key={x} geometry={cyl} material={hair} position={[x, -0.2 - (i % 2) * 0.03, -0.13 + Math.abs(x) * 0.3]} scale={[0.045, 0.42, 0.045]} rotation={[0.18, 0, x * 0.4]} />
+      ))}
+    </>
+  );
+}
 
 const shirtCache = new Map<number, THREE.MeshStandardMaterial>();
 function shirt(i: number): THREE.MeshStandardMaterial {
@@ -44,7 +98,8 @@ type Limb = { upper: React.RefObject<THREE.Group | null>; lower: React.RefObject
  * real squat: thighs forward, knees bent, back leaning, head up, feet planted.
  */
 export default function Avatar({ av, label, me, motion, tag }: { av: number[]; label?: string; me?: boolean; motion: { current: Motion }; tag?: string }) {
-  const [s, t, b] = av;
+  const [s, t, b, gender = 0, style = 0] = av;
+  const female = gender === 1;
   const skin = mat(SKIN[s % 8]);
   const pants = mat(BOTTOMS[b % 8]);
   const top = shirt(t);
@@ -112,21 +167,25 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
       <group ref={body}>
       <group ref={pelvis} position={[0, STAND_HIP, 0]}>
         {/* hips */}
-        <mesh geometry={box} material={pants} position={[0, 0.03, 0]} scale={[0.38, 0.17, 0.23]} castShadow />
+        <mesh geometry={box} material={pants} position={[0, 0.03, 0]} scale={female ? [0.4, 0.17, 0.25] : [0.38, 0.17, 0.23]} castShadow />
+        {female && <mesh geometry={skirtGeo} material={pants} position={[0, -0.23, 0]} scale={[1, 0.54, 0.86]} castShadow />}
         {/* legs: hip -> knee -> foot */}
         {[-0.12, 0.12].map((x, i) => (
           <group key={x} ref={legs[i].upper} position={[x, 0, 0]}>
             <mesh geometry={cap} material={pants} position={[0, -THIGH / 2, 0]} scale={[0.19, THIGH / 2 - 0.02, 0.19]} castShadow />
             <group ref={legs[i].lower} position={[0, -THIGH, 0]}>
-              <mesh geometry={cap} material={pants} position={[0, -SHIN / 2, 0]} scale={[0.16, SHIN / 2 - 0.02, 0.16]} castShadow />
-              <mesh geometry={box} material={shoe} position={[0, -SHIN - 0.01, 0.06]} scale={[0.15, 0.09, 0.3]} castShadow />
+              <mesh geometry={cap} material={female ? skin : pants} position={[0, -SHIN / 2, 0]} scale={female ? [0.13, SHIN / 2 - 0.02, 0.13] : [0.16, SHIN / 2 - 0.02, 0.16]} castShadow />
+              <mesh geometry={box} material={female ? mat("#7a3b2a") : shoe} position={[0, -SHIN - 0.01, 0.06]} scale={female ? [0.13, 0.05, 0.27] : [0.15, 0.09, 0.3]} castShadow />
             </group>
           </group>
         ))}
         {/* torso pivots at the waist so the back can bend */}
         <group ref={spine} position={[0, 0.08, 0]}>
-          <mesh geometry={cap} material={top} position={[0, 0.3, 0]} scale={[0.42, 0.28, 0.26]} castShadow />
-          {[-0.27, 0.27].map((x, i) => (
+          <mesh geometry={cap} material={top} position={[0, 0.3, 0]} scale={female ? [0.37, 0.28, 0.25] : [0.42, 0.28, 0.26]} castShadow />
+          {/* collar line (men) / neckline trim (women) */}
+          <mesh geometry={box} material={female ? skin : top} position={[0, 0.555, 0.06]} scale={female ? [0.14, 0.03, 0.04] : [0.2, 0.04, 0.12]} />
+          {!female && <mesh geometry={box} material={mat("#1b1410")} position={[0, -0.02, 0]} scale={[0.4, 0.05, 0.25]} />}
+          {(female ? [-0.24, 0.24] : [-0.27, 0.27]).map((x, i) => (
             <group key={x} ref={arms[i].upper} position={[x, 0.52, 0]}>
               <mesh geometry={cap} material={top} position={[0, -UPPER_ARM / 2, 0]} scale={[0.13, UPPER_ARM / 2, 0.13]} castShadow />
               <group ref={arms[i].lower} position={[0, -UPPER_ARM, 0]}>
@@ -138,14 +197,19 @@ export default function Avatar({ av, label, me, motion, tag }: { av: number[]; l
           <group ref={neck} position={[0, 0.6, 0]}>
             <mesh geometry={cap} material={skin} position={[0, 0.04, 0]} scale={[0.1, 0.06, 0.1]} />
             <group position={[0, 0.22, 0]}>
-              <mesh geometry={ball} material={skin} scale={[0.27, 0.32, 0.29]} castShadow />
-              <mesh geometry={hairCap} material={mat("#15100c")} position={[0, 0.03, -0.01]} scale={[0.29, 0.31, 0.31]} />
+              <mesh geometry={ball} material={skin} scale={female ? [0.255, 0.31, 0.28] : [0.27, 0.32, 0.29]} castShadow />
+              <Hair female={female} style={style % 4} accent={top} />
+              {/* eyebrows */}
+              <mesh geometry={box} material={mat("#120d0a")} position={[-0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? 0.12 : 0.05]} />
+              <mesh geometry={box} material={mat("#120d0a")} position={[0.065, 0.085, 0.13]} scale={[0.07, female ? 0.01 : 0.016, 0.01]} rotation={[0, 0, female ? -0.12 : -0.05]} />
+              {female && <mesh geometry={ball} material={mat("#c4a032")} position={[-0.135, -0.06, 0]} scale={0.03} />}
+              {female && <mesh geometry={ball} material={mat("#c4a032")} position={[0.135, -0.06, 0]} scale={0.03} />}
               <mesh geometry={ball} material={mat("#ffffff")} position={[-0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
               <mesh geometry={ball} material={mat("#ffffff")} position={[0.065, 0.03, 0.125]} scale={[0.055, 0.04, 0.03]} />
               <mesh geometry={ball} material={mat("#120d0a")} position={[-0.065, 0.03, 0.14]} scale={0.022} />
               <mesh geometry={ball} material={mat("#120d0a")} position={[0.065, 0.03, 0.14]} scale={0.022} />
               <mesh geometry={ball} material={skin} position={[0, -0.03, 0.15]} scale={[0.05, 0.06, 0.05]} />
-              <mesh geometry={box} material={mat("#5a2a22")} position={[0, -0.1, 0.135]} scale={[0.08, 0.015, 0.02]} />
+              <mesh geometry={box} material={mat(female ? "#6e2626" : "#5a2a22")} position={[0, -0.1, 0.135]} scale={female ? [0.085, 0.022, 0.025] : [0.08, 0.015, 0.02]} />
               <mesh geometry={ball} material={skin} position={[-0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
               <mesh geometry={ball} material={skin} position={[0.14, 0, 0]} scale={[0.04, 0.07, 0.05]} />
             </group>

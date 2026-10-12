@@ -102,7 +102,7 @@ export async function refreshToken(acc: Account): Promise<Account> {
   return next;
 }
 
-export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null; car_id: string | null }
+export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null; car_id: string | null; flags?: Record<string, string> }
 
 export function logout(): void {
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
@@ -144,6 +144,16 @@ export async function reportPlayer(acc: Account, targetId: string, reason: strin
 const authed = (acc: Account) => ({ Authorization: `Bearer ${acc.token}` });
 const get = async <T,>(acc: Account, path: string) => json<T>(await fetch(`${API_URL}${path}`, { headers: authed(acc) }));
 const send = async <T,>(acc: Account, path: string, body: unknown) => json<T>(await post(path, body, acc.token));
+
+export const saveAvatar = (acc: Account, avatar: number[]) => send<{ ok: boolean; avatar: number[] }>(acc, "/api/me/avatar", { avatar });
+
+/** Per-account UI progress (tour step, first-game guide). Fire and forget. */
+export const serverFlags: Record<string, string> = {};
+export function setFlag(key: "tour" | "guide", value: string): void {
+  serverFlags[key] = value;
+  const acc = loadAccount();
+  if (acc) send<{ ok: boolean }>(acc, "/api/me/flag", { key, value }).catch(() => {});
+}
 
 // ---------------------------------------------------------------- life: phone, house, friends, DMs
 export const buyPhone = (acc: Account, phoneId: string) =>

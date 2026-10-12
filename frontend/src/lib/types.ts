@@ -12,6 +12,8 @@ export interface Prop {
   label?: string;
   dir?: "x" | "z";
   face?: "n" | "s" | "e" | "w";
+  /** ramps: the end that is high */
+  up?: "n" | "s" | "e" | "w";
   ad?: string;
   line?: string;
   style?: string;

@@ -18,12 +18,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import houses
+from app.avatar import FEMALE, MALE
 from app.content import HUB_MAP_ID, GameConfig, MapData
 from app.db import ChatMessage, FurnitureItem, Game, Player, RoundStat
 from app.economy import Economy, InsufficientFunds
 from app.engine import rules
 from app.engine.geometry import Box, MoveCheck, collides, distance, in_bounds, in_rect, validate_move
 from app.realtime import protocol as P
+from app.realtime.bots import FEMALE_NAMES
 from app.realtime.group import LIVE_PHASES, GroupError, GroupRoom
 from app.realtime.rooms import ExploreRoom, HubShard, Room, Sender, Session
 from app.safety import TextRejected, clean_chat
@@ -368,14 +370,23 @@ class World:
         ax, az = self.maps[HUB_MAP_ID].arrival
         return self.free_spot((ax + self.rng.uniform(-1, 1), az + self.rng.uniform(-0.5, 0.5)))
 
+    def set_avatar(self, pid: str, avatar: list[int]) -> None:
+        s = self.sessions.get(pid)
+        if s is None:
+            return
+        s.avatar = avatar
+        if s.room is not None:
+            s.room.broadcast_roster()
+
     # ------------------------------------------------------------ NPC players
     def create_bot(self, name: str) -> Session:
         pid = f"bot_{self.rng.getrandbits(64):016x}"
+        r = self.rng.randrange
         s = Session(
             pid=pid,
             nick=name,
             net_id=next(self._net_ids),
-            avatar=[self.rng.randrange(8), self.rng.randrange(8), self.rng.randrange(8)],
+            avatar=[r(8), r(8), r(8), FEMALE if name in FEMALE_NAMES else MALE, r(4)],
             bot=True,
             last_move_at=self.now(),
         )

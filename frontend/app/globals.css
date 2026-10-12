@@ -29,6 +29,9 @@ html, body { height: 100%; }
 .safe-inset {
   top: env(safe-area-inset-top, 0px); right: env(safe-area-inset-right, 0px);
   bottom: env(safe-area-inset-bottom, 0px); left: env(safe-area-inset-left, 0px);
+  /* in a browser tab the large viewport runs under the bottom toolbar: lift the controls above it
+     (lvh = dvh when installed or when the toolbar is hidden, so this adds nothing there) */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 100lvh - 100dvh);
 }
 body {
   background: radial-gradient(1200px 600px at 20% -10%, #17305e 0%, var(--ink) 55%) fixed, var(--ink);
@@ -151,3 +154,7 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
   100% { opacity: 0; transform: translateY(420px) rotate(560deg); }
 }
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
+
+/* the first-game guide points at the thing to press: a soft pulsing ring */
+@keyframes guide-ring { 0%, 100% { outline-color: rgba(255, 210, 63, 0.95); outline-offset: 2px; } 50% { outline-color: rgba(255, 210, 63, 0.25); outline-offset: 6px; } }
+.guide-glow { outline: 3px solid rgba(255, 210, 63, 0.95); outline-offset: 2px; animation: guide-ring 1.2s ease-in-out infinite; position: relative; z-index: 1; }

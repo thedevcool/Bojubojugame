@@ -189,9 +189,10 @@
       "name": "Ibadan",
       "lat": 7.3775,
       "lng": 3.947,
-      "blurb": "Ancient city of hills and huge trees.",
+      "blurb": "Ancient city of hills — and Akobo's walled compounds, General Gas flyover and Ojurin market.",
       "arenas": [
-        "arena_ibadan"
+        "arena_ibadan",
+        "arena_akobo"
       ],
       "fares": [
         {

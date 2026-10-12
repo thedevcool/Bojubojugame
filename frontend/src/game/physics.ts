@@ -36,3 +36,23 @@ export function resolveCollision(map: GameMap, x: number, z: number, r: number):
 }
 
 export const inRect = (r: Rect, x: number, z: number) => r[0] <= x && x <= r[2] && r[1] <= z && z <= r[3];
+
+/**
+ * How much room a car body has at (x, z) facing ry, against walls, stalls, parked cars and poles:
+ * negative = it would overlap one. The car is a capsule (a line along it, with a radius).
+ */
+export function carRoom(map: GameMap, x: number, z: number, ry: number, half: number, r: number): number {
+  const dx = Math.sin(ry), dz = Math.cos(ry);
+  let m = Infinity;
+  for (const c of [...map.props.map((p) => p.collider), ...solidColliders()]) {
+    if (!c) continue;
+    // quick reject: the box is further than the whole car
+    if (c[0] - x > half + r || x - c[2] > half + r || c[1] - z > half + r || z - c[3] > half + r) continue;
+    for (const k of [-1, -0.5, 0, 0.5, 1]) {
+      const px = x + dx * half * k, pz = z + dz * half * k;
+      const cx = Math.min(Math.max(px, c[0]), c[2]), cz = Math.min(Math.max(pz, c[1]), c[3]);
+      m = Math.min(m, Math.hypot(px - cx, pz - cz) - r);
+    }
+  }
+  return m;
+}

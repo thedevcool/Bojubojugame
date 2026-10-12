@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { BOTTOMS, SKIN, TOPS } from "@/game/palette";
+import AvatarEditor from "@/ui/AvatarEditor";
 import { getContent, loadAccount, register, type Account } from "@/lib/api";
 import { LoginForm, PasswordInput, passwordProblem } from "@/ui/AuthForms";
 import InstallApp from "@/ui/InstallApp";
@@ -23,7 +23,7 @@ function Landing() {
   const [pw2, setPw2] = useState("");
   const [email, setEmail] = useState("");
   const [area, setArea] = useState("");
-  const [av, setAv] = useState([2, 0, 0]);
+  const [av, setAv] = useState([2, 0, 0, 0, 0]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"new" | "login">("new");
@@ -47,15 +47,6 @@ function Landing() {
       setBusy(false);
     }
   };
-
-  const swatch = (palette: string[], idx: number) => (
-    <div className="flex flex-wrap gap-1.5">
-      {palette.map((c, i) => (
-        <button type="button" key={c} aria-label={`colour ${i + 1}`} onClick={() => setAv(av.map((v, j) => (j === idx ? i : v)))}
-          className={`h-8 w-8 rounded-full border-2 transition-transform duration-300 [transition-timing-function:var(--ease-spring)] ${av[idx] === i ? "scale-125 border-white" : "border-transparent"}`} style={{ background: c }} />
-      ))}
-    </div>
-  );
 
   return (
     <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-4 py-8">
@@ -98,11 +89,7 @@ function Landing() {
           </label>
           <AvatarPreview av={av} className="mx-auto h-56 w-40" />
           <p className="-mt-2 text-center text-xs opacity-70">This na you — change your look below 👇</p>
-          <div className="space-y-2 text-sm font-bold">
-            <div>Skin {swatch(SKIN, 0)}</div>
-            <div>Ankara shirt {swatch(TOPS, 1)}</div>
-            <div>Trousers {swatch(BOTTOMS, 2)}</div>
-          </div>
+          <AvatarEditor av={av} onChange={setAv} />
           {err && <div className="rounded bg-red-600/80 px-3 py-2 text-sm">{err}</div>}
           <label className="block text-sm font-bold">Password
             <PasswordInput value={pw} onChange={setPw} autoComplete="new-password" placeholder="At least 8 characters" />

@@ -59,6 +59,9 @@ class Player(Base):
     vatar_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar: Mapped[list[int]] = mapped_column(JSON, default=lambda: [0, 0, 0])
+    # small per-account UI progress (guided tour step, first-game guide answer): survives devices,
+    # and LagosLife's frame, where browser storage is often blocked
+    flags: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
     hunger: Mapped[float] = mapped_column(default=80.0)
     hunger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

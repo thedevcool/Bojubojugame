@@ -83,6 +83,7 @@ export function PhaseBar() {
   const myHome = useGame((s) => s.home);
   const onboarding = useGame((s) => s.onboard !== null); // the tour card sits where the location pill goes
   const tip = useTip();
+  const guiding = useGame((s) => s.gameGuide === "on");
   const newPlayer = gamesPlayed() < 3;
   if (g?.phase === "over" && map?.kind === "arena") {
     return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · free to explore — 🚌 the bus stop takes you home</div>;
@@ -94,6 +95,7 @@ export function PhaseBar() {
     const label = homeLabel ?? (section ? `📍 ${section.name}` : null);
     return label ? <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">{label}</div> : null;
   }
+  if (guiding && g.phase !== "over") return null; // the guide card is the Coach (with the timer) while it runs
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const hiding = r ? Object.values(r.state).filter((s) => s === "hiding").length : 0;
@@ -197,10 +199,12 @@ export function ActionButtons() {
               >🪑<br />{sitting ? "Stand" : "Sit"}</button>
             )}
             <button
+              data-guide="bend"
               className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
               onClick={() => { setBend(!crouch); if (!crouch) set({ sitting: false }); }}
             >🧎<br />{crouch ? "Stand" : "Bend"}</button>
             <button
+              data-guide="run"
               className="btn btn-ghost h-14 w-14 rounded-full text-[11px] leading-tight"
               onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)} onLostPointerCapture={hold(false)}
             >🏃🏾<br />Run</button>
@@ -221,9 +225,18 @@ export function ZonePanel() {
   const home = useGame((s) => s.home);
   const map = useMap();
   const mini = useGame((s) => !!s.mini);
+  const driving = useGame((s) => s.driving);
   if (!zone || !cfg) return null;
   // LagosLife players shop, eat and live in LagosLife: only the bus stops work here (rides are free)
   if (mini && zone.kind !== "bus_stop") return null;
+  // in the car: the pedals own the bottom of the screen; shops and buses are for people on foot
+  if (driving) {
+    return (
+      <div className="pointer-events-none absolute left-1/2 top-[7.4rem] z-20 max-w-[80vw] -translate-x-1/2">
+        <div className="panel anim-rise truncate px-3 py-1.5 text-xs font-semibold">🚗 {zone.name} — park and tap 🚶 Walk to go in</div>
+      </div>
+    );
+  }
   if (zone.kind === "food") {
     const items = cfg.items.filter((i) => i.spot === zone.id);
     return (
@@ -265,7 +278,7 @@ export function ZonePanel() {
         <div className="mb-1 font-bold">🚌 Motor Park</div>
         {g?.phase === "travel" && !boarded ? (
           (cfg.cities.find((c) => c.arenas.includes(g.settings.arena))?.fares ?? cfg.fares).map((f) => (
-            <button key={f.id} disabled={!mini && balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
+            <button key={f.id} data-guide="board" disabled={!mini && balance < f.price} className="btn btn-primary mb-1 flex w-full justify-between" onClick={() => net.send({ t: "g_board", fare: f.id })}>
               <span>Board {f.name}</span><span>{mini ? "Free" : naira(f.price)}</span>
             </button>
           ))
@@ -371,7 +384,7 @@ export function SafeCompass() {
   const inside = r.safe.includes(me);
   const rel = Math.atan2(sx - local.x, sz - local.z) - (cam.yaw + Math.PI);
   return (
-    <div className="panel anim-rise pointer-events-none absolute bottom-28 left-3 z-20 flex items-center gap-2 px-3 py-2 max-sm:bottom-40">
+    <div data-guide="safe" className="panel anim-rise pointer-events-none absolute bottom-28 left-3 z-20 flex items-center gap-2 px-3 py-2 max-sm:bottom-40">
       <span className="grid h-9 w-9 place-items-center rounded-full bg-[var(--leaf)]/25">
         <span className="text-lg transition-transform duration-150" style={{ transform: `rotate(${-rel}rad)` }}>{inside ? "🏠" : "⬆️"}</span>
       </span>

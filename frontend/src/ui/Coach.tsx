@@ -7,7 +7,7 @@ import { useMap, useSecondsLeft } from "./hooks";
 
 /**
  * One clear voice for new players:
- * - "How to play": five quick cards, shown the first time you join a game (and any time from the menus).
+ * - "How to play": quick cards, any time from the menus (first games get the guide in GameGuide.tsx).
  * - The Coach: the timer bar at the top says the ONE thing to do right now, for your role,
  *   with a guide arrow when you need to walk somewhere (more detail for your first games).
  * - A big flash at the two moments that matter: RUN & HIDE! / FIND THEM!
@@ -40,8 +40,8 @@ export function HowToPlay() {
   const c = CARDS[i], last = i === CARDS.length - 1;
   const close = () => { store.set(SEEN_KEY, "1"); set({ howTo: false }); };
   return (
-    <div className="pointer-events-auto absolute inset-0 z-[70] flex items-end justify-center bg-black/55 p-3 sm:items-center" data-testid="howto" data-keep-phone>
-      <div className="panel anim-sheet w-full max-w-sm p-5 text-center">
+    <div className="pointer-events-auto absolute inset-0 z-[70] flex items-center justify-center bg-black/55 p-3" data-testid="howto" data-keep-phone>
+      <div className="panel anim-pop touch-scroll max-h-full w-full max-w-sm overflow-y-auto p-5 text-center">
         <div className="text-[11px] font-bold uppercase tracking-widest opacity-60">How to play Boju Boju</div>
         <div key={i} className="anim-pop mt-3 text-6xl leading-none">{c.icon}</div>
         <div className="mt-3 text-xl font-black">{c.title}</div>
@@ -140,20 +140,14 @@ export function CoachGuide() {
   return null;
 }
 
-/** Big flash for the moments that matter, plus first-time "How to play" and the games-played count. */
+/** Big flash for the moments that matter, and the games-played count (first games: see GameGuide). */
 export function CoachMoments() {
   const g = useGame((s) => s.group);
   const me = useGame((s) => s.me?.id);
   const over = useGame((s) => s.over);
-  const set = useGame((s) => s.set);
   const [flash, setFlash] = useState<{ text: string; sub: string; color: string } | null>(null);
   const last = useRef<string>("");
   const counted = useRef<string | null>(null);
-
-  // first time in any game: show "How to play" once
-  useEffect(() => {
-    if (g && !store.get(SEEN_KEY)) { store.set(SEEN_KEY, "1"); set({ howTo: true }); }
-  }, [g?.code, set]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // count finished games (the Coach gets quieter after 3)
   useEffect(() => {

@@ -124,6 +124,28 @@ export function PhaseBar() {
   );
 }
 
+/**
+ * Run: tap to keep running (tap again to walk), or hold it down. The ring is your breath:
+ * it drains while you run and refills while you walk; out of breath, you slow to a walk.
+ */
+function RunButton() {
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 150); return () => clearInterval(id); }, []);
+  const max = useGame((s) => s.content?.config.movement.stamina_max_s ?? 5);
+  const downAt = useRef(0);
+  const on = input.runToggle || input.runHeld;
+  const p = Math.max(0, Math.min(1, local.stamina / max));
+  const release = () => { input.runHeld = false; };
+  return (
+    <button aria-label="Run" aria-pressed={on} data-guide="run" className="ctl ctl-lg ctl-ring" data-on={on} data-tired={p < 0.2}
+      style={{ "--p": p } as React.CSSProperties}
+      onPointerDown={(e) => { downAt.current = performance.now(); input.runHeld = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } }}
+      onPointerUp={() => { if (performance.now() - downAt.current < 300) input.runToggle = !input.runToggle; release(); }}
+      onPointerCancel={release} onLostPointerCapture={release} onContextMenu={(e) => e.preventDefault()}
+    ><span className="ic">🏃🏾</span><span className="lb">{on ? "Running" : "Run"}</span></button>
+  );
+}
+
 export function ActionButtons() {
   const { isSeeker, inGame, myState } = useRole();
   const g = useGame((s) => s.group);
@@ -140,7 +162,6 @@ export function ActionButtons() {
   const nearBed = bedNear(local.x, local.z);
   const insideMine = !!myHome && local.insideHome === myHome;
   const canTaunt = !isSeeker && (!inGame || (g?.phase === "seek" && myState === "hiding"));
-  const hold = (v: boolean) => () => { input.runHeld = v; };
   const aerial = useGame((s) => s.aerial);
   const set = useGame((s) => s.set);
   // Boju can't use the aerial view while counting or seeking — that would be cheating.
@@ -153,7 +174,7 @@ export function ActionButtons() {
     sound.play("pop");
   };
   return (
-    <div className="pointer-events-auto absolute bottom-6 right-3 z-20 flex flex-col items-end gap-2">
+    <div className="pointer-events-auto absolute bottom-6 right-3 z-20 flex flex-col items-end gap-2.5">
       {wheel && (
         <div className="panel grid grid-cols-2 gap-1 p-2">
           {emotes.map((e) => (
@@ -161,53 +182,44 @@ export function ActionButtons() {
           ))}
         </div>
       )}
-      <div className="flex gap-2">
-        {canTaunt && <button className="btn btn-ghost h-14 w-14 rounded-full text-xl" onClick={() => setWheel(!wheel)}>😜</button>}
+      <div className="flex items-end gap-2.5">
+        {canTaunt && <button aria-label="Emotes" className="ctl" data-on={wheel} onClick={() => setWheel(!wheel)}><span className="ic">😜</span></button>}
         {canAerial && (
-          <button aria-label="Aerial view" data-guide="aerial" className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
-            🛰️<br />{aerial ? "Back" : "Aerial"}
+          <button aria-label="Aerial view" data-guide="aerial" className="ctl" data-on={aerial} onClick={toggleAerial}>
+            <span className="ic">🛰️</span><span className="lb">{aerial ? "Back" : "Aerial"}</span>
           </button>
         )}
         {!aerial && (
           <>
             {!inGame && (sleeping || nearBed) && (
-              <button aria-label="Sleep"
-                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sleeping ? "btn-leaf" : "btn-ghost"}`}
-                onClick={() => (sleeping ? wake() : sleep())}
-              >{sleeping ? "🌅" : "😴"}<br />{sleeping ? "Wake" : "Sleep"}</button>
+              <button aria-label="Sleep" className="ctl" data-on={sleeping} onClick={() => (sleeping ? wake() : sleep())}>
+                <span className="ic">{sleeping ? "🌅" : "😴"}</span><span className="lb">{sleeping ? "Wake" : "Sleep"}</span>
+              </button>
             )}
             {!inGame && hasCar && !local.insideHome && !sleeping && (
-              <button aria-label="Drive"
-                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${driving ? "btn-primary" : "btn-ghost"}`}
+              <button aria-label="Drive" className="ctl" data-on={driving}
                 onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play(driving ? "door" : "horn"); }}
-              >{driving ? "🚶🏾" : "🚗"}<br />{driving ? "Walk" : "Drive"}</button>
+              ><span className="ic">{driving ? "🚶🏾" : "🚗"}</span><span className="lb">{driving ? "Walk" : "Drive"}</span></button>
             )}
             {!inGame && insideMine && !sleeping && (
-              <button aria-label="Decorate" className="btn btn-ghost h-12 w-12 rounded-full text-[11px] leading-tight sm:h-14 sm:w-14" onClick={() => void startDecorating()}>
-                🛋️<br />Decor
+              <button aria-label="Decorate" className="ctl" onClick={() => void startDecorating()}>
+                <span className="ic">🛋️</span><span className="lb">Decor</span>
               </button>
             )}
             {!inGame && !sleeping && (
-              <button aria-label="Sit"
-                className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${sitting ? "btn-leaf" : "btn-ghost"}`}
+              <button aria-label="Sit" className="ctl" data-on={sitting}
                 onClick={() => {
                   const on = !sitting;
                   if (on) { setBend(false); local.path = []; }
                   local.sit = on;
                   set({ sitting: on });
                 }}
-              >🪑<br />{sitting ? "Stand" : "Sit"}</button>
+              ><span className="ic">🪑</span><span className="lb">{sitting ? "Stand" : "Sit"}</span></button>
             )}
-            <button
-              data-guide="bend"
-              className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${crouch ? "btn-leaf" : "btn-ghost"}`}
+            <button aria-label="Bend" data-guide="bend" className="ctl" data-on={crouch}
               onClick={() => { setBend(!crouch); if (!crouch) set({ sitting: false }); }}
-            >🧎<br />{crouch ? "Stand" : "Bend"}</button>
-            <button
-              data-guide="run"
-              className="btn btn-ghost h-14 w-14 rounded-full text-[11px] leading-tight"
-              onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)} onLostPointerCapture={hold(false)}
-            >🏃🏾<br />Run</button>
+            ><span className="ic">🧎</span><span className="lb">{crouch ? "Stand" : "Bend"}</span></button>
+            <RunButton />
           </>
         )}
       </div>
@@ -639,16 +651,15 @@ export function DriveControls() {
     onLostPointerCapture: () => { input.pedal[k] = false; },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
-  const pad = "grid select-none place-items-center rounded-2xl bg-black/45 font-black text-white shadow-lg backdrop-blur active:scale-95 active:bg-black/65 touch-none";
   return (
     <>
-      <div className="pointer-events-auto absolute bottom-24 left-3 z-20 flex gap-2" data-testid="steer">
-        <button aria-label="Steer left" className={`${pad} h-16 w-16 text-3xl`} {...hold("left")}>◀</button>
-        <button aria-label="Steer right" className={`${pad} h-16 w-16 text-3xl`} {...hold("right")}>▶</button>
+      <div className="pointer-events-auto absolute bottom-24 left-3 z-20 flex gap-2.5" data-testid="steer">
+        <button aria-label="Steer left" className="pedal h-16 w-16 text-2xl" {...hold("left")}>◀</button>
+        <button aria-label="Steer right" className="pedal h-16 w-16 text-2xl" {...hold("right")}>▶</button>
       </div>
-      <div className="pointer-events-auto absolute bottom-24 right-[5.5rem] z-20 flex items-end gap-2" data-testid="pedals">
-        <button aria-label="Brake" className={`${pad} h-14 w-14 text-[11px]`} {...hold("brake")}>🛑<br />Brake</button>
-        <button aria-label="Gas" className={`${pad} h-20 w-14 bg-emerald-600/80 text-[11px]`} {...hold("gas")}>⛽<br />Gas</button>
+      <div className="pointer-events-auto absolute bottom-24 right-[5.5rem] z-20 flex items-end gap-2.5" data-testid="pedals">
+        <button aria-label="Brake" className="pedal pedal-brake h-14 w-14" {...hold("brake")}><span className="text-lg leading-none">■</span><span className="lb">Brake</span></button>
+        <button aria-label="Gas" className="pedal pedal-gas h-20 w-14" {...hold("gas")}><span className="text-lg leading-none">▲</span><span className="lb">Gas</span></button>
       </div>
     </>
   );

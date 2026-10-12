@@ -24,7 +24,7 @@ import { DicePanel, GameOverPanel, RoundResultPanel } from "@/ui/Panels";
 import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
-import Onboarding, { onboardingDone } from "@/ui/Onboarding";
+import Onboarding, { onboardingDone, savedTourStep } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
 const DecorateOverlay = dynamic(() => import("@/ui/Decorate").then((m) => m.DecorateOverlay), { ssr: false });
@@ -37,7 +37,7 @@ export default function PlayPage() {
   const me = useGame((s) => s.me);
   const map = useMap();
   const decor = useGame((s) => !!s.decor);
-  const onboarding = useGame((s) => s.onboard !== null);
+  const onboarding = useGame((s) => s.onboard === "welcome");
   const mini = useGame((s) => !!s.mini);
   const [error, setError] = useState("");
   const [forceChange, setForceChange] = useState<{ acc: Account; username: string } | null>(null);
@@ -74,8 +74,9 @@ export default function PlayPage() {
           setTimeout(() => useGame.getState().toast("👆🏾 Tap the ground to walk · drag to look around", "good"), 1500);
         }
         // first launch (or no phone/house yet): the welcome tour
-        if (!mini && !onboardingDone() && (!profile.phone_id || !profile.home_id)) {
-          set({ onboard: profile.phone_id ? "launch" : "welcome" });
+        // the guided tour, for new players (or carry on where they left off)
+        if (!mini && !onboardingDone() && (savedTourStep() || !profile.phone_id || !profile.home_id)) {
+          set({ onboard: savedTourStep() ?? "welcome" });
           markSeen(); // the tour is the "what's new" for them — don't stack a second sheet on top
         }
         getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});

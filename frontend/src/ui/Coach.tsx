@@ -40,7 +40,7 @@ export function HowToPlay() {
   const c = CARDS[i], last = i === CARDS.length - 1;
   const close = () => { store.set(SEEN_KEY, "1"); set({ howTo: false }); };
   return (
-    <div className="pointer-events-auto absolute inset-0 z-[70] flex items-end justify-center bg-black/55 p-3 sm:items-center" data-testid="howto">
+    <div className="pointer-events-auto absolute inset-0 z-[70] flex items-end justify-center bg-black/55 p-3 sm:items-center" data-testid="howto" data-keep-phone>
       <div className="panel anim-sheet w-full max-w-sm p-5 text-center">
         <div className="text-[11px] font-bold uppercase tracking-widest opacity-60">How to play Boju Boju</div>
         <div key={i} className="anim-pop mt-3 text-6xl leading-none">{c.icon}</div>

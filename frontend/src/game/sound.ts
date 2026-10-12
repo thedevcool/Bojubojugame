@@ -1,7 +1,8 @@
 /**
  * Procedural game audio with Tone.js — every sound is synthesised, so there
  * is nothing to download and nothing to license. Tone is lazy-loaded on the
- * first user gesture (browsers block audio before that anyway).
+ * first user gesture (browsers block audio before that anyway), and built a few pieces at a time:
+ * building every synth in one go froze a low-end phone for ~3.5 s on its first tap.
  * The one recording is the Boju Boju song (public/audio), sung while Boju's eyes are closed.
  */
 import type * as ToneNS from "tone";
@@ -11,6 +12,7 @@ export type Sfx = "click" | "pop" | "coin" | "error" | "gotcha" | "caught" | "wh
 type Scene = "off" | "hub" | "arena" | "tension";
 
 const PREF = "boju.audio";
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0)); // let taps and frames through
 
 class SoundEngine {
   private T: ToneT | null = null;
@@ -27,6 +29,7 @@ class SoundEngine {
   private ambFilter: ToneNS.Filter | null = null;
   private scene: Scene = "off";
   private loops: { dispose(): unknown }[] = [];
+  private musicReady = false;
   private lastStep = 0;
   private lastBeat = 0;
   prefs = { sound: true, music: true };
@@ -52,29 +55,42 @@ class SoundEngine {
       this.musicBus = new T.Gain(this.prefs.music ? 0.32 : 0).connect(comp);
       this.ambBus = new T.Gain(this.prefs.sound ? 0.5 : 0).connect(comp);
       this.songBus = new T.Gain(this.prefs.sound ? 1 : 0).connect(this.master);
-      const reverb = new T.Freeverb({ roomSize: 0.3, wet: 0.12 }).connect(this.sfxBus);
+      // a short echo instead of Freeverb (its 8 comb filters alone took ~2 s to build on a slow phone)
+      const space = new T.FeedbackDelay({ delayTime: 0.09, feedback: 0.18, wet: 0.12 }).connect(this.sfxBus);
       this.s = {
         blip: new T.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.002, decay: 0.08, sustain: 0, release: 0.05 } }).connect(this.sfxBus),
-        tri: new T.PolySynth(T.Synth, { oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.1, release: 0.2 } }).connect(reverb),
+        tri: new T.PolySynth(T.Synth, { oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.1, release: 0.2 } }).connect(space),
         sq: new T.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.005, decay: 0.12, sustain: 0, release: 0.05 } }).connect(this.sfxBus),
+      } as typeof this.s;
+      this.T = T; // sound effects work from here
+      await breathe();
+      Object.assign(this.s, {
         wood: new T.MembraneSynth({ pitchDecay: 0.008, octaves: 2, envelope: { attack: 0.001, decay: 0.08, sustain: 0 } }).connect(this.sfxBus),
         thump: new T.MembraneSynth({ pitchDecay: 0.05, octaves: 3, envelope: { attack: 0.002, decay: 0.25, sustain: 0 } }).connect(this.sfxBus),
         step: new T.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.06, sustain: 0 } }).connect(new T.Filter(900, "lowpass").connect(this.sfxBus)),
         rattle: new T.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }).connect(new T.Filter(3000, "bandpass").connect(this.sfxBus)),
-        whistle: new T.FMSynth({ harmonicity: 1, modulationIndex: 2, oscillator: { type: "sine" }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.08 } }).connect(this.sfxBus),
-        horn: new T.PolySynth(T.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.7, release: 0.06 } }).connect(new T.Filter(1400, "lowpass").connect(this.ambBus)),
-        // music
+      });
+      await breathe();
+      this.s.whistle = new T.FMSynth({ harmonicity: 1, modulationIndex: 2, oscillator: { type: "sine" }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.08 } }).connect(this.sfxBus);
+      this.s.horn = new T.PolySynth(T.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.7, release: 0.06 } }).connect(new T.Filter(1400, "lowpass").connect(this.ambBus));
+      await breathe();
+      // music
+      Object.assign(this.s, {
         kick: new T.MembraneSynth({ pitchDecay: 0.03, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(this.musicBus),
         shaker: new T.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.04, sustain: 0 } }).connect(new T.Filter(7000, "highpass").connect(this.musicBus)),
         clave: new T.MembraneSynth({ pitchDecay: 0.004, octaves: 1.5, envelope: { attack: 0.001, decay: 0.05, sustain: 0 } }).connect(this.musicBus),
+      });
+      await breathe();
+      Object.assign(this.s, {
         bass: new T.MonoSynth({ oscillator: { type: "fmsquare" }, filter: { Q: 2, type: "lowpass" }, filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.3, baseFrequency: 120, octaves: 2.5 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.2 } }).connect(this.musicBus),
         guitar: new T.PluckSynth({ attackNoise: 1, dampening: 3200, resonance: 0.92 }).connect(new T.FeedbackDelay("8n.", 0.25).connect(this.musicBus)),
-      } as typeof this.s;
+      });
+      await breathe();
       this.ambFilter = new T.Filter(500, "lowpass").connect(this.ambBus);
       this.ambience = new T.Noise("brown").connect(this.ambFilter);
       this.ambience.volume.value = -22;
       T.getTransport().bpm.value = 104;
-      this.T = T;
+      this.musicReady = true;
       const want = this.scene;
       this.scene = "off";
       this.setScene(want);
@@ -186,7 +202,7 @@ class SoundEngine {
     if (scene === this.scene) return;
     this.scene = scene;
     const T = this.T;
-    if (!T) return;
+    if (!T || !this.musicReady) return; // applied once the music is built
     this.loops.forEach((l) => l.dispose());
     this.loops = [];
     const tr = T.getTransport();

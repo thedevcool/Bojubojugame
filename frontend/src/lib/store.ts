@@ -3,6 +3,7 @@ import { input, local } from "@/game/state";
 import type { ChatMsg, Content, GroupState, HiddenSpot, Home, RosterEntry, Standing } from "./types";
 
 export type Quality = "low" | "medium" | "high";
+export type TourStep = "welcome" | "move" | "look" | "phone" | "house" | "home" | "map" | "aerial" | "roles" | "play";
 
 export function detectQuality(): Quality {
   if (typeof navigator === "undefined") return "medium";
@@ -52,8 +53,10 @@ interface GameStore {
   /** last live direct message (Messages app listens to this) */
   dmLive: { from: string; username: string; text: string; id: number; ts: number } | null;
   friendsVersion: number;
-  /** onboarding step for brand-new players (null = done) */
-  onboard: null | "welcome" | "controls" | "phone" | "launch" | "rent" | "home";
+  /** guided tour step for new players (null = done) — see src/ui/Onboarding.tsx */
+  onboard: TourStep | null;
+  /** The city is being put together (rendering pauses meanwhile; the HUD says so). */
+  building: boolean;
   /** player chose "Stay & explore" after the final whistle */
   stayed: boolean;
   sitting: boolean;
@@ -141,6 +144,7 @@ export const useGame = create<GameStore>((set, get) => ({
   dmLive: null,
   friendsVersion: 0,
   onboard: null,
+  building: false,
   stayed: false,
   sitting: false,
   sleeping: false,

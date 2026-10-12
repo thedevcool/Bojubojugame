@@ -39,7 +39,7 @@ function ReleaseCard({ r, big }: { r: Release; big?: boolean }) {
 
 function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="anim-fade pointer-events-auto absolute inset-0 z-[70] flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div data-keep-phone className="anim-fade pointer-events-auto absolute inset-0 z-[70] flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="panel anim-sheet touch-scroll max-h-[88dvh] w-full max-w-md rounded-b-none p-5 sm:rounded-b-[20px]">
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-white/25 sm:hidden" />
         {children}

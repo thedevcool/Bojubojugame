@@ -128,7 +128,7 @@ function Crowd({ walkers }: { walkers: Walker[] }) {
       part(hairs.current, i, 0, 1.81, 0, 0, [0.29, 0.31, 0.31]);
     });
     for (const m of [legs, arms, torso, heads, hairs]) if (m.current) m.current.instanceMatrix.needsUpdate = true;
-    const now = state.clock.elapsedTime;
+    const now = performance.now() / 1000; // not clock.elapsedTime: it restarts when the frame loop changes
     if (now - lastBubble.current > 0.25) {
       lastBubble.current = now;
       const nb = near as { x: number; z: number; text: string } | null;
@@ -171,7 +171,7 @@ function Traffic({ cars }: { cars: Car[] }) {
   const st = useRef(cars.map((c) => ({ s: ((serverNow() / 1000) * c.speed + c.offset) % c.len, v: c.speed, wait: 0, horn: -9 })));
   const [shout, setShout] = useState<{ x: number; z: number; text: string; at: number } | null>(null);
   useFrame((state, delta) => {
-    const dt = Math.min(delta, 0.1), now = state.clock.elapsedTime;
+    const dt = Math.min(delta, 0.1), now = performance.now() / 1000;
     const bodies: Body[] = cars.map((c, i) => ({ x: c.ax + c.dx * st.current[i].s, z: c.az + c.dz * st.current[i].s, dx: c.dx, dz: c.dz, half: c.half, r: c.r }));
     traffic.cars = bodies;
     const others = otherPlayers(), me = localBody();

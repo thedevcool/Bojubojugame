@@ -16,6 +16,21 @@ register in the release that ships them.
 ---
 
 ## 2.11.4 — 2026-10-12
+Owner reports (LagosLife): "a two-person game, after the second person left, the game still continues for the person to
+Boju for who?!", "make LagosLife onboarding be just on the game", "we are packing our other extras and focusing on the
+game", "not responsive at the moment".
+- A game ends when everyone else has gone. Closing the tab never sent "leave", so a player who did that stayed in the
+  game. Now a player offline for 45 s mid-game counts as having left. If the last hider leaves, the round ends at once,
+  even during the countdown, instead of Boju seeking no one. Everyone sees "<name> left the game", and the last player
+  sees "Everyone else left — game over".
+- The big FIND THEM! / RUN & HIDE! flash could get stuck over the round result and game over screens. A phase change
+  within 2 s cancelled its timer. It now has its own timer and clears as soon as hiding or seeking ends.
+- Changes `P32`: LagosLife is just the game. The tour covers walking, looking, Aerial, hiding vs seeking and a first
+  game; the phone, house, home and map steps are gone (the phone was already free). The welcome greets you by your
+  LagosLife name. The bus stop only says "buses leave when your game starts" and, after a game, offers a ride back to
+  the Motor Park; there are no trips to other cities. The map shows only the area you're in, with no Naija tab.
+- LagosLife layout: the name card no longer wraps into the coach bar. On a short, landscape screen the phone is wider,
+  fills the height, and its home screen scrolls, so the apps can be reached.
 Player reports: "I can't even move about freely in my house", "I'm not really understanding the movements", and "they
 keep saying I can follow the arrows but none is indicative".
 - Inside your house, the camera turns to face into the house when you walk in. Before, it faced the front door, so
@@ -82,7 +97,7 @@ keep saying I can follow the arrows but none is indicative".
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
+- `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
@@ -95,7 +110,7 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
-| 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home |
+| 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |
 | 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |
 | 2.11.2 | 2026-10-12 | New players get the tour, not What's New; changelog gate |
 | 2.11.1 | 2026-10-12 | A fresh new look ✨ |

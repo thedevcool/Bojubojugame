@@ -17,8 +17,11 @@ const DONE_KEY = "boju.onboarded";
 const STEP_KEY = "boju.tourStep";
 export const TOUR: TourStep[] = ["welcome", "move", "look", "phone", "house", "home", "map", "aerial", "roles", "play"];
 
-/** LagosLife has no phone, house or home to walk to (those live in LagosLife itself). */
-const MINI_SKIP: TourStep[] = ["phone", "house", "home"];
+/**
+ * LagosLife is just the game: the tour is about playing Boju Boju (moving, looking, Aerial, hiding vs seeking, a first
+ * game). The phone comes free, and houses, shops and travel aren't part of it.
+ */
+const MINI_SKIP: TourStep[] = ["phone", "house", "home", "map"];
 const steps = (): TourStep[] => (useGame.getState().mini ? TOUR.filter((s) => !MINI_SKIP.includes(s)) : TOUR);
 
 export function onboardingDone(): boolean {
@@ -70,9 +73,10 @@ export default function Onboarding() {
   const mapOpen = useGame((s) => s.mapOpen);
   const aerial = useGame((s) => s.aerial);
   const group = useGame((s) => !!s.group);
-  const username = useGame((s) => s.life.username || s.me?.nick || "");
+  const username = useGame((s) => s.mini?.name || s.life.username || s.me?.nick || "");
   const cityBuilt = useGame((s) => s.cityBuilt && !s.building);
   const guide = useGame((s) => s.gameGuide);
+  const mini = useGame((s) => !!s.mini);
   useTicker(300);
   const mark = useRef<{ step: TourStep | null; x: number; z: number; yaw: number; turned: number; seenOn: boolean }>({ step: null, x: 0, z: 0, yaw: 0, turned: 0, seenOn: false });
 
@@ -126,12 +130,14 @@ export default function Onboarding() {
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-3xl leading-none"><span className="logo-peek">🙈</span></span>
             <div className="min-w-0">
               <div className="text-lg font-black leading-tight">Ẹ káàbọ̀, {username}!</div>
-              <div className="text-[13px] leading-snug opacity-85">Welcome to Boju Boju. Before you start to dey Boju — we get more than that here. Want me to show you around?</div>
+              <div className="text-[13px] leading-snug opacity-85">{mini
+                ? "Welcome to Boju Boju — hide & seek, Lagos style. Want a quick guide to playing?"
+                : "Welcome to Boju Boju. Before you start to dey Boju — we get more than that here. Want me to show you around?"}</div>
             </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button className="btn btn-ghost flex-1" onClick={skip}>Not now</button>
-            <button className="btn btn-primary flex-[2]" onClick={() => next("welcome")}>Show me around ▶</button>
+            <button className="btn btn-primary flex-[2]" onClick={() => next("welcome")}>{mini ? "Show me how ▶" : "Show me around ▶"}</button>
           </div>
         </div>
       </div>
@@ -147,9 +153,9 @@ export default function Onboarding() {
       : { icon: "🏠", title: "Rent a house", text: "Open your phone (top right) → 🏠 Houses, and rent one to call home.", action: { label: "Open Houses", on: () => useGame.getState().openApp("houses") } },
     home: { icon: "🚶🏾", title: "Walk home", text: `Follow the glowing arrows on the ground to ${home?.name ?? "your new house"} and walk in through the door — it's yours. Lost? Tap the arrow at the edge of the screen.` },
     map: { icon: "🗺️", title: "See every place", text: "Tap the round MAP (top left): Lagos up close, and every city in Naija. Pin a place to walk, ride or drive there." },
-    aerial: { icon: "🛰️", title: "Look from above", text: "Tap 🛰️ Aerial (bottom right) to see the area from the sky — great for scouting hiding spots. Tap it again to come back." },
+    aerial: { icon: "🛰️", title: "Look from above", text: "Tap 🛰️ Aerial at the bottom to see the area from the sky — great for scouting hiding spots, and for watching Boju while you hide. Tap it again to come back." },
     roles: { icon: "🙈", title: "Hiding vs seeking", text: "", action: { label: "Got it", on: () => next("roles") } },
-    play: { icon: "🎉", title: "Start your first Boju Boju", text: "Open 🙈 Boju Boju on your phone — I'll guide you through a practice game with NPCs.", action: { label: "Open Boju Boju", on: () => useGame.getState().openApp("boju") } },
+    play: { icon: "🎉", title: "Start your first Boju Boju", text: `Open 🙈 Boju Boju on your phone${mini ? " (top right — it's free)" : ""}. I'll guide you through a practice game with NPCs.`, action: { label: "Open Boju Boju", on: () => useGame.getState().openApp("boju") } },
   };
   const s = STEPS[step];
   // show, don't tell: a finger tapping the ground / swiping across the screen

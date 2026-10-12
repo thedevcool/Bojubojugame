@@ -306,3 +306,10 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
 .guide-edge-text [data-dist] { opacity: 0.75; }
 @keyframes guide-pulse { 50% { box-shadow: 0 0 0 9px rgba(62, 231, 255, 0), 0 6px 18px rgba(0, 0, 0, 0.45); } }
 @media (prefers-reduced-motion: reduce) { .guide-edge-arrow { animation: none; } }
+
+/* a short screen (a phone on its side, a small LagosLife frame): the phone gets wider and as tall as it can, and scrolls */
+@media (max-height: 520px) and (orientation: landscape) {
+  .phone-device { width: min(34rem, 94vw) !important; height: 94dvh !important; margin-bottom: 3dvh !important; border-radius: 1.8rem !important; }
+  .phone-bezel { border-radius: 1.65rem !important; }
+  .phone-screen { border-radius: 1.3rem !important; }
+}

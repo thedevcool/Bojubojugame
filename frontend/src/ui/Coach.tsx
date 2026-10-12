@@ -184,7 +184,9 @@ export function CoachMoments() {
   const r = g?.round;
   const key = g && r && me ? `${r.no}:${g.phase}` : "";
   useEffect(() => {
-    if (!key || key === last.current || !g || !r || !me) return;
+    // the moment has passed (round over, game over, you left): never leave a flash stuck on screen
+    if (!key || !g || !r || !me || (g.phase !== "hide" && g.phase !== "seek")) { setFlash(null); return; }
+    if (key === last.current) return;
     last.current = key;
     const boju = r.seeker === me, hiding = r.state[me] === "hiding";
     let f: typeof flash = null;
@@ -195,9 +197,13 @@ export function CoachMoments() {
     setFlash(f);
     if (g.phase === "hide") sound.play("whistle"); // the seek whistle already blows for everyone
     useGame.getState().closePhone(); // nothing should cover the screen when it's time to run or seek
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // its own timer: a phase change right after (e.g. the last hider left) used to cancel it and leave it up for good
+  useEffect(() => {
+    if (!flash) return;
     const id = setTimeout(() => setFlash(null), 2200);
     return () => clearTimeout(id);
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flash]);
 
   if (!flash) return null;
   return (

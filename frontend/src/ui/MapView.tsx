@@ -145,17 +145,22 @@ export function MapScreen() {
   const map = useMap();
   const [tab, setTab] = useState<"here" | "naija">("here");
   const set = useGame((s) => s.set);
+  const mini = useGame((s) => !!s.mini); // LagosLife is just the game: the map is this area, no trips round Naija
   if (!open || !map) return null;
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[52] flex flex-col bg-[#0a1324]">
       <div className="flex items-center gap-2 px-3 pb-2 pt-[max(env(safe-area-inset-top),10px)]">
-        <div className="segmented flex-1">
-          <button data-on={tab === "here"} onClick={() => setTab("here")}>📍 {map.kind === "hub" ? "Lagos hub" : map.name}</button>
-          <button data-on={tab === "naija"} onClick={() => setTab("naija")}>🇳🇬 Naija</button>
-        </div>
+        {mini ? (
+          <div className="flex-1 truncate font-bold">📍 {map.kind === "hub" ? "Lagos hub" : map.name}</div>
+        ) : (
+          <div className="segmented flex-1">
+            <button data-on={tab === "here"} onClick={() => setTab("here")}>📍 {map.kind === "hub" ? "Lagos hub" : map.name}</button>
+            <button data-on={tab === "naija"} onClick={() => setTab("naija")}>🇳🇬 Naija</button>
+          </div>
+        )}
         <button className="btn btn-ghost px-3 py-1.5" onClick={() => set({ mapOpen: false })}>✕</button>
       </div>
-      <div className="relative min-h-0 flex-1">{tab === "here" ? <AreaMap map={map} /> : <TravelMap />}</div>
+      <div className="relative min-h-0 flex-1">{tab === "here" || mini ? <AreaMap map={map} /> : <TravelMap />}</div>
     </div>
   );
 }

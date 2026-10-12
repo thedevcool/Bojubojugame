@@ -744,7 +744,7 @@ function StaticBatch({ items, city }: { items: React.ReactNode[]; city?: boolean
   const doneBuilding = () => {
     if (built.current) return;
     built.current = true;
-    if (city) useGame.getState().set({ building: false });
+    if (city) useGame.getState().set({ building: false, cityBuilt: true });
   };
   // the city is "building" from mount until it's merged (the Scene pauses drawing meanwhile)
   useLayoutEffect(() => {

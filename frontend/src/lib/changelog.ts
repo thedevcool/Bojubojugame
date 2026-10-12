@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.11.2",
+    date: "2026-10-12",
+    title: "Welcome, new players 👋🏾",
+    items: [
+      { emoji: "🧭", title: "The tour for every new player", text: "Every new account gets the guided tour, even on a phone where someone else already took it — and new players go straight into the tour instead of a list of updates." },
+    ],
+  },
+  {
     version: "2.11.1",
     date: "2026-10-12",
     title: "A fresh new look ✨",

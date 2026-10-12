@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { cam, local } from "@/game/state";
-import { serverFlags, setFlag } from "@/lib/api";
+import { accountKey, serverFlags, setFlag } from "@/lib/api";
 import { useGame, type TourStep } from "@/lib/store";
 import { goToShop } from "./Phone";
 import { useTicker } from "./hooks";
@@ -12,6 +12,7 @@ import { useTicker } from "./hooks";
  * A small card says what to try; most steps finish by themselves when the player does it.
  * "Skip" ends it at any point; progress survives a reload.
  */
+// kept per account: a new account on a phone where someone already took the tour still gets it
 const DONE_KEY = "boju.onboarded";
 const STEP_KEY = "boju.tourStep";
 export const TOUR: TourStep[] = ["welcome", "move", "look", "phone", "house", "home", "map", "aerial", "roles", "play"];
@@ -22,19 +23,19 @@ const steps = (): TourStep[] => (useGame.getState().mini ? TOUR.filter((s) => !M
 
 export function onboardingDone(): boolean {
   if (serverFlags.tour === "done") return true;
-  try { return localStorage.getItem(DONE_KEY) === "1"; } catch { return false; }
+  try { return localStorage.getItem(accountKey(DONE_KEY)) === "1"; } catch { return false; }
 }
 export function savedTourStep(): TourStep | null {
   let s: string | null = null;
-  try { s = localStorage.getItem(STEP_KEY); } catch { /* storage blocked */ }
+  try { s = localStorage.getItem(accountKey(STEP_KEY)); } catch { /* storage blocked */ }
   s ??= serverFlags.tour ?? null;
   return s && steps().includes(s as TourStep) ? (s as TourStep) : null;
 }
 function save(step: TourStep | null): void {
   setFlag("tour", step ?? "done");
   try {
-    if (step) localStorage.setItem(STEP_KEY, step);
-    else { localStorage.removeItem(STEP_KEY); localStorage.setItem(DONE_KEY, "1"); }
+    if (step) localStorage.setItem(accountKey(STEP_KEY), step);
+    else { localStorage.removeItem(accountKey(STEP_KEY)); localStorage.setItem(accountKey(DONE_KEY), "1"); }
   } catch { /* storage blocked */ }
 }
 
@@ -70,7 +71,7 @@ export default function Onboarding() {
   const aerial = useGame((s) => s.aerial);
   const group = useGame((s) => !!s.group);
   const username = useGame((s) => s.life.username || s.me?.nick || "");
-  const building = useGame((s) => s.building);
+  const cityBuilt = useGame((s) => s.cityBuilt && !s.building);
   const guide = useGame((s) => s.gameGuide);
   useTicker(300);
   const mark = useRef<{ step: TourStep | null; x: number; z: number; yaw: number; turned: number; seenOn: boolean }>({ step: null, x: 0, z: 0, yaw: 0, turned: 0, seenOn: false });
@@ -117,7 +118,7 @@ export default function Onboarding() {
 
   // ---- the invitation (small, at the bottom, nothing blocked)
   if (step === "welcome") {
-    if (building) return null; // say hello once the city is standing, not over an empty field
+    if (!cityBuilt) return null; // say hello once the city is standing, not over an empty field
     return (
       <div className="pointer-events-auto absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] z-[56] flex justify-center px-3" data-testid="tour" data-keep-phone>
         <div className="panel anim-sheet guide-attn w-full max-w-md p-4">

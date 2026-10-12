@@ -57,13 +57,15 @@ export function WhatsNew() {
   const [open, setOpen] = useState(false);
   const openApp = useGame((s) => s.openApp);
   const onboarding = useGame((s) => s.onboard !== null);
+  const ok = useGame((s) => s.whatsNewOk); // never for new players (they get the tour instead)
   useEffect(() => {
+    if (!ok) return;
     let seen: string | null = null;
     try { seen = localStorage.getItem(KEY); } catch { /* storage blocked */ }
     // first visit on this device: nothing is "new" to a new player (the tour shows them around)
     if (seen === null) markSeen();
     else if (seen !== LATEST.version) setOpen(true);
-  }, []);
+  }, [ok]);
   if (!open || onboarding) return null;
   const close = () => {
     try { localStorage.setItem(KEY, LATEST.version); } catch { /* ignore */ }

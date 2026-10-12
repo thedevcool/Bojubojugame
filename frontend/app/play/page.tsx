@@ -77,7 +77,7 @@ export default function PlayPage() {
         if (!onboardingDone() && (mini || savedTourStep() || !profile.phone_id || !profile.home_id)) {
           set({ onboard: savedTourStep() ?? "welcome" });
           markSeen(); // the tour is the "what's new" for them — don't stack a second sheet on top
-        }
+        } else if (!mini) set({ whatsNewOk: true });
         getFriends(fresh).then((d) => set({ dmUnread: d.friends.reduce((a, f) => a + f.unread, 0), friendReqs: d.incoming.length })).catch(() => {});
         if (!mini && profile.topup) useGame.getState().toast(`🎉 Test-phase bonus: +${naira(profile.topup)} — enjoy!`, "good");
         if (!mini && profile.daily_bonus > 0) useGame.getState().toast(`Daily bonus: +${naira(profile.daily_bonus)}`, "good");

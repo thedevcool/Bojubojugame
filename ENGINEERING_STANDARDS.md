@@ -34,6 +34,13 @@ cheats, crashes, or player harm. When a rule here conflicts with convenience, th
 6. **Mobile first.** Every feature must run at ≥30 fps on a mid‑range Android phone and
    respect the data budget (§7). If it can't, it ships behind the quality setting.
 7. **Small phases, always shippable.** `main` must always build, pass CI, and be deployable.
+8. **Never remove approved, working behaviour.** Anything the owner has approved and that works —
+   and that is not what the current request asks to change — must never be removed, broken or
+   quietly altered by a new change. The only exception is when it directly relates to the requested
+   update; then the change is named explicitly. Approved features are listed with IDs (`P01`…) under
+   **Protected features** in `CHANGELOG.md`, and the changelog gate (§9) enforces this: removing or
+   rewriting one needs "Removes `Pxx`" or "Changes `Pxx`" and the reason in that release's notes.
+   Before every PR, re-test the protected features the change touches.
 
 ## 2. Repository layout
 
@@ -159,6 +166,10 @@ Every performance check runs on this profile (Playwright + Chrome DevTools Proto
 
 - Branch per change; small commits with imperative subjects (`Add safe-house capacity check`).
 - CI (`.github/workflows/ci.yml`) runs ruff, pytest, tsc, lint and build. Red CI never merges.
+- **Changelog hard gate** (`scripts/changelog_gate.py`, CI job `changelog`): a pull request that
+  changes game code must add a new release section at the top of `CHANGELOG.md` (same version as the
+  newest entry in `frontend/src/lib/changelog.ts`), and must not remove or rewrite a protected feature
+  without naming it ("Removes `Pxx`" or "Changes `Pxx`"). New approved features are added to the register.
 - Never commit `.env`, build output, `node_modules`, or large binaries. Assets >1 MB go to the CDN.
 - Never disable, skip or delete a failing test to get green.
 
@@ -177,7 +188,12 @@ Every performance check runs on this profile (Playwright + Chrome DevTools Proto
 - Lagos‑inspired, not replicas: no real brand logos, real people, or exact buildings.
 - Places and props are assembled from the modular kit defined by map JSON.
 
-## 12. Player-facing changelog
+## 12. Changelogs
+
+There are two, and every release updates both:
+- `CHANGELOG.md` (repo root, for us): the release notes, the **Protected features** register and the
+  version history. It is the hard gate in §9.
+- `frontend/src/lib/changelog.ts` (for players): the "What's new" sheet. Rules below.
 
 - Every release that players can notice adds an entry at the **top** of
   `frontend/src/lib/changelog.ts` (new `version`, a short title, 2–5 items with emoji,

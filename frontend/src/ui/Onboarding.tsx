@@ -71,7 +71,7 @@ export default function Onboarding() {
   const aerial = useGame((s) => s.aerial);
   const group = useGame((s) => !!s.group);
   const username = useGame((s) => s.life.username || s.me?.nick || "");
-  const building = useGame((s) => s.building);
+  const cityBuilt = useGame((s) => s.cityBuilt && !s.building);
   const guide = useGame((s) => s.gameGuide);
   useTicker(300);
   const mark = useRef<{ step: TourStep | null; x: number; z: number; yaw: number; turned: number; seenOn: boolean }>({ step: null, x: 0, z: 0, yaw: 0, turned: 0, seenOn: false });
@@ -118,7 +118,7 @@ export default function Onboarding() {
 
   // ---- the invitation (small, at the bottom, nothing blocked)
   if (step === "welcome") {
-    if (building) return null; // say hello once the city is standing, not over an empty field
+    if (!cityBuilt) return null; // say hello once the city is standing, not over an empty field
     return (
       <div className="pointer-events-auto absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] z-[56] flex justify-center px-3" data-testid="tour" data-keep-phone>
         <div className="panel anim-sheet guide-attn w-full max-w-md p-4">

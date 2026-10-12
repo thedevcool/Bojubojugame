@@ -19,6 +19,8 @@ register in the release that ships them.
 - New players get the guided tour again, and never the What's New sheet. Tour progress, tour
   completion and the first-game guide answer were kept per phone, so on a phone where someone had already
   taken the tour, every new account skipped it (and saw What's New instead). They are now kept per account.
+- The welcome card waits until the city has actually been built (before, it flashed up for a moment and
+  vanished until the build finished).
 - This changelog, the protected-features register and the CI gate that enforces both.
 
 ## Protected features (approved & working)

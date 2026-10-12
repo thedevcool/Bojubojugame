@@ -110,6 +110,11 @@ export default function Phone() {
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[4px] sm:items-center"
       onPointerDown={(e) => e.target === e.currentTarget && close()}>
+      {/* always a plain way out, at the top: tapping outside or the home bar isn't obvious to everyone */}
+      <button aria-label="Close phone" data-testid="phone-close" onClick={close}
+        className="absolute right-3 top-[max(env(safe-area-inset-top),10px)] z-[60] flex items-center gap-1 rounded-full bg-[#0a1324]/85 px-3 py-1.5 text-sm font-bold text-white shadow-lg ring-1 ring-white/20 backdrop-blur-md active:scale-95">
+        ✕ Close
+      </button>
       {/* device: metal band (phone colour) -> black bezel -> screen */}
       <div ref={device} className="phone-device anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
         style={{ background: `linear-gradient(145deg, ${shade(metal, 0.45)}, ${metal} 35%, ${shade(metal, -0.35)} 70%, ${shade(metal, 0.2)})` }}>

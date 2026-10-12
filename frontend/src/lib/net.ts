@@ -15,11 +15,39 @@ class Net {
   private retry = 0;
   private closedByUs = false;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private lastMsgAt = 0;
+  private watching = false;
 
   start(account: Account): void {
     this.account = account;
     this.closedByUs = false;
     this.open();
+    this.watchLifecycle();
+  }
+
+  /**
+   * Phones freeze a minimised app, and the socket often comes back "open" but dead. On coming back (or getting
+   * signal again), reconnect straight away instead of waiting out a long retry: your stand-in kept your place,
+   * so you simply carry on from where it is.
+   */
+  private watchLifecycle(): void {
+    if (this.watching || typeof window === "undefined") return;
+    this.watching = true;
+    const revive = () => {
+      if (this.closedByUs || !this.account || document.visibilityState !== "visible") return;
+      const ws = this.ws;
+      const fresh = ws?.readyState === WebSocket.OPEN && performance.now() - this.lastMsgAt < 6000;
+      if (fresh || ws?.readyState === WebSocket.CONNECTING) return;
+      this.retry = 0;
+      this.ws = null; // the old socket's close handler must not schedule another reconnect
+      try { ws?.close(); } catch { /* already gone */ }
+      this.open();
+    };
+    document.addEventListener("visibilitychange", revive);
+    window.addEventListener("pageshow", revive);
+    window.addEventListener("online", revive);
+    // a dead socket that never says so: no word from the server for a while while you're looking at the game
+    setInterval(() => { if (this.ws?.readyState === WebSocket.OPEN && performance.now() - this.lastMsgAt > 15000) revive(); }, 5000);
   }
 
   stop(): void {
@@ -39,11 +67,13 @@ class Net {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
+      this.lastMsgAt = performance.now();
       useGame.getState().set({ connected: true });
       if (this.pingTimer) clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => this.send({ t: "ping" }), 5000);
     };
     ws.onmessage = (ev) => {
+      this.lastMsgAt = performance.now();
       try {
         this.onMessage(decode(new Uint8Array(ev.data as ArrayBuffer)) as Msg);
       } catch (e) {
@@ -183,8 +213,7 @@ class Net {
           g.set({ pendingInvite: null });
         }
         const me = g.me?.id;
-        if (gs.round && me) local.frozen = gs.round.seeker === me && gs.phase === "hide";
-        else local.frozen = false;
+        local.frozen = !!me && benched(gs, me);
         announce(gs, prev, me);
         break;
       }
@@ -282,3 +311,19 @@ function announce(gs: GroupState, prev: GroupState | null, me: string | undefine
 }
 
 export const net = new Net();
+
+/**
+ * You stay put when it isn't your turn to move: Boju counting with eyes closed, and anyone out of the round (caught,
+ * done as Boju, or sitting it out) waits in the stands until the next round instead of wandering the field.
+ */
+function benched(gs: GroupState, me: string): boolean {
+  const r = gs.round;
+  const m = gs.members.find((x) => x.id === me);
+  if (!m || m.left || gs.phase === "lobby" || gs.phase === "over") return false;
+  if (m.retired) return true;
+  if (!r) return false;
+  if (gs.phase === "result") return r.state[me] === "found"; // the caught wait in the stands for the next round
+  if (gs.phase !== "hide" && gs.phase !== "seek") return false;
+  if (r.seeker === me) return gs.phase === "hide";
+  return r.state[me] !== "hiding";
+}

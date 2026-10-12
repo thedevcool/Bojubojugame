@@ -175,6 +175,7 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ bend: on, ...(on ? { sitting: false } : {}) });
   },
   toast: (msg, kind = "info") => {
+    if (get().toasts.some((t) => t.msg === msg)) return; // the same message is already on screen
     const id = ++toastId;
     set({ toasts: [...get().toasts.slice(-3), { id, msg, kind }] });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), 3500);

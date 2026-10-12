@@ -72,6 +72,8 @@ class Net {
       case "hello": {
         clock.offset = (m.server_time as number) - Date.now();
         g.set({ me: m.me as { id: string; nick: string; n: number }, home: (m.home as Home | null) ?? null });
+        // the server says we're not in a game (it ended while we were away): drop any stale game screens
+        if (m.in_group === false && g.group) { g.set({ group: null, over: null, dice: null, stayed: false, rematch: null }); local.frozen = false; }
         break;
       }
       case "pong":
@@ -237,6 +239,16 @@ class Net {
         g.toast(m.msg as string);
         break;
       case "err":
+        if (m.msg === "You are not in a group" && (g.group || Date.now() - staleClearedAt < 4000)) {
+          // our game already ended on the server: clear it instead of showing the error again and again
+          if (g.group) {
+            g.set({ group: null, over: null, dice: null, stayed: false, rematch: null });
+            local.frozen = false;
+            staleClearedAt = Date.now();
+            g.toast("That game has ended");
+          }
+          break;
+        }
         g.toast(m.msg as string, "error");
         sound.play("error");
         break;
@@ -247,6 +259,8 @@ class Net {
     }
   }
 }
+
+let staleClearedAt = 0;
 
 function announce(gs: GroupState, prev: GroupState | null, me: string | undefined): void {
   const g = useGame.getState();

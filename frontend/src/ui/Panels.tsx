@@ -308,7 +308,9 @@ export function GameOverPanel() {
   const set = useGame((s) => s.set);
   const stayed = useGame((s) => s.stayed);
   const mini = useGame((s) => !!s.mini);
-  if (!over || g?.phase !== "over" || stayed) return null;
+  const inArena = useGame((s) => !!s.mapId && s.content?.maps[s.mapId]?.kind === "arena");
+  // only at the venue of the game that just ended — never back in Lagos
+  if (!over || g?.phase !== "over" || stayed || !inArena) return null;
   const res = over.results;
   const url = `${siteUrl()}/share/${over.gameId}`;
   const winner = res[0];

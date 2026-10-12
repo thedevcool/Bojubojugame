@@ -138,6 +138,7 @@ class World:
                 "me": {"id": pid, "nick": s.nick, "n": s.net_id},
                 "home": self.maps[HUB_MAP_ID].home_by_id(s.home_id),
                 "server_time": int(now * 1000),
+                "in_group": s.group is not None,
             }
         )
         s.send(self.doors_msg())
@@ -951,6 +952,7 @@ class World:
                 self.drop_bot(p)
             elif s is not None and s.group is g:
                 s.group = None
+                s.send({"t": "g_left"})  # or the phone keeps showing that game (e.g. a stuck game-over box)
                 if s.room is g.arena:
                     # still looking around the venue: keep exploring it, now as a traveller
                     self.explore_room(g.settings["arena"]).add(s, s.x, s.z, self.now())

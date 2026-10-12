@@ -15,6 +15,20 @@ register in the release that ships them.
 
 ---
 
+## 2.11.4 — 2026-10-12
+Player reports: "I can't even move about freely in my house", "I'm not really understanding the movements", and "they
+keep saying I can follow the arrows but none is indicative".
+- Inside your house, the camera turns to face into the house when you walk in. Before, it faced the front door, so
+  tapping the middle of the screen walked you back outside.
+- Inside, the camera also sits higher, follows behind you as you walk, and settles facing the other rooms when you
+  stop, so every room is on screen to tap. Your own house's walls no longer block a tap on the room behind them; you
+  walk there through the doorway.
+- Changes `P04`: the guide arrows are now a trail of glowing chevrons on the ground, unaffected by fog. When the goal
+  is off screen, a pointer at the screen edge shows the place and the distance; tapping it walks you there and turns
+  the camera to face the way. Before, the arrow was a small dim cone hidden under your feet.
+- Changes `P04`: the walk and look tour steps show an animated tap and swipe. A new player who hasn't moved 20 seconds
+  after the city is built gets a one-time "Tap here to walk" hint.
+
 ## 2.11.3 — 2026-10-12
 - Run works with tap-to-go: tap Run to keep running (tap again to walk), or hold it. A cyan ring shows your breath
   and turns red when you're nearly out; out of breath, you slow to a walk.
@@ -42,7 +56,7 @@ register in the release that ships them.
 - `P01` **Username + password accounts** — sign up with username, password (twice), optional email; log in by username or email; forgot password by email.
 - `P02` **Welcome back screen** — returning phones see Enter Lagos, Log in as someone else, and Create new account (which opens the sign-up form).
 - `P03` **Look picker** — male/female body, 4 hairstyles each, skin, ankara top, trousers/wrapper, live 3D preview at sign-up; change any time in Settings → My look (others see it at once).
-- `P04` **Guided tour for new players** — "Show me around" (or Not now): walk, look, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
+- `P04` **Guided tour for new players** — "Show me around" (or Not now): walk, look (animated tap/swipe hints; a one-time "Tap here to walk" if you haven't moved), follow the glowing ground arrows or tap the edge-of-screen pointer to walk there, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
 - `P05` **First-game guide** — a small "Want a quick guide?" card; Yes starts the shortest practice game (you + 1 NPC) and the guide card walks through code/invite, Start, bus, circle, dice, hide or seek (Run, Bend, safe house, Aerial to watch Boju) and the result; the button to press glows; new info pulses; Exit any time.
 - `P06` **What's New** — shows once per release for returning players only (never for new players), plus Settings → What's new.
 
@@ -81,6 +95,7 @@ register in the release that ships them.
 
 | Version | Date | Title |
 |---|---|---|
+| 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home |
 | 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |
 | 2.11.2 | 2026-10-12 | New players get the tour, not What's New; changelog gate |
 | 2.11.1 | 2026-10-12 | A fresh new look ✨ |

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { walkTo } from "@/game/nav";
 import { sound } from "@/game/sound";
+import { cam, guideHud, local } from "@/game/state";
 import { useGame } from "@/lib/store";
 import { useMap, useSecondsLeft } from "./hooks";
 
@@ -138,6 +140,31 @@ export function CoachGuide() {
     }
   }, [goKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
+}
+
+/**
+ * The pointer at the edge of the screen when where you need to go is off screen: an arrow pointing the way, the
+ * place and how far. Tap it and you walk there. (The scene moves it every frame; see GuideMarker.)
+ */
+export function GuideEdge() {
+  const guide = useGame((s) => s.guide);
+  if (!guide) return null;
+  return (
+    <button
+      ref={(el) => { guideHud.el = el; }}
+      data-testid="guide-edge"
+      onClick={() => {
+        // walk there, and swing the camera round behind you so you see where you're going
+        if (walkTo(guide.x, guide.z)) cam.turn = Math.atan2(local.x - guide.x, local.z - guide.z);
+      }}
+      aria-label={`Walk to ${guide.label}`}
+      className="guide-edge"
+      style={{ display: "none" }}
+    >
+      <span className="guide-edge-arrow" aria-hidden>➤</span>
+      <span className="guide-edge-text"><b>{guide.label}</b><span data-dist /></span>
+    </button>
+  );
 }
 
 /** Big flash for the moments that matter, and the games-played count (first games: see GameGuide). */

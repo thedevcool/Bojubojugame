@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cam, local } from "@/game/state";
 import { accountKey, serverFlags, setFlag } from "@/lib/api";
 import { useGame, type TourStep } from "@/lib/store";
@@ -141,20 +141,34 @@ export default function Onboarding() {
   const STEPS: Record<Exclude<TourStep, "welcome">, { icon: string; title: string; text: string; action?: { label: string; on: () => void } }> = {
     move: { icon: "👆🏾", title: "Tap the ground to walk", text: "Tap anywhere on the ground and you walk there. (Prefer a joystick? ⚙️ Settings → Controls.)" },
     look: { icon: "👀", title: "Drag to look around", text: "Slide your finger across the screen to turn the camera. Pinch to zoom." },
-    phone: { icon: "📱", title: "Buy a phone at Tini Tech", text: "Your phone is how you play, chat and travel. Follow the arrow to the shop and pick one.", action: { label: "Walk me there", on: goToShop } },
+    phone: { icon: "📱", title: "Buy a phone at Tini Tech", text: "Your phone is how you play, chat and travel. Follow the glowing arrows on the ground to the shop (or tap Walk me there), then pick one.", action: { label: "Walk me there", on: goToShop } },
     house: phoneOpen
       ? { icon: "🏠", title: phoneApp === "houses" ? "Pick a house and rent it" : "Open 🏠 Houses", text: phoneApp === "houses" ? "Choose any free house on the list, then pay the rent to move in." : "Tap the Houses app on your phone." }
       : { icon: "🏠", title: "Rent a house", text: "Open your phone (top right) → 🏠 Houses, and rent one to call home.", action: { label: "Open Houses", on: () => useGame.getState().openApp("houses") } },
-    home: { icon: "🚶🏾", title: "Walk home", text: `Follow the arrow to ${home?.name ?? "your new house"} and walk in through the door — it's yours.` },
+    home: { icon: "🚶🏾", title: "Walk home", text: `Follow the glowing arrows on the ground to ${home?.name ?? "your new house"} and walk in through the door — it's yours. Lost? Tap the arrow at the edge of the screen.` },
     map: { icon: "🗺️", title: "See every place", text: "Tap the round MAP (top left): Lagos up close, and every city in Naija. Pin a place to walk, ride or drive there." },
     aerial: { icon: "🛰️", title: "Look from above", text: "Tap 🛰️ Aerial (bottom right) to see the area from the sky — great for scouting hiding spots. Tap it again to come back." },
     roles: { icon: "🙈", title: "Hiding vs seeking", text: "", action: { label: "Got it", on: () => next("roles") } },
     play: { icon: "🎉", title: "Start your first Boju Boju", text: "Open 🙈 Boju Boju on your phone — I'll guide you through a practice game with NPCs.", action: { label: "Open Boju Boju", on: () => useGame.getState().openApp("boju") } },
   };
   const s = STEPS[step];
+  // show, don't tell: a finger tapping the ground / swiping across the screen
+  const hint = step === "move" ? (
+    <div className="pointer-events-none absolute left-1/2 top-[56%] z-[55] flex -translate-x-1/2 flex-col items-center" data-testid="move-hint">
+      <div className="hint-tap"><span>👆🏾</span></div>
+      <div className="hint-label">Tap here to walk</div>
+    </div>
+  ) : step === "look" ? (
+    <div className="pointer-events-none absolute left-1/2 top-[56%] z-[55] flex -translate-x-1/2 flex-col items-center">
+      <div className="hint-swipe"><span>👆🏾</span></div>
+      <div className="hint-label">Slide to look around</div>
+    </div>
+  ) : null;
   // at the top like the in-game coach: the bottom stays free for shop panels and buttons
   const top = phoneOpen || mapOpen; // the phone / map fill the screen: sit small at the very top
   return (
+    <>
+    {hint}
     <div className={`pointer-events-none absolute inset-x-0 z-[56] flex justify-center px-3 ${top ? "top-2" : "top-[3.9rem]"}`} data-testid="tour" data-keep-phone>
       <div key={step} className="panel anim-banner guide-attn pointer-events-auto w-full max-w-md p-3" style={top ? ({ "--glass": "rgba(10, 16, 34, 0.97)" } as React.CSSProperties) : undefined}>
         <div className="flex items-start gap-3">
@@ -166,7 +180,7 @@ export default function Onboarding() {
             </div>
             {step === "roles" ? (
               <div className="mt-1 grid grid-cols-2 gap-2 text-[12px] leading-snug">
-                <div className="rounded-xl bg-white/5 p-2"><b className="block">🏃🏾 When you hide</b>Get behind walls. <b>Bend</b> behind hedges. Hold <b>Run</b>. Follow the 🟢 compass to the safe house.</div>
+                <div className="rounded-xl bg-white/5 p-2"><b className="block">🏃🏾 When you hide</b>Get behind walls. <b>Bend</b> behind hedges. Tap <b>Run</b>. Follow the 🟢 compass to the safe house.</div>
                 <div className="rounded-xl bg-white/5 p-2"><b className="block">👀 When you&apos;re Boju</b>Eyes closed while they hide, then walk close to anyone to catch them — no button.</div>
               </div>
             ) : (
@@ -179,6 +193,39 @@ export default function Onboarding() {
           </div>
         </div>
       </div>
+    </div>
+    </>
+  );
+}
+
+/**
+ * For players who skipped the tour: if they haven't walked anywhere ~20 s after arriving, show the
+ * tapping-finger hint once (per account) until they move.
+ */
+export function MoveHint() {
+  const ready = useGame((s) => s.cityBuilt && s.onboard === null && !s.group && !s.phoneOpen && !s.mapOpen && !s.mini);
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    let seen = false;
+    try { seen = localStorage.getItem(accountKey("boju.moveHint")) === "1"; } catch { /* storage blocked */ }
+    if (seen) return;
+    const x0 = local.x, z0 = local.z;
+    const moved = () => Math.hypot(local.x - x0, local.z - z0) > 2;
+    const t = setTimeout(() => { if (!moved()) setShow(true); }, 20000);
+    const id = setInterval(() => {
+      if (!moved()) return;
+      setShow(false);
+      try { localStorage.setItem(accountKey("boju.moveHint"), "1"); } catch { /* storage blocked */ }
+      clearInterval(id);
+    }, 500);
+    return () => { clearTimeout(t); clearInterval(id); };
+  }, [ready]);
+  if (!show || !ready) return null;
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-[56%] z-[55] flex -translate-x-1/2 flex-col items-center" data-testid="move-hint">
+      <div className="hint-tap"><span>👆🏾</span></div>
+      <div className="hint-label">Tap the ground to walk there</div>
     </div>
   );
 }

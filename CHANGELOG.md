@@ -21,6 +21,8 @@ register in the release that ships them.
   taken the tour, every new account skipped it (and saw What's New instead). They are now kept per account.
 - The welcome card waits until the city has actually been built (before, it flashed up for a moment and
   vanished until the build finished).
+- The display font (Space Grotesk) is now served from our own files instead of fetched from Google Fonts at
+  build time, which had started failing builds.
 - This changelog, the protected-features register and the CI gate that enforces both.
 
 ## Protected features (approved & working)

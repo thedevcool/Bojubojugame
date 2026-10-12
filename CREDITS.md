@@ -21,6 +21,10 @@ with its source URL and license **in the same commit**.
 
 All sound effects and music are synthesised in code at runtime (Tone.js) — no audio files.
 
+### Fonts
+- **Space Grotesk** by Florian Karsten — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Space+Grotesk
+  (`frontend/public/fonts/`, latin + latin-ext subsets).
+
 ### Software
 three.js (MIT), @react-three/fiber and drei (MIT), Next.js (MIT), React (MIT), Zustand (MIT),
 Tailwind CSS (MIT), Tone.js (MIT), postprocessing / @react-three/postprocessing (Zlib/MIT), httpx (BSD-3), @msgpack/msgpack (ISC), FastAPI (MIT), SQLAlchemy (MIT), Pydantic (MIT),

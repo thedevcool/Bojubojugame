@@ -111,12 +111,12 @@ export default function Phone() {
     <div className="anim-fade pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[4px] sm:items-center"
       onPointerDown={(e) => e.target === e.currentTarget && close()}>
       {/* device: metal band (phone colour) -> black bezel -> screen */}
-      <div ref={device} className="anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
+      <div ref={device} className="phone-device anim-phone relative mb-[max(env(safe-area-inset-bottom),8px)] h-[min(46rem,90dvh)] w-[min(23rem,94vw)] rounded-[3.3rem] p-[3px] shadow-[0_30px_60px_-20px_rgba(0,0,0,.8)]"
         style={{ background: `linear-gradient(145deg, ${shade(metal, 0.45)}, ${metal} 35%, ${shade(metal, -0.35)} 70%, ${shade(metal, 0.2)})` }}>
         {[["left", "18%", "2.2rem"], ["left", "27%", "3.4rem"], ["left", "37%", "3.4rem"], ["right", "30%", "5rem"]].map(([side, top, h]) => (
           <span key={`${side}${top}`} className="absolute w-[3px] rounded-full" style={{ [side]: "-3px", top, height: h, background: shade(metal, -0.2) } as React.CSSProperties} />
         ))}
-        <div className="h-full w-full rounded-[3.1rem] bg-black p-[7px]">
+        <div className="phone-bezel h-full w-full rounded-[3.1rem] bg-black p-[7px]">
           <div className="phone-screen relative flex h-full w-full flex-col overflow-hidden rounded-[2.65rem] bg-[var(--sys-bg)]">
             {!inApp && <Wallpaper color={model?.color} />}
             <StatusBar dark={!inApp} />
@@ -227,7 +227,7 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
     );
   };
   return (
-    <div className="absolute inset-0 flex flex-col px-5 pb-6">
+    <div className="touch-scroll absolute inset-0 flex flex-col overflow-y-auto px-5 pb-6">
       {/* widgets */}
       <div className="anim-rise mt-2 grid grid-cols-2 gap-3" style={{ animationDelay: "40ms" }}>
         <div className="glass col-span-2 flex items-center justify-between rounded-[1.4rem] px-4 py-3">

@@ -15,6 +15,35 @@ register in the release that ships them.
 
 ---
 
+## 2.11.4 — 2026-10-12
+Owner reports (LagosLife): "a two-person game, after the second person left, the game still continues for the person to
+Boju for who?!", "make LagosLife onboarding be just on the game", "we are packing our other extras and focusing on the
+game", "not responsive at the moment".
+- A game ends when everyone else has gone. Closing the tab never sent "leave", so a player who did that stayed in the
+  game. Now a player offline for 45 s mid-game counts as having left. If the last hider leaves, the round ends at once,
+  even during the countdown, instead of Boju seeking no one. Everyone sees "<name> left the game", and the last player
+  sees "Everyone else left — game over".
+- The big FIND THEM! / RUN & HIDE! flash could get stuck over the round result and game over screens. A phase change
+  within 2 s cancelled its timer. It now has its own timer and clears as soon as hiding or seeking ends.
+- Changes `P32`: LagosLife is just the game. The tour covers walking, looking, Aerial, hiding vs seeking and a first
+  game; the phone, house, home and map steps are gone (the phone was already free). The welcome greets you by your
+  LagosLife name. The bus stop only says "buses leave when your game starts" and, after a game, offers a ride back to
+  the Motor Park; there are no trips to other cities. The map shows only the area you're in, with no Naija tab.
+- LagosLife layout: the name card no longer wraps into the coach bar. On a short, landscape screen the phone is wider,
+  fills the height, and its home screen scrolls, so the apps can be reached.
+Player reports: "I can't even move about freely in my house", "I'm not really understanding the movements", and "they
+keep saying I can follow the arrows but none is indicative".
+- Inside your house, the camera turns to face into the house when you walk in. Before, it faced the front door, so
+  tapping the middle of the screen walked you back outside.
+- Inside, the camera also sits higher, follows behind you as you walk, and settles facing the other rooms when you
+  stop, so every room is on screen to tap. Your own house's walls no longer block a tap on the room behind them; you
+  walk there through the doorway.
+- Changes `P04`: the guide arrows are now a trail of glowing chevrons on the ground, unaffected by fog. When the goal
+  is off screen, a pointer at the screen edge shows the place and the distance; tapping it walks you there and turns
+  the camera to face the way. Before, the arrow was a small dim cone hidden under your feet.
+- Changes `P04`: the walk and look tour steps show an animated tap and swipe. A new player who hasn't moved 20 seconds
+  after the city is built gets a one-time "Tap here to walk" hint.
+
 ## 2.11.3 — 2026-10-12
 - Run works with tap-to-go: tap Run to keep running (tap again to walk), or hold it. A cyan ring shows your breath
   and turns red when you're nearly out; out of breath, you slow to a walk.
@@ -42,7 +71,7 @@ register in the release that ships them.
 - `P01` **Username + password accounts** — sign up with username, password (twice), optional email; log in by username or email; forgot password by email.
 - `P02` **Welcome back screen** — returning phones see Enter Lagos, Log in as someone else, and Create new account (which opens the sign-up form).
 - `P03` **Look picker** — male/female body, 4 hairstyles each, skin, ankara top, trousers/wrapper, live 3D preview at sign-up; change any time in Settings → My look (others see it at once).
-- `P04` **Guided tour for new players** — "Show me around" (or Not now): walk, look, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
+- `P04` **Guided tour for new players** — "Show me around" (or Not now): walk, look (animated tap/swipe hints; a one-time "Tap here to walk" if you haven't moved), follow the glowing ground arrows or tap the edge-of-screen pointer to walk there, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
 - `P05` **First-game guide** — a small "Want a quick guide?" card; Yes starts the shortest practice game (you + 1 NPC) and the guide card walks through code/invite, Start, bus, circle, dice, hide or seek (Run, Bend, safe house, Aerial to watch Boju) and the result; the button to press glows; new info pulses; Exit any time.
 - `P06` **What's New** — shows once per release for returning players only (never for new players), plus Settings → What's new.
 
@@ -68,7 +97,7 @@ register in the release that ships them.
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
+- `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
@@ -81,6 +110,7 @@ register in the release that ships them.
 
 | Version | Date | Title |
 |---|---|---|
+| 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |
 | 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |
 | 2.11.2 | 2026-10-12 | New players get the tour, not What's New; changelog gate |
 | 2.11.1 | 2026-10-12 | A fresh new look ✨ |

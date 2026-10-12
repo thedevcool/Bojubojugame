@@ -245,6 +245,30 @@ async def test_seeker_disconnect_skips_round(db):
     assert g.phase in ("dice", "reveal") and seeker.pid not in g.dice_pool
 
 
+async def test_last_hider_gone_ends_the_game(db):
+    """Two players; the hider closes the tab mid-round. Boju must not keep seeking no one."""
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, _) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
+    await send(world, a, t="g_start")
+    g = a.group
+    await advance(world, clock, 61)
+    await gather_all(world, clock, g)
+    await until(world, clock, g, "hide")
+    scatter(world, g)
+    hider = world.sessions[next(p for p in g.round.hiders)]
+    boju = world.sessions[g.round.seeker]
+    world.disconnect(hider, hider.sender)
+    await advance(world, clock, 10)
+    assert g.phase in ("hide", "seek")  # a reload in time keeps you in the game
+    await advance(world, clock, 6)
+    assert g.phase == "result" and g.last_result["game_over"]  # not a whole seek against no one
+    await until(world, clock, g, "over")
+    boju_client = ca if boju is a else players[1][1]
+    assert any(m["t"] == "toast" and "left" in m["msg"] for m in boju_client.msgs)
+
+
 async def test_hungry_player_cannot_start(db):
     world, clock, players = await setup(db, 2)
     (a, ca), (b, cb) = players

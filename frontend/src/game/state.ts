@@ -43,6 +43,8 @@ export const cam = {
   yaw: Math.PI,
   pitch: 0.35,
   dist: 6,
+  /** a yaw the camera is easing round to (entering a house, or walking off to a guide target); dragging cancels it */
+  turn: null as number | null,
   /** Aerial "scan the map" mode: drag pans x/z, wheel/pinch changes height. */
   aerial: { on: false, x: 0, z: 0, h: 55, tx: 0, tz: 0, th: 55, vx: 0, vz: 0, drag: false },
 };
@@ -53,6 +55,8 @@ export const sceneRefs = { camera: null as unknown as import("three").Camera | n
 
 /** Short-lived screen effects (camera shake on a tag, etc.). */
 export const fx = { shake: 0 };
+/** the on-screen pointer to the guide target (a DOM element the scene moves every frame) */
+export const guideHud = { el: null as HTMLElement | null };
 
 /** Remote players: net id -> snapshot buffer (server time, ms). */
 export const remotes = new Map<number, Snap[]>();

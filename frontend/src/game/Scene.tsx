@@ -19,7 +19,7 @@ import { carRoom, inRect, resolveCollision } from "./physics";
 import { findSeat, type Seat } from "./seats";
 import { MapProps, Vehicle } from "./props";
 import { sound } from "./sound";
-import { cam, fx, input, local, remotes, sample, sceneRefs } from "./state";
+import { cam, fx, guideHud, input, local, remotes, sample, sceneRefs } from "./state";
 import { grass, laterite } from "./textures";
 
 const SEND_HZ = 12;
@@ -230,6 +230,10 @@ function LocalPlayer({ map }: { map: GameMap }) {
     if (local.insideHome !== camState.current.home) {
       camState.current.home = local.insideHome;
       sound.play("door");
+      // walking in: swing the camera round to stand by the front door looking into the house, so the rooms
+      // are in front of you (before, it often faced back out of the door and taps walked you outside)
+      const h = local.insideHome ? map.homes?.find((x) => x.id === local.insideHome) : undefined;
+      if (h) cam.turn = Math.atan2(h.door[0] - h.center[0], h.door[1] - h.center[1]);
     }
     // ---- render
     const st0 = seat.current;
@@ -295,6 +299,31 @@ function LocalPlayer({ map }: { map: GameMap }) {
       camera.up.set(0, 1, 0);
       const inside = !!local.insideHome;
       if (onboarding) cam.yaw += dt * 0.22; // slow welcome orbit
+      if (cam.turn !== null) {
+        let dy = (cam.turn - cam.yaw) % (Math.PI * 2);
+        if (dy > Math.PI) dy -= Math.PI * 2;
+        if (dy < -Math.PI) dy += Math.PI * 2;
+        cam.yaw += dy * (1 - Math.exp(-dt * 4));
+        if (Math.abs(dy) < 0.02 || performance.now() - input.lookedAt < 300) cam.turn = null; // done, or the player took over
+      }
+      if (inside && cam.turn === null && local.moving && !local.sit && performance.now() - input.lookedAt > 2000) {
+        // indoors the camera drifts round behind you as you walk, so the room you're heading into stays in view
+        let dy = (local.ry + Math.PI - cam.yaw) % (Math.PI * 2);
+        if (dy > Math.PI) dy -= Math.PI * 2;
+        if (dy < -Math.PI) dy += Math.PI * 2;
+        cam.yaw += dy * (1 - Math.exp(-dt * 1.6));
+      }
+      const home = inside ? map.homes?.find((h) => h.id === local.insideHome) : undefined;
+      if (home && cam.turn === null && !local.moving && performance.now() - input.lookedAt > 1500) {
+        // standing still indoors: the camera settles behind you facing into the house, so the other rooms are on screen to tap
+        const fx = local.x - home.center[0], fz = local.z - home.center[1];
+        if (Math.hypot(fx, fz) > 1) {
+          let dy = (Math.atan2(fx, fz) - cam.yaw) % (Math.PI * 2);
+          if (dy > Math.PI) dy -= Math.PI * 2;
+          if (dy < -Math.PI) dy += Math.PI * 2;
+          cam.yaw += dy * (1 - Math.exp(-dt * 1.4));
+        }
+      }
       if (local.drive && Math.abs(local.carV) > 1.2 && performance.now() - input.lookedAt > 1500) {
         // driving: the camera swings round behind the car
         let dy = (local.ry + Math.PI - cam.yaw) % (Math.PI * 2);
@@ -304,7 +333,8 @@ function LocalPlayer({ map }: { map: GameMap }) {
       }
       // indoors you can still look all around the room, just from a closer, higher camera
       const wantDist = onboarding ? 9 : inside ? Math.min(cam.dist, 3.8) : local.drive ? cam.dist + 4 : cam.dist;
-      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.55, cam.pitch + 0.3)) : local.drive ? Math.max(cam.pitch, 0.5) : cam.pitch;
+      // indoors: higher, so you see the floor of the whole room (and where a tap will take you)
+      const wantPitch = onboarding ? 0.45 : inside ? Math.min(1.3, Math.max(0.85, cam.pitch + 0.3)) : local.drive ? Math.max(cam.pitch, 0.5) : cam.pitch;
       c.dist = THREE.MathUtils.lerp(c.dist, wantDist, 1 - Math.exp(-dt * 5));
       c.pitch = THREE.MathUtils.lerp(c.pitch, wantPitch, 1 - Math.exp(-dt * 5));
       const ox = Math.sin(cam.yaw) * c.dist * Math.cos(c.pitch), oy = Math.sin(c.pitch) * c.dist, oz = Math.cos(cam.yaw) * c.dist * Math.cos(c.pitch);
@@ -319,7 +349,7 @@ function LocalPlayer({ map }: { map: GameMap }) {
           if (ox) t = Math.min(t, lim(local.x, ox, hr[0] + 0.3, hr[2] - 0.3));
           if (oz) t = Math.min(t, lim(local.z, oz, hr[1] + 0.3, hr[3] - 0.3));
           clear = Math.max(0.05, Math.min(1, t));
-          lift = (1 - clear) * c.dist * 0.6; // squeezed by a wall: rise up instead
+          lift = (1 - clear) * c.dist * 1.1; // squeezed by a wall: rise up instead (the roof is hidden indoors)
         }
       } else clear = cameraClearance(map, local.x, HEAD_Y, local.z, local.x + ox, HEAD_Y - 0.1 + oy, local.z + oz);
       // pull in fast when blocked, ease back out slowly (no popping)
@@ -332,7 +362,9 @@ function LocalPlayer({ map }: { map: GameMap }) {
         camera.position.y += (Math.random() - 0.5) * fx.shake * 0.4;
         fx.shake *= Math.exp(-dt * 6);
       }
-      camera.lookAt(local.x, 1.3, local.z);
+      // indoors, look a little toward the middle of the house so more of it is in view
+      if (home) camera.lookAt(local.x + (home.center[0] - local.x) * 0.3, 1, local.z + (home.center[1] - local.z) * 0.3);
+      else camera.lookAt(local.x, 1.3, local.z);
     }
     // ---- heartbeat: a hider hears Boju getting close
     const st = useGame.getState();
@@ -551,7 +583,9 @@ function TapMover() {
     const here = local.insideHome ? map.homes?.find((h) => h.id === local.insideHome) : undefined;
     const aimOut = !!here && !inRect(here.rect, hit.x, hit.z);
     let nearest = aimOut ? 0 : ray.ray.origin.distanceTo(hit);
-    for (const c of [...map.props.map((p) => p.collider), ...solidColliders()]) {
+    // inside your house, its own walls don't stop a tap: you meant the floor beyond (the path goes via the doorways)
+    const ownWall = (c: number[]) => !!here && c[0] >= here.rect[0] - 0.6 && c[2] <= here.rect[2] + 0.6 && c[1] >= here.rect[1] - 0.6 && c[3] <= here.rect[3] + 0.6;
+    for (const c of [...map.props.map((p) => (p.collider && ownWall(p.collider) ? null : p.collider)), ...solidColliders()]) {
       if (!c || Math.max(Math.abs((c[0] + c[2]) / 2 - local.x), Math.abs((c[1] + c[3]) / 2 - local.z)) > 60) continue;
       box3.min.set(c[0], 0, c[1]);
       box3.max.set(c[2], c[4], c[3]);
@@ -651,25 +685,84 @@ function RevealMarker() {
   );
 }
 
-/** Onboarding guide: a bobbing pin over the goal + an arrow at your feet pointing to it. */
+const CHEVRONS = 4;
+const guideProj = new THREE.Vector3();
+/** A flat, bold chevron (">" pointing along +z) for the walking trail. */
+function chevronGeometry() {
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.55, -0.25);
+  sh.lineTo(0, 0.3);
+  sh.lineTo(0.55, -0.25);
+  sh.lineTo(0.55, -0.6);
+  sh.lineTo(0, -0.05);
+  sh.lineTo(-0.55, -0.6);
+  sh.closePath();
+  const g = new THREE.ShapeGeometry(sh);
+  g.rotateX(-Math.PI / 2); // lie flat; the shape's +y becomes the world's -z…
+  g.rotateY(Math.PI); // …so turn it to point along +z
+  return g;
+}
+
+/**
+ * Where to go: a bobbing pin over the goal, a trail of marching chevrons on the ground from your feet towards it
+ * (starting just ahead of you, so your body doesn't hide it), and — when the goal is off screen — a pointer at the
+ * edge of the screen with the distance, which you can tap to walk there.
+ */
 function GuideMarker() {
   const guide = useGame((s) => s.guide);
   const pin = useRef<THREE.Group>(null);
-  const arrow = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (!guide) return;
-    if (pin.current) pin.current.visible = Math.hypot(guide.x - local.x, guide.z - local.z) > 4;
+  const trail = useRef<THREE.Group>(null);
+  const chevron = useMemo(chevronGeometry, []);
+  useFrame(({ clock, camera, size }) => {
+    const el = guideHud.el;
+    if (!guide) {
+      if (el) el.style.display = "none";
+      return;
+    }
+    const d = Math.hypot(guide.x - local.x, guide.z - local.z);
+    if (d < 1.8 && !useGame.getState().onboard) useGame.getState().set({ guide: null }); // arrived
     if (pin.current) {
+      pin.current.visible = d > 4;
       pin.current.position.set(guide.x, 3.2 + Math.sin(clock.elapsedTime * 3) * 0.25, guide.z);
       pin.current.rotation.y = clock.elapsedTime * 1.5;
     }
-    if (arrow.current) {
-      const d = Math.hypot(guide.x - local.x, guide.z - local.z);
-      arrow.current.visible = d > 2.5;
-      if (d < 1.8 && !useGame.getState().onboard) useGame.getState().set({ guide: null }); // arrived
-      arrow.current.position.set(local.x, 0.08, local.z);
-      arrow.current.rotation.y = Math.atan2(guide.x - local.x, guide.z - local.z);
+    if (trail.current) {
+      trail.current.visible = d > 2.5 && !local.drive;
+      trail.current.position.set(local.x, 0.12, local.z);
+      trail.current.rotation.y = Math.atan2(guide.x - local.x, guide.z - local.z);
+      const t = (clock.elapsedTime * 1.2) % 1; // the chevrons march towards the goal
+      trail.current.children.forEach((m, i) => {
+        const along = 1.6 + (i + t) * 1.3;
+        m.position.z = Math.min(along, d - 1);
+        m.visible = along < d - 1;
+        const mat = (m as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.95 * Math.sin((Math.PI * (i + t)) / CHEVRONS); // fade in at your feet, out at the far end
+      });
     }
+    // the edge pointer: only when the goal is off screen (otherwise the pin and its label do the job)
+    if (!el) return;
+    guideProj.set(guide.x, 1, guide.z).project(camera);
+    const behind = guideProj.z > 1;
+    const nx = behind ? -guideProj.x : guideProj.x;
+    let ny = behind ? -guideProj.y : guideProj.y;
+    const onScreen = !behind && Math.abs(nx) < 0.85 && Math.abs(ny) < 0.8;
+    if (onScreen || d < 2.5) {
+      el.style.display = "none";
+      return;
+    }
+    if (behind && Math.abs(nx) < 0.01 && Math.abs(ny) < 0.01) ny = -1;
+    // clamp onto a rectangle inside the screen, clear of the top bar and the controls
+    const W = size.width, H = size.height, mx = 44, top = 120, bottom = 190;
+    const cx = W / 2, cy = H / 2;
+    const dx = nx * W / 2, dy = -ny * H / 2;
+    const k = Math.min(Math.abs((W / 2 - mx) / (dx || 1e-6)), dy < 0 ? (cy - top) / -dy : (H - bottom - cy) / (dy || 1e-6));
+    const px = cx + dx * k, py = cy + dy * k;
+    el.style.display = "flex";
+    el.style.transform = `translate(${px.toFixed(0)}px, ${py.toFixed(0)}px) translate(-50%, -50%)`;
+    const arrowEl = el.firstElementChild as HTMLElement | null;
+    if (arrowEl) arrowEl.style.transform = `rotate(${Math.atan2(dy, dx).toFixed(3)}rad)`;
+    const dist = el.querySelector("[data-dist]");
+    if (dist) dist.textContent = `${Math.round(d)} m`;
   });
   if (!guide) return null;
   return (
@@ -683,11 +776,12 @@ function GuideMarker() {
           <div className="whitespace-nowrap rounded-full bg-[#2f7cf6] px-2.5 py-1 text-xs font-bold text-white shadow-lg">{guide.label}</div>
         </Html>
       </group>
-      <group ref={arrow}>
-        <mesh position={[0, 0, 1.5]} rotation={[Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.35, 0.8, 3]} />
-          <meshBasicMaterial color="#2f7cf6" transparent opacity={0.85} />
-        </mesh>
+      <group ref={trail}>
+        {Array.from({ length: CHEVRONS }, (_, i) => (
+          <mesh key={i} geometry={chevron} scale={1.3} renderOrder={10}>
+            <meshBasicMaterial color="#22e4ff" transparent depthWrite={false} side={THREE.DoubleSide} fog={false} toneMapped={false} />
+          </mesh>
+        ))}
       </group>
     </>
   );

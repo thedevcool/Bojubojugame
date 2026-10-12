@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { walkTo } from "@/game/nav";
 import { sound } from "@/game/sound";
+import { cam, guideHud, local } from "@/game/state";
 import { useGame } from "@/lib/store";
 import { useMap, useSecondsLeft } from "./hooks";
 
@@ -140,6 +142,31 @@ export function CoachGuide() {
   return null;
 }
 
+/**
+ * The pointer at the edge of the screen when where you need to go is off screen: an arrow pointing the way, the
+ * place and how far. Tap it and you walk there. (The scene moves it every frame; see GuideMarker.)
+ */
+export function GuideEdge() {
+  const guide = useGame((s) => s.guide);
+  if (!guide) return null;
+  return (
+    <button
+      ref={(el) => { guideHud.el = el; }}
+      data-testid="guide-edge"
+      onClick={() => {
+        // walk there, and swing the camera round behind you so you see where you're going
+        if (walkTo(guide.x, guide.z)) cam.turn = Math.atan2(local.x - guide.x, local.z - guide.z);
+      }}
+      aria-label={`Walk to ${guide.label}`}
+      className="guide-edge"
+      style={{ display: "none" }}
+    >
+      <span className="guide-edge-arrow" aria-hidden>➤</span>
+      <span className="guide-edge-text"><b>{guide.label}</b><span data-dist /></span>
+    </button>
+  );
+}
+
 /** Big flash for the moments that matter, and the games-played count (first games: see GameGuide). */
 export function CoachMoments() {
   const g = useGame((s) => s.group);
@@ -157,7 +184,9 @@ export function CoachMoments() {
   const r = g?.round;
   const key = g && r && me ? `${r.no}:${g.phase}` : "";
   useEffect(() => {
-    if (!key || key === last.current || !g || !r || !me) return;
+    // the moment has passed (round over, game over, you left): never leave a flash stuck on screen
+    if (!key || !g || !r || !me || (g.phase !== "hide" && g.phase !== "seek")) { setFlash(null); return; }
+    if (key === last.current) return;
     last.current = key;
     const boju = r.seeker === me, hiding = r.state[me] === "hiding";
     let f: typeof flash = null;
@@ -168,9 +197,13 @@ export function CoachMoments() {
     setFlash(f);
     if (g.phase === "hide") sound.play("whistle"); // the seek whistle already blows for everyone
     useGame.getState().closePhone(); // nothing should cover the screen when it's time to run or seek
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // its own timer: a phase change right after (e.g. the last hider left) used to cancel it and leave it up for good
+  useEffect(() => {
+    if (!flash) return;
     const id = setTimeout(() => setFlash(null), 2200);
     return () => clearTimeout(id);
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flash]);
 
   if (!flash) return null;
   return (

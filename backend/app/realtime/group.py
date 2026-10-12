@@ -30,6 +30,7 @@ GAME_PHASES = {"gather", "dice", "reveal", "hide", "seek", "result"}
 GATHER_RADIUS = 4.5  # the circle everyone stands in before the dice
 SEEN_GRACE_S = 1.2  # Boju keeps seeing a hider this long after losing sight (no popping out of view)
 LIVE_PHASES = {"hide", "seek"}  # chat locked, positions culled
+OFFLINE_DROP_S = 45.0  # a player gone this long mid-game (closed the tab, lost data) has left the game
 
 
 class GroupError(Exception):
@@ -520,7 +521,18 @@ class GroupRoom:
         self.last_tick = now
         if self.bots and self.phase != "lobby":
             drive_bots(self, now, dt)
+        if self.phase in GAME_PHASES:
+            # closing the tab never sends "leave": after a grace period (time to reload), count them as gone,
+            # so nobody is left playing Boju against no one
+            for p in self.humans:
+                s = self.session(p)
+                gone_at = s.disconnected_at if s is not None and not s.connected else None
+                if s is not None and gone_at is not None and now - gone_at > OFFLINE_DROP_S:
+                    self.leave(s)
+                    self.broadcast({"t": "toast", "msg": f"{self.nicks.get(p, 'A player')} left the game"})
         if self.phase in GAME_PHASES and (len(self.active) < 2 or not self.humans) and not self.game_over_pending:
+            if self.humans:
+                self.broadcast({"t": "toast", "msg": "Everyone else left — game over"})
             await self.finish_game()
             return
         if self.phase == "travel":
@@ -541,7 +553,8 @@ class GroupRoom:
             if self.phase == "seek" and self.round.seeker not in self.bots and (sk := self.session(self.round.seeker)):
                 self.tag(sk, auto=True)
             if self.round.skipped or now >= self.phase_end:
-                if self.phase == "hide" and not self.round.skipped:
+                anyone_hiding = any(v == "hiding" for v in self.round.state.values())
+                if self.phase == "hide" and not self.round.skipped and anyone_hiding:
                     if (sk := self.session(self.round.seeker)) is not None:
                         sk.frozen = False
                     self.set_phase("seek", self.settings["search"], "seek_started")
@@ -578,6 +591,7 @@ class GroupRoom:
             ):
                 r.state[h] = "idle"
                 r.in_safe.discard(h)
+                self.broadcast({"t": "toast", "msg": f"{self.nicks.get(h, 'A player')} left the game"})
                 continue
             if hs is not None and seeker is not None and self.phase == "seek":
                 d = distance(seeker.x, seeker.z, hs.x, hs.z)
@@ -603,7 +617,8 @@ class GroupRoom:
                 r.in_safe.discard(h)
                 hs.send({"t": "toast", "msg": "Safe-house time up! Run!"})
                 self.broadcast_state("safe_exit")
-        if not any(v == "hiding" for v in r.state.values()) and self.phase == "seek":
+        if not any(v == "hiding" for v in r.state.values()):
+            # nobody left to find (all caught, or the hiders left): end the round now, even mid-countdown
             self.phase_end = min(self.phase_end, now)
 
     async def auto_board(self) -> None:

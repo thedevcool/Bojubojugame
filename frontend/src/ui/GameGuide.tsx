@@ -65,7 +65,7 @@ function explain(g: Group, me: string, since: number, riding: boolean): Say {
     case "travel":
       return mine?.boarded
         ? { step: 1, text: "You're on the bus to the arena. When you arrive, walk into the circle." }
-        : { step: 1, text: "Everyone rides to the arena together. Follow the arrow to the 🚏 bus stop and tap Board.", glow: "board" };
+        : { step: 1, text: "Everyone rides to the arena together. Follow the glowing arrows on the ground to the 🚏 bus stop (or tap the arrow at the edge of the screen) and tap Board.", glow: "board" };
     case "gather":
       if (riding) return { step: 1, text: "You're on the bus to the arena 🚌. When you arrive, you'll walk into the circle." };
       return { step: 2, text: "Walk into the ⭕ circle with the others. The dice roll as soon as everyone is in." };

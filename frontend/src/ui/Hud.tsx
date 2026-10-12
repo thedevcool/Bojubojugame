@@ -33,9 +33,9 @@ export function TopBar() {
     <div className="pointer-events-auto absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2">
       <div className="panel flex min-w-0 items-center gap-2.5 px-3 py-2">
         {mini ? (
-          <div className="text-left">
-            <div className="text-sm font-black leading-none">🙈 {mini.name}</div>
-            <div className="text-[10px] opacity-70">Boju Boju{mini.mode === "test" ? " · TEST" : ""}</div>
+          <div className="min-w-0 text-left">
+            <div className="truncate text-sm font-black leading-tight">🙈 {mini.name}</div>
+            <div className="truncate text-[10px] leading-tight opacity-70">Boju Boju{mini.mode === "test" ? " · TEST" : ""}</div>
           </div>
         ) : (
           <button onClick={() => openApp("wallet")} className="text-left">
@@ -43,7 +43,7 @@ export function TopBar() {
             <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
           </button>
         )}
-        <div className="w-14 sm:w-20">
+        <div className="w-14 shrink-0 sm:w-20">
           {!mini && <div className="text-[10px] opacity-80">Belle {Math.round(hunger)}%</div>}
           {!mini && <div className="h-1.5 rounded bg-white/15"><div className="h-1.5 rounded bg-[var(--clay)]" style={{ width: `${hunger}%` }} /></div>}
           <div className="mt-1 h-1 rounded bg-white/15"><div className="h-1 rounded bg-sky-300" style={{ width: `${stamina * 100}%` }} /></div>
@@ -86,7 +86,7 @@ export function PhaseBar() {
   const guiding = useGame((s) => s.gameGuide === "on");
   const newPlayer = gamesPlayed() < 3;
   if (g?.phase === "over" && map?.kind === "arena") {
-    return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · free to explore — 🚌 the bus stop takes you home</div>;
+    return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · {useGame.getState().mini ? "🚌 the bus stop takes you back to the Motor Park" : "free to explore — 🚌 the bus stop takes you home"}</div>;
   }
   if (!g && onboarding) return null; // the tour's welcome orbit
   if (!g) {
@@ -561,8 +561,19 @@ function TravelOptions() {
   const [to, setTo] = useState<string | null>(null);
   if (!cfg || !maps) return null;
   const here = mapId === "hub_plaza" ? "hub" : mapId;
+  if (mini) {
+    // LagosLife is just the game: no sightseeing trips. Buses run to games, and back to the Motor Park after.
+    if (here === "hub") return <div className="text-xs opacity-80">Buses leave from here when your game starts. Open 🙈 on your phone to play.</div>;
+    const city = cfg.cities.find((c) => c.arenas.includes(mapId ?? ""));
+    const back = (city?.fares ?? cfg.fares)[0];
+    return (
+      <button className="btn btn-primary w-full py-1.5 text-sm" onClick={() => back && net.send({ t: "trip", to: "hub", mode: back.id, key: crypto.randomUUID() })}>
+        🚌 Ride back to the Motor Park
+      </button>
+    );
+  }
   const dests = [
-    ...(here !== "hub" ? [{ to: "hub", label: mini ? "🚌 Lagos Motor Park" : "🏠 Home (Lagos)" }] : []),
+    ...(here !== "hub" ? [{ to: "hub", label: "🏠 Home (Lagos)" }] : []),
     ...cfg.cities.flatMap((c) => c.arenas.filter((a) => a !== here).map((a) => ({ to: a, label: `${c.name} · ${maps[a]?.venue?.name ?? maps[a]?.name}` }))),
   ];
   const dest = to ?? pin?.to ?? dests[0]?.to;
@@ -573,9 +584,9 @@ function TravelOptions() {
         {dests.map((d) => <option key={d.to} value={d.to} className="text-black">{d.to === pin?.to ? "📌 " : ""}{d.label}</option>)}
       </select>
       {fares.map((f) => (
-        <button key={f.id} disabled={!mini && balance < f.price} className="btn btn-primary flex w-full justify-between py-1.5 text-sm"
+        <button key={f.id} disabled={balance < f.price} className="btn btn-primary flex w-full justify-between py-1.5 text-sm"
           onClick={() => dest && net.send({ t: "trip", to: dest, mode: f.id, key: crypto.randomUUID() })}>
-          <span>Board {f.name}</span><span>{mini ? "Free" : naira(f.price)}</span>
+          <span>Board {f.name}</span><span>{naira(f.price)}</span>
         </button>
       ))}
       <div className="text-[10px] opacity-60">Explore any city without a game. Pin places on the 🗺️ map.</div>

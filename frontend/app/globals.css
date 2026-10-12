@@ -268,3 +268,48 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
 .pedal .lb { margin-top: 4px; font: 600 9px/1 var(--font-display), system-ui, sans-serif; letter-spacing: 0.09em; text-transform: uppercase; }
 .pedal-gas { background: var(--grad-leaf); box-shadow: 0 10px 26px rgba(16, 185, 129, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
 .pedal-brake { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 10px 26px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+
+/* movement hints: a finger tapping the ground (with a ripple), and a finger swiping to look around */
+@keyframes tap-ripple { 0% { transform: scale(0.3); opacity: 0.9; } 100% { transform: scale(2.2); opacity: 0; } }
+@keyframes tap-finger { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(6px) scale(0.92); } }
+@keyframes swipe-finger { 0%, 100% { transform: translateX(-46px); } 50% { transform: translateX(46px); } }
+.hint-tap { position: relative; width: 72px; height: 72px; display: grid; place-items: center; }
+.hint-tap::before, .hint-tap::after {
+  content: ""; position: absolute; inset: 14px; border-radius: 999px; border: 2px solid rgba(34, 211, 238, 0.9);
+  animation: tap-ripple 1.4s ease-out infinite;
+}
+.hint-tap::after { animation-delay: 0.7s; }
+.hint-tap > span { font-size: 34px; animation: tap-finger 1.4s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
+.hint-swipe > span { display: inline-block; font-size: 34px; animation: swipe-finger 1.8s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
+.hint-label { margin-top: 6px; border-radius: 999px; padding: 0.3rem 0.75rem; font: 600 12px/1.2 var(--font-display), system-ui, sans-serif; background: rgba(10, 16, 34, 0.7); box-shadow: inset 0 0 0 1px rgba(148, 180, 255, 0.25); }
+@media (prefers-reduced-motion: reduce) { .hint-tap::before, .hint-tap::after, .hint-tap > span, .hint-swipe > span { animation: none; } }
+
+/* the pointer at the screen edge towards where you need to go (tap it to walk there) */
+.guide-edge {
+  position: fixed; left: 0; top: 0; z-index: 25;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; color: #fff; pointer-events: auto;
+}
+.guide-edge-arrow {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 9999px;
+  font-size: 22px; line-height: 1;
+  background: linear-gradient(135deg, #3ee7ff, #2f7cf6);
+  box-shadow: 0 0 0 3px rgba(62, 231, 255, 0.28), 0 6px 18px rgba(0, 0, 0, 0.45);
+  animation: guide-pulse 1.4s ease-in-out infinite;
+}
+.guide-edge-text {
+  display: flex; flex-direction: column; align-items: center;
+  max-width: 120px; padding: 2px 8px; border-radius: 9999px;
+  background: rgba(6, 10, 28, 0.8); font-size: 11px; line-height: 1.25; white-space: nowrap;
+}
+.guide-edge-text b { overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.guide-edge-text [data-dist] { opacity: 0.75; }
+@keyframes guide-pulse { 50% { box-shadow: 0 0 0 9px rgba(62, 231, 255, 0), 0 6px 18px rgba(0, 0, 0, 0.45); } }
+@media (prefers-reduced-motion: reduce) { .guide-edge-arrow { animation: none; } }
+
+/* a short screen (a phone on its side, a small LagosLife frame): the phone gets wider and as tall as it can, and scrolls */
+@media (max-height: 520px) and (orientation: landscape) {
+  .phone-device { width: min(34rem, 94vw) !important; height: 94dvh !important; margin-bottom: 3dvh !important; border-radius: 1.8rem !important; }
+  .phone-bezel { border-radius: 1.65rem !important; }
+  .phone-screen { border-radius: 1.3rem !important; }
+}

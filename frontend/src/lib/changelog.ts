@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.11.4",
+    date: "2026-10-12",
+    title: "Easier to get around 🧭",
+    items: [
+      { emoji: "➡️", title: "Arrows you can follow", text: "Glowing arrows on the ground point the way. If the place is off screen, an arrow at the edge shows where it is and how far. Tap that arrow to walk there." },
+      { emoji: "🏠", title: "Move freely at home", text: "Inside your house, the camera faces into the rooms, so you can tap any room to walk there (before, it faced the door and you walked out)." },
+      { emoji: "🚪", title: "No more seeking no one", text: "If everyone else leaves (or closes the app), the game ends instead of leaving you as Boju with nobody to find." },
+      { emoji: "👆🏾", title: "How to move, shown", text: "New players see where to tap to walk and how to slide to look around. If you haven't moved yet, a hint reminds you." },
+    ],
+  },
+  {
     version: "2.11.3",
     date: "2026-10-12",
     title: "Run, Forrest, run 🏃🏾",

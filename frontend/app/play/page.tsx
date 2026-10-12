@@ -14,7 +14,7 @@ import { MapScreen, MiniMapWidget } from "@/ui/MapView";
 import { WatchView } from "@/ui/Live";
 import { AdBubble } from "@/ui/AdBubble";
 import { MiniBridge } from "@/ui/LagosLife";
-import { CoachGuide, CoachMoments, HowToPlay } from "@/ui/Coach";
+import { CoachGuide, CoachMoments, GuideEdge, HowToPlay } from "@/ui/Coach";
 import { BojuSong, SongCaptions } from "@/ui/BojuSong";
 import { Reveal } from "@/ui/Reveal";
 import { ActionButtons, BlindOverlay, BuildingWorld, DriveControls, PhaseBar, SafeCompass, SeatAsk, Toasts, TopBar, ZonePanel } from "@/ui/Hud";
@@ -25,7 +25,7 @@ import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
 import { GameGuide } from "@/ui/GameGuide";
-import Onboarding, { onboardingDone, savedTourStep } from "@/ui/Onboarding";
+import Onboarding, { MoveHint, onboardingDone, savedTourStep } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
 const DecorateOverlay = dynamic(() => import("@/ui/Decorate").then((m) => m.DecorateOverlay), { ssr: false });
@@ -164,6 +164,7 @@ export default function PlayPage() {
             <TopBar />
             <PhaseBar />
             <CoachGuide />
+            <GuideEdge />
             <CoachMoments />
             <BojuSong />
             <SongCaptions />
@@ -179,6 +180,7 @@ export default function PlayPage() {
             <GameOverPanel />
             <Toasts />
             <Onboarding />
+            <MoveHint />
             <Phone />
             <PlayerCard />
             <InviteBanner />

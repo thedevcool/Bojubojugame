@@ -57,6 +57,8 @@ interface GameStore {
   onboard: TourStep | null;
   /** The city is being put together (rendering pauses meanwhile; the HUD says so). */
   building: boolean;
+  /** the profile is loaded and this player isn't a newcomer on the tour: What's New may show */
+  whatsNewOk: boolean;
   /** player chose "Stay & explore" after the final whistle */
   stayed: boolean;
   sitting: boolean;
@@ -147,6 +149,7 @@ export const useGame = create<GameStore>((set, get) => ({
   friendsVersion: 0,
   onboard: null,
   building: false,
+  whatsNewOk: false,
   stayed: false,
   sitting: false,
   sleeping: false,

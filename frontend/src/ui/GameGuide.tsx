@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { serverFlags, setFlag } from "@/lib/api";
+import { accountKey, serverFlags, setFlag } from "@/lib/api";
 import { net } from "@/lib/net";
 import { local } from "@/game/state";
 import { useGame } from "@/lib/store";
@@ -17,8 +17,8 @@ import { fmtTime, useSecondsLeft } from "./hooks";
  */
 const KEY = "boju.gameGuide"; // "done" | "no"
 const store = {
-  get: () => { try { return localStorage.getItem(KEY); } catch { return null; } },
-  set: (v: string) => { try { localStorage.setItem(KEY, v); } catch { /* storage blocked */ } },
+  get: () => { try { return localStorage.getItem(accountKey(KEY)); } catch { return null; } }, // per account
+  set: (v: string) => { try { localStorage.setItem(accountKey(KEY), v); } catch { /* storage blocked */ } },
 };
 export const guideAnswered = () => store.get() !== null || !!serverFlags.guide;
 

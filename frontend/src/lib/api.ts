@@ -151,6 +151,12 @@ const send = async <T,>(acc: Account, path: string, body: unknown) => json<T>(aw
 
 export const saveAvatar = (acc: Account, avatar: number[]) => send<{ ok: boolean; avatar: number[] }>(acc, "/api/me/avatar", { avatar });
 
+/** A browser-storage key for this account only (several people can sign up on one phone). */
+export function accountKey(base: string): string {
+  const id = loadAccount()?.playerId;
+  return id ? `${base}.${id}` : base;
+}
+
 /** Per-account UI progress (tour step, first-game guide). Fire and forget. */
 export const serverFlags: Record<string, string> = {};
 export function setFlag(key: "tour" | "guide", value: string): void {

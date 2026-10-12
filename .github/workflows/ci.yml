@@ -3,6 +3,14 @@ on:
   push:
   pull_request:
 jobs:
+  changelog:
+    # the hard gate: code changes need a release entry, and approved features never vanish quietly
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - run: python3 scripts/changelog_gate.py "origin/${{ github.base_ref }}"
   backend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }

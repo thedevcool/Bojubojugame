@@ -164,7 +164,7 @@ export function ActionButtons() {
       <div className="flex gap-2">
         {canTaunt && <button className="btn btn-ghost h-14 w-14 rounded-full text-xl" onClick={() => setWheel(!wheel)}>😜</button>}
         {canAerial && (
-          <button aria-label="Aerial view" className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
+          <button aria-label="Aerial view" data-guide="aerial" className={`btn h-12 w-12 rounded-full sm:h-14 sm:w-14 text-[11px] leading-tight ${aerial ? "btn-primary" : "btn-ghost"}`} onClick={toggleAerial}>
             🛰️<br />{aerial ? "Back" : "Aerial"}
           </button>
         )}
@@ -427,7 +427,7 @@ export function PhoneShop() {
         <div className="font-black">📱 Tini Tech</div>
         <div className="text-[10px] opacity-60">in-game naira only</div>
       </div>
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="touch-scroll-x mb-3 flex gap-2 overflow-x-auto pb-1">
         {phones.map((p, i) => (
           <button key={p.id} onClick={() => setPick(p.id)} data-on={chosen.id === p.id}
             className="choice anim-rise flex w-24 shrink-0 flex-col items-center gap-1 p-2" style={{ animationDelay: `${i * 50}ms` }}>

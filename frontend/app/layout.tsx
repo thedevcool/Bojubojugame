@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { BUILD_SITE_URL } from "@/lib/env";
 import SwRegister from "./sw-register";
@@ -22,12 +23,15 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#0a1324",
+  themeColor: "#060b1a",
 };
+
+// the display face for titles and buttons (body text stays on the fast system font)
+const display = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-display", display: "swap" });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={display.variable}>
       <body>
         {children}
         <SwRegister />

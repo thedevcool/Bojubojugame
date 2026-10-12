@@ -120,7 +120,7 @@ export default function Onboarding() {
     if (building) return null; // say hello once the city is standing, not over an empty field
     return (
       <div className="pointer-events-auto absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] z-[56] flex justify-center px-3" data-testid="tour" data-keep-phone>
-        <div className="panel anim-sheet w-full max-w-md p-4">
+        <div className="panel anim-sheet guide-attn w-full max-w-md p-4">
           <div className="flex items-center gap-3">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-3xl leading-none"><span className="logo-peek">🙈</span></span>
             <div className="min-w-0">
@@ -155,7 +155,7 @@ export default function Onboarding() {
   const top = phoneOpen || mapOpen; // the phone / map fill the screen: sit small at the very top
   return (
     <div className={`pointer-events-none absolute inset-x-0 z-[56] flex justify-center px-3 ${top ? "top-2" : "top-[3.9rem]"}`} data-testid="tour" data-keep-phone>
-      <div key={step} className="panel anim-banner pointer-events-auto w-full max-w-md p-3" style={top ? { background: "rgba(14, 22, 40, 0.97)" } : undefined}>
+      <div key={step} className="panel anim-banner guide-attn pointer-events-auto w-full max-w-md p-3" style={top ? ({ "--glass": "rgba(10, 16, 34, 0.97)" } as React.CSSProperties) : undefined}>
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/25 text-2xl leading-none">{s.icon}</span>
           <div className="min-w-0 flex-1">

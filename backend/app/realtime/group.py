@@ -30,7 +30,9 @@ GAME_PHASES = {"gather", "dice", "reveal", "hide", "seek", "result"}
 GATHER_RADIUS = 4.5  # the circle everyone stands in before the dice
 SEEN_GRACE_S = 1.2  # Boju keeps seeing a hider this long after losing sight (no popping out of view)
 LIVE_PHASES = {"hide", "seek"}  # chat locked, positions culled
-OFFLINE_DROP_S = 45.0  # a player gone this long mid-game (closed the tab, lost data) has left the game
+STANDIN_AFTER_S = (
+    3.0  # a player offline this long (app minimised, closed, lost data) gets a stand-in until they're back
+)
 
 
 class GroupError(Exception):
@@ -88,6 +90,8 @@ class GroupRoom:
         self.last_tick = world.now()
         self.lock = asyncio.Lock()
         self.bots: dict[str, BotBrain] = {}
+        # humans who are offline mid-game: the server plays for them (quietly, no "NPC" label) until they come back
+        self.standins: dict[str, BotBrain] = {}
         self.arrive_at: dict[str, float] = {}
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
@@ -519,17 +523,9 @@ class GroupRoom:
     async def update(self, now: float) -> None:
         dt = min(1.0, max(0.0, now - self.last_tick))
         self.last_tick = now
-        if self.bots and self.phase != "lobby":
+        self.update_standins(now)
+        if (self.bots or self.standins) and self.phase != "lobby":
             drive_bots(self, now, dt)
-        if self.phase in GAME_PHASES:
-            # closing the tab never sends "leave": after a grace period (time to reload), count them as gone,
-            # so nobody is left playing Boju against no one
-            for p in self.humans:
-                s = self.session(p)
-                gone_at = s.disconnected_at if s is not None and not s.connected else None
-                if s is not None and gone_at is not None and now - gone_at > OFFLINE_DROP_S:
-                    self.leave(s)
-                    self.broadcast({"t": "toast", "msg": f"{self.nicks.get(p, 'A player')} left the game"})
         if self.phase in GAME_PHASES and (len(self.active) < 2 or not self.humans) and not self.game_over_pending:
             if self.humans:
                 self.broadcast({"t": "toast", "msg": "Everyone else left — game over"})
@@ -569,16 +565,30 @@ class GroupRoom:
                 else:
                     self.start_dice([p for p in self.dice_pool if p in self.active] or self.active)
 
+    def update_standins(self, now: float) -> None:
+        """Minimising or closing the app never kicks you out: a stand-in keeps your place (and plays your turn as
+        Boju) until you reconnect, then you take over again from exactly where it is."""
+        if self.phase in ("lobby", "over"):
+            self.standins.clear()
+            return
+        for p in self.humans:
+            s = self.session(p)
+            away = s is None or (
+                not s.connected and s.disconnected_at is not None and now - s.disconnected_at > STANDIN_AFTER_S
+            )
+            if away and p not in self.standins:
+                self.standins[p] = BotBrain(stay=True)
+            elif not away and p in self.standins:
+                del self.standins[p]
+        for p in [p for p in self.standins if p not in self.humans]:
+            del self.standins[p]
+
     def track_live(self, now: float, dt: float) -> None:
         r = self.round
         assert r is not None
         g = self.cfg.game
         seeker = self.session(r.seeker)
-        if r.seeker in self.left or (
-            seeker is not None
-            and seeker.disconnected_at is not None
-            and now - seeker.disconnected_at > g.seeker_disconnect_skip_s
-        ):
+        if r.seeker in self.left:  # Boju pressed Leave (just being offline is fine: a stand-in seeks for them)
             r.skipped = True
             return
         safe = self.map.safe_houses.get(self.settings["safe"])
@@ -586,9 +596,7 @@ class GroupRoom:
             if r.state.get(h) != "hiding":
                 continue
             hs = self.session(h)
-            if h in self.left or (
-                hs is not None and hs.disconnected_at is not None and now - hs.disconnected_at > g.disconnect_grace_s
-            ):
+            if h in self.left:
                 r.state[h] = "idle"
                 r.in_safe.discard(h)
                 self.broadcast({"t": "toast", "msg": f"{self.nicks.get(h, 'A player')} left the game"})
@@ -653,6 +661,9 @@ class GroupRoom:
         deltas = rules.score_round(outcome, self.cfg.scoring)
         plan = rules.plan_next_round(outcome, self.active)
         self.retired |= plan.retired
+        for p in plan.retired:  # done for this game: off the field to the stands, not standing at the last spot
+            if (rs := self.session(p)) is not None and rs.room is self.arena:
+                self.to_found_area(rs)
         self.pending_seeker = plan.next_seeker
         self.dice_pool = list(plan.dice_pool)
         self.rounds_played += 1

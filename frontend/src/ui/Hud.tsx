@@ -85,15 +85,24 @@ export function PhaseBar() {
   const tip = useTip();
   const guiding = useGame((s) => s.gameGuide === "on");
   const newPlayer = gamesPlayed() < 3;
+  // the card says what's new, then tucks itself into a small ⓘ after a few seconds (tap to open or close it)
+  const [open, setOpen] = useState(true);
+  const tipKey = tip?.key ?? "";
+  useEffect(() => {
+    setOpen(true);
+    if (!tipKey || tipKey === "lobby-host") return; // the host needs the lobby card until they start
+    const id = setTimeout(() => setOpen(false), newPlayer ? 9000 : 6000);
+    return () => clearTimeout(id);
+  }, [tipKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (g?.phase === "over" && map?.kind === "arena") {
-    return <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">🏁 Game over · {useGame.getState().mini ? "🚌 the bus stop takes you back to the Motor Park" : "free to explore — 🚌 the bus stop takes you home"}</div>;
+    return <Fleeting id="over" text={`🏁 Game over · ${useGame.getState().mini ? "🚌 the bus stop takes you back to the Motor Park" : "free to explore — 🚌 the bus stop takes you home"}`} />;
   }
   if (!g && onboarding) return null; // the tour's welcome orbit
   if (!g) {
     const inside = local.insideHome;
     const homeLabel = inside ? (inside === myHome?.id ? `🏠 Your house · ${myHome.name} — walk out the door to explore` : "🏠 Neighbour's house") : null;
     const label = homeLabel ?? (section ? `📍 ${section.name}` : null);
-    return label ? <div className="panel absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">{label}</div> : null;
+    return label ? <Fleeting id={label} text={label} /> : null;
   }
   if (guiding && g.phase !== "over") return null; // the guide card is the Coach (with the timer) while it runs
   const r = g.round;
@@ -105,8 +114,23 @@ export function PhaseBar() {
   const live = r && ["hide", "seek"].includes(g.phase);
   // the timer bar is also the Coach: what to do right now, for your role (more detail for new players)
   const detail = newPlayer || live || g.phase === "lobby";
+  if (!open) {
+    // tucked away: a small round ⓘ (with the timer) that opens the full card again
+    return (
+      <button className="coach-dot pointer-events-auto absolute left-2 top-[3.9rem] z-10 flex items-center gap-1.5" data-testid="coach-dot" aria-label="What to do now"
+        onClick={() => setOpen(true)}>
+        <span className="relative grid h-10 w-10 place-items-center rounded-full bg-[#0a1324]/75 text-xl shadow-[inset_0_0_0_1.5px_rgba(148,180,255,.35)] backdrop-blur-md">
+          {tip?.icon ?? "ⓘ"}
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-black italic text-black">i</span>
+        </span>
+        {timed && <span className="rounded-full bg-[#0a1324]/75 px-2 py-0.5 text-sm font-black tabular-nums text-[var(--accent)] backdrop-blur-md">{fmtTime(left)}</span>}
+        {safeLeft !== null && <span className="rounded-full bg-green-500/80 px-2 py-0.5 text-xs font-bold">🟢 {safeLeft.toFixed(0)}s</span>}
+      </button>
+    );
+  }
   return (
-    <div className="panel absolute left-1/2 top-[3.9rem] z-10 flex w-[min(26rem,calc(100vw-1rem))] -translate-x-1/2 items-center gap-2.5 px-3 py-2" data-testid="coach">
+    <div className="panel pointer-events-auto absolute left-1/2 top-[3.9rem] z-10 flex w-[min(26rem,calc(100vw-1rem))] -translate-x-1/2 items-center gap-2.5 px-3 py-2" data-testid="coach"
+      onClick={() => setOpen(false)}>
       {tip && <span key={tip.key} className="anim-pop grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/25 text-2xl leading-none">{tip.icon}</span>}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -122,6 +146,18 @@ export function PhaseBar() {
       </div>
     </div>
   );
+}
+
+/** A small note at the top that shows for a few seconds when it changes, then gets out of the way. */
+function Fleeting({ id, text }: { id: string; text: string }) {
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    setShown(true);
+    const t = setTimeout(() => setShown(false), 4500);
+    return () => clearTimeout(t);
+  }, [id]);
+  if (!shown) return null;
+  return <div className="panel anim-fade absolute left-1/2 top-[3.9rem] z-10 max-w-[88vw] -translate-x-1/2 truncate px-3 py-1 text-center text-xs">{text}</div>;
 }
 
 /**
@@ -158,6 +194,7 @@ export function ActionButtons() {
   const hasCar = useGame((s) => !!s.life.carId);
   const myHome = useGame((s) => s.home?.id);
   const [wheel, setWheel] = useState(false);
+  const [tucked, setTucked] = useState(() => { try { return localStorage.getItem("boju.ctlTucked") === "1"; } catch { return false; } });
   useTicker(400);
   const nearBed = bedNear(local.x, local.z);
   const insideMine = !!myHome && local.insideHome === myHome;
@@ -173,59 +210,87 @@ export function ActionButtons() {
     set({ aerial: on });
     sound.play("pop");
   };
+  // hiding while Boju looks: the Aerial view shows where Boju is, so you know if they're close — point at it
+  const watchBoju = canAerial && inGame && g?.phase === "seek" && myState === "hiding" && !aerial;
+  const extras: { key: string; node: React.ReactNode }[] = [];
+  if (!aerial) {
+    extras.push({ key: "bend", node: (
+      <button aria-label="Bend" data-guide="bend" className="ctl" data-on={crouch}
+        onClick={() => { setBend(!crouch); if (!crouch) set({ sitting: false }); }}
+      ><span className="ic">🧎</span><span className="lb">{crouch ? "Stand" : "Bend"}</span></button>
+    ) });
+  }
+  if (canAerial) {
+    extras.push({ key: "aerial", node: (
+      <button aria-label="Aerial view" data-guide="aerial" className={`ctl ${watchBoju ? "ctl-attn" : ""}`} data-on={aerial} onClick={toggleAerial}>
+        <span className="ic">🛰️</span><span className="lb">{aerial ? "Back" : watchBoju ? "Watch" : "Aerial"}</span>
+      </button>
+    ) });
+  }
+  if (!aerial && !inGame && !sleeping) {
+    extras.push({ key: "sit", node: (
+      <button aria-label="Sit" className="ctl" data-on={sitting}
+        onClick={() => {
+          const on = !sitting;
+          if (on) { setBend(false); local.path = []; }
+          local.sit = on;
+          set({ sitting: on });
+        }}
+      ><span className="ic">🪑</span><span className="lb">{sitting ? "Stand" : "Sit"}</span></button>
+    ) });
+  }
+  if (canTaunt) extras.push({ key: "emote", node: <button aria-label="Emotes" className="ctl" data-on={wheel} onClick={() => setWheel(!wheel)}><span className="ic">😜</span></button> });
+  if (!aerial && !inGame && hasCar && !local.insideHome && !sleeping) {
+    extras.push({ key: "drive", node: (
+      <button aria-label="Drive" className="ctl" data-on={driving}
+        onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play(driving ? "door" : "horn"); }}
+      ><span className="ic">{driving ? "🚶🏾" : "🚗"}</span><span className="lb">{driving ? "Walk" : "Drive"}</span></button>
+    ) });
+  }
+  if (!aerial && !inGame && insideMine && !sleeping) {
+    extras.push({ key: "decor", node: <button aria-label="Decorate" className="ctl" onClick={() => void startDecorating()}><span className="ic">🛋️</span><span className="lb">Decor</span></button> });
+  }
+  if (!aerial && !inGame && (sleeping || nearBed)) {
+    extras.push({ key: "sleep", node: (
+      <button aria-label="Sleep" className="ctl" data-on={sleeping} onClick={() => (sleeping ? wake() : sleep())}>
+        <span className="ic">{sleeping ? "🌅" : "😴"}</span><span className="lb">{sleeping ? "Wake" : "Sleep"}</span>
+      </button>
+    ) });
+  }
+  // folded away for a clean screen: only Run stays (and Aerial whenever it's the thing to press, or you're up there)
+  const shown = tucked ? extras.filter((e) => e.key === "aerial" && (watchBoju || aerial)) : extras;
   return (
-    <div className="pointer-events-auto absolute bottom-6 right-3 z-20 flex flex-col items-end gap-2.5">
+    <div className="ctl-cluster pointer-events-none absolute bottom-[max(env(safe-area-inset-bottom),14px)] right-3 z-20" data-tucked={tucked}>
       {wheel && (
-        <div className="panel grid grid-cols-2 gap-1 p-2">
+        <div className="panel pointer-events-auto absolute bottom-[210px] right-0 grid grid-cols-2 gap-1 p-2">
           {emotes.map((e) => (
             <button key={e.id} className="btn btn-ghost text-sm" onClick={() => { net.send({ t: "emote", id: e.id }); setWheel(false); }}>{e.text}</button>
           ))}
         </div>
       )}
-      <div className="flex items-end gap-2.5">
-        {canTaunt && <button aria-label="Emotes" className="ctl" data-on={wheel} onClick={() => setWheel(!wheel)}><span className="ic">😜</span></button>}
-        {canAerial && (
-          <button aria-label="Aerial view" data-guide="aerial" className="ctl" data-on={aerial} onClick={toggleAerial}>
-            <span className="ic">🛰️</span><span className="lb">{aerial ? "Back" : "Aerial"}</span>
-          </button>
-        )}
-        {!aerial && (
-          <>
-            {!inGame && (sleeping || nearBed) && (
-              <button aria-label="Sleep" className="ctl" data-on={sleeping} onClick={() => (sleeping ? wake() : sleep())}>
-                <span className="ic">{sleeping ? "🌅" : "😴"}</span><span className="lb">{sleeping ? "Wake" : "Sleep"}</span>
-              </button>
-            )}
-            {!inGame && hasCar && !local.insideHome && !sleeping && (
-              <button aria-label="Drive" className="ctl" data-on={driving}
-                onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play(driving ? "door" : "horn"); }}
-              ><span className="ic">{driving ? "🚶🏾" : "🚗"}</span><span className="lb">{driving ? "Walk" : "Drive"}</span></button>
-            )}
-            {!inGame && insideMine && !sleeping && (
-              <button aria-label="Decorate" className="ctl" onClick={() => void startDecorating()}>
-                <span className="ic">🛋️</span><span className="lb">Decor</span>
-              </button>
-            )}
-            {!inGame && !sleeping && (
-              <button aria-label="Sit" className="ctl" data-on={sitting}
-                onClick={() => {
-                  const on = !sitting;
-                  if (on) { setBend(false); local.path = []; }
-                  local.sit = on;
-                  set({ sitting: on });
-                }}
-              ><span className="ic">🪑</span><span className="lb">{sitting ? "Stand" : "Sit"}</span></button>
-            )}
-            <button aria-label="Bend" data-guide="bend" className="ctl" data-on={crouch}
-              onClick={() => { setBend(!crouch); if (!crouch) set({ sitting: false }); }}
-            ><span className="ic">🧎</span><span className="lb">{crouch ? "Stand" : "Bend"}</span></button>
-            <RunButton />
-          </>
-        )}
-      </div>
+      {/* the buttons sit on arcs round Run (thumb reach), nearest first */}
+      {shown.map((e, i) => {
+        const [r, deg] = ARC[i] ?? ARC[ARC.length - 1];
+        const rad = (deg * Math.PI) / 180;
+        return (
+          <div key={e.key} className="ctl-slot pointer-events-auto absolute" style={{ right: 32 - Math.cos(rad) * r - 26, bottom: 32 + Math.sin(rad) * r - 26 }}>
+            {e.node}
+          </div>
+        );
+      })}
+      <div className="pointer-events-auto absolute bottom-0 right-0">{!aerial && <RunButton />}</div>
+      {extras.length > 0 && !aerial && (
+        <button aria-label={tucked ? "Show controls" : "Hide controls"} className="ctl-fold pointer-events-auto absolute"
+          onClick={() => { const v = !tucked; setTucked(v); try { localStorage.setItem("boju.ctlTucked", v ? "1" : "0"); } catch { /* storage blocked */ } }}>
+          {tucked ? "⋯" : "✕"}
+        </button>
+      )}
     </div>
   );
 }
+
+/** [radius from Run's centre, angle] for each control: 180° = straight left of Run, 90° = straight above. */
+const ARC: [number, number][] = [[92, 180], [92, 135], [92, 90], [158, 165], [158, 125], [158, 90], [158, 195]];
 
 /** Shops and the bus stop appear when you walk into their zone. */
 export function ZonePanel() {
@@ -396,14 +461,12 @@ export function SafeCompass() {
   const inside = r.safe.includes(me);
   const rel = Math.atan2(sx - local.x, sz - local.z) - (cam.yaw + Math.PI);
   return (
-    <div data-guide="safe" className="panel anim-rise pointer-events-none absolute bottom-28 left-3 z-20 flex items-center gap-2 px-3 py-2 max-sm:bottom-40">
-      <span className="grid h-9 w-9 place-items-center rounded-full bg-[var(--leaf)]/25">
-        <span className="text-lg transition-transform duration-150" style={{ transform: `rotate(${-rel}rad)` }}>{inside ? "🏠" : "⬆️"}</span>
+    // a small round compass, not a card: an arrow to the safe house and how far
+    <div data-guide="safe" className="anim-rise pointer-events-none absolute left-[14px] top-[16.2rem] z-20 flex flex-col items-center gap-1" aria-label={`${safe.name}: ${Math.round(dist)} m`}>
+      <span className="grid h-12 w-12 place-items-center rounded-full bg-[#0a1324]/70 shadow-[inset_0_0_0_2px_var(--leaf),0_6px_16px_rgba(0,0,0,.35)] backdrop-blur-md">
+        <span className="text-xl transition-transform duration-150" style={{ transform: inside ? undefined : `rotate(${-rel}rad)` }}>{inside ? "🏠" : "⬆️"}</span>
       </span>
-      <span className="text-xs leading-tight">
-        <span className="block font-bold">{inside ? "You're safe!" : safe.name}</span>
-        <span className="opacity-75">{inside ? "Time is ticking…" : `${Math.round(dist)} m away`}</span>
-      </span>
+      <span className="rounded-full bg-[#0a1324]/75 px-1.5 text-[10px] font-bold tabular-nums leading-4">{inside ? "Safe" : `🟢 ${Math.round(dist)} m`}</span>
     </div>
   );
 }

@@ -15,6 +15,37 @@ register in the release that ships them.
 
 ---
 
+## 2.12.0 — 2026-10-13
+Owner requests: "clear the screen better… a small round i", "when user minimize the app it shouldn't act weird by
+logging them out… replace them with an npc… (generally, for LagosLife and our full gameplay)", "when they said the
+user should sit it out, he is still able to move within the field", "the phone should have a close at the top", "the
+controls should be round, not listed like that, and should be hideable", "when the player is hiding, highlight the
+Aerial".
+- **Stand-ins.** Minimising or closing the app no longer takes you out of anything. You stay standing where you were,
+  in Lagos, in LagosLife and in a game, looking like any other player (no "offline" or "NPC" label).
+  - In a game, after 3 s offline a quiet stand-in takes your turn. As a hider it stays hidden exactly where you left
+    it, and Boju can still find it. As Boju it seeks. In the circle and at the dice it does what's needed.
+  - When you come back you take over from where it is.
+  - Out of a game, you stay standing in the world for 2 hours; after that the server remembers your spot, so you
+    still come back there.
+  - Coming back reconnects at once. Phones often hand back a dead socket after a minimise; it's now detected and
+    replaced, with no long retry wait.
+  - This replaces 2.11.4's "offline 45 s = left the game". Pressing Leave still leaves, and a game with only one
+    person left still ends.
+- **Sitting out means sitting out.** Anyone out of the round can't walk around the field and waits in the stands
+  until the next round. That covers Boju once retired, caught players, and anyone told to sit the round out. A
+  retired Boju goes to the stands the moment the round ends, not after it, and doesn't stay where they were.
+- Changes `P11`: the Coach card shows what to do, then after 6 s (9 s for new players) tucks into a small round ⓘ in
+  the corner, with the timer and the safe-house seconds. Tap it to open it again; tap the card to close it. It opens
+  by itself when there's something new. The lobby card for the host stays open.
+- The location and "Game over" notes at the top fade after a few seconds. The safe-house compass is now a small round
+  arrow with the distance, under the map.
+- Changes `P27`: the controls are now round buttons on arcs around Run, in thumb reach, instead of a row. A small
+  ✕ / ⋯ button folds them away, leaving only Run, and the choice is remembered. While you hide and Boju is looking,
+  Aerial glows and reads "Watch", so you can see how close Boju is. It stays visible even when the controls are
+  folded.
+- Changes `P20`: the phone has a "✕ Close" button at the top.
+
 ## 2.11.4 — 2026-10-12
 Owner reports (LagosLife): "a two-person game, after the second person left, the game still continues for the person to
 Boju for who?!", "make LagosLife onboarding be just on the game", "we are packing our other extras and focusing on the
@@ -77,7 +108,7 @@ keep saying I can follow the arrows but none is indicative".
 
 ### Playing Boju Boju
 - `P10` **Game flow** — lobby with code/invite/NPCs → bus to the arena → gather circle → dice pick → hide (song) → seek → result → game over; Quick game with NPCs, play with friends, public games, live games.
-- `P11` **Coach bar** — the one thing to do now for your role, with the timer; big RUN & HIDE / FIND THEM / BOJU IS COMING flashes.
+- `P11` **Coach bar** — the one thing to do now for your role, with the timer (tucks into a round ⓘ after a few seconds; tap to open); big RUN & HIDE / FIND THEM / BOJU IS COMING flashes.
 - `P12` **Boju Boju song** — male/female recordings while Boju counts, with lyric captions in sync ("Boju Boju o!" ×2, "Ṣé kí n ṣí?" ×2); Settings choice.
 - `P13` **Catching** — Boju catches by walking close (no button); safe house protects for 20 s in total; safe-house compass.
 - `P14` **Hiding-spot reveal** — after a round, the camera visits unfound hiders' spots with how close Boju came.
@@ -85,18 +116,19 @@ keep saying I can follow the arrows but none is indicative".
 - `P16` **Aerial view** — look from the sky (and during games).
 
 ### Life in Lagos
-- `P20` **Phone** — opens/closes (tap outside closes it; dialogs over it don't); apps: Boju Boju, Houses, Messages, Map, Wallet, Settings, etc.; swipeable shop lists.
+- `P20` **Phone** — opens/closes (✕ Close at the top; tap outside closes it; dialogs over it don't); apps: Boju Boju, Houses, Messages, Map, Wallet, Settings, etc.; swipeable shop lists.
 - `P21` **Shops** — Tini Tech phones, furniture, Tokunbo Autos cars, food (belle).
 - `P22` **Houses** — rent, walk in through your door, room & parlour, decorate, sleep and sit; neighbours knock.
 - `P23` **Cars & driving** — pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
 - `P25` **Map & travel** — minimap, full map with pins, real map of Naija, rides between cities and venues.
 - `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja.
-- `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass control buttons.
+- `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass buttons on arcs round Run, foldable; Aerial glows while you hide.
 
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
+- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games); in a game a quiet stand-in plays your turn until you're back; no NPC/offline label.
 - `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
@@ -110,6 +142,7 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.12.0 | 2026-10-13 | Stand-ins, a cleaner screen, round controls |
 | 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |
 | 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |
 | 2.11.2 | 2026-10-12 | New players get the tour, not What's New; changelog gate |

@@ -415,7 +415,9 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
     const g = group.current;
     if (!g) return;
     const snap = sample(r.n);
-    const vis = !!snap && (snap.f & 8) === 0; // out of range or disconnected: no ghost bodies/tags
+    // out of range: hidden. Someone who closed the app stays standing where they were, like everyone else (their
+    // stand-in) — no "offline" look or label, so the world doesn't empty out and games play on
+    const vis = !!snap;
     if (vis !== shown) setShown(vis);
     if (!snap || !vis) { g.visible = false; return; }
     g.visible = true;
@@ -525,7 +527,7 @@ function TapMover() {
     for (const p of Object.values(st.roster)) {
       if (p.id === st.me?.id || p.bot) continue;
       const s = sample(p.n);
-      if (!s || (s.f & 8)) continue;
+      if (!s) continue;
       for (const y of [0.5, 1.1, 1.7]) {
         pv.set(s.x, y, s.z).project(camera);
         if (pv.z > 1) continue;

@@ -68,6 +68,9 @@ class RematchAsk:
     code: str | None = None  # the rematch game, once someone said yes
 
 
+STANDIN_KEEP_S = 2 * 3600.0  # how long someone who closed the app keeps standing in the world
+
+
 class World:
     def __init__(
         self,
@@ -101,6 +104,7 @@ class World:
         # called with (game_id, final_results) when a game ends (LagosLife match results)
         self.game_over_hooks: list[Callable[[str, list[dict[str, Any]]], Awaitable[None]]] = []
         self.rematches: dict[str, RematchAsk] = {}  # finished game id -> open "play again" request
+        self.last_spots: dict[str, tuple[float, float, float]] = {}  # pid -> where they were in Lagos (x, z, when)
         self._net_ids = itertools.count(1)
         self._shard_ids = itertools.count(1)
 
@@ -146,7 +150,8 @@ class World:
         s.send(self.doors_msg())
         s.send({"t": "furn_all", "homes": self.furniture})
         if s.room is None:
-            self.join_hub(s, at=self.home_spawn(s))
+            spot = self.last_spots.pop(pid, None)
+            self.join_hub(s, at=self.free_spot((spot[0], spot[1]), exclude=pid) if spot else self.home_spawn(s))
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
         if s.group is not None:
@@ -930,12 +935,18 @@ class World:
                 if g.code not in feeds:
                     feeds[g.code] = g.watch_msg()
                 s.send(feeds[g.code])
-        # forget players who left without a group after a grace period
+        # someone who closed the app stays standing where they were (a quiet stand-in) for a good while; then we
+        # remember the spot, so they still come back exactly there
         for pid, s in list(self.sessions.items()):
-            if s.sender is None and s.group is None and s.disconnected_at and now - s.disconnected_at > 60:
+            if s.sender is None and s.group is None and s.disconnected_at and now - s.disconnected_at > STANDIN_KEEP_S:
+                if isinstance(s.room, HubShard):
+                    self.last_spots[pid] = (s.x, s.z, now)
                 if s.room is not None:
                     s.room.remove(s)
                 del self.sessions[pid]
+        if len(self.last_spots) > 5000:  # keep the memory small: drop the oldest
+            for pid, _ in sorted(self.last_spots.items(), key=lambda kv: kv[1][2])[:1000]:
+                del self.last_spots[pid]
         self.shards = [h for h in self.shards if h.sessions] or self.shards[:1]
 
     def _group_expired(self, g: GroupRoom, now: float) -> bool:

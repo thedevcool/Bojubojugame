@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { changePassword, forgotPassword, login, type Account } from "@/lib/api";
 
-const field = "mt-1 w-full rounded-lg bg-white/10 px-3 py-2 font-normal outline-none";
+const field = "field mt-1";
 
 export function PasswordInput({ value, onChange, placeholder, autoComplete = "current-password" }: { value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string }) {
   const [show, setShow] = useState(false);
@@ -57,12 +57,12 @@ export function LoginForm({ onDone }: { onDone: (acc: Account, mustChange: boole
 
   return (
     <form onSubmit={submit} className="anim-step space-y-4">
-      <label className="block text-sm font-bold">Username or email
+      <label className="block text-[13px] font-semibold text-white/80">Username or email
         <input value={name} onChange={(e) => setName(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="username"
           placeholder="e.g. tolu_fast" className={field} />
       </label>
       {mode === "login" ? (
-        <label className="block text-sm font-bold">Password
+        <label className="block text-[13px] font-semibold text-white/80">Password
           <PasswordInput value={pw} onChange={setPw} placeholder="Your password" />
         </label>
       ) : (
@@ -104,15 +104,15 @@ export function NewPasswordForm({ acc, username, temporary, onDone }: { acc: Acc
   return (
     <form onSubmit={submit} className="space-y-3">
       {!temporary && (
-        <label className="block text-sm font-bold">Current password
+        <label className="block text-[13px] font-semibold text-white/80">Current password
           <PasswordInput value={current} onChange={setCurrent} />
         </label>
       )}
-      <label className="block text-sm font-bold">New password
+      <label className="block text-[13px] font-semibold text-white/80">New password
         <PasswordInput value={pw} onChange={setPw} autoComplete="new-password" placeholder="At least 8 characters" />
         {problem && <span className="mt-1 block text-xs font-normal text-[var(--clay)]">{problem}</span>}
       </label>
-      <label className="block text-sm font-bold">Type it again
+      <label className="block text-[13px] font-semibold text-white/80">Type it again
         <PasswordInput value={again} onChange={setAgain} autoComplete="new-password" />
         {mismatch && <span className="mt-1 block text-xs font-normal text-[var(--clay)]">{mismatch}</span>}
       </label>

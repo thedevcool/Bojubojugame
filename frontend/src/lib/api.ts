@@ -27,8 +27,10 @@ export function loadAccount(): Account | null {
   try { return JSON.parse(raw) as Account; } catch { return null; }
 }
 
+let loggedOut = false; // after "Log out", late token refreshes must not bring the account back
 export function saveAccount(a: Account): void {
   if (memAccount) { memAccount = a; return; }
+  if (loggedOut) return;
   safeSet(KEY, JSON.stringify(a));
 }
 
@@ -105,6 +107,8 @@ export async function refreshToken(acc: Account): Promise<Account> {
 export interface Me { id: string; nickname: string; home_area: string; avatar: number[]; balance: number; hunger: number; daily_bonus: number; topup?: number; username: string | null; email: string | null; must_change_password: boolean; phone_id: string | null; home_id: string | null; rent_until: string | null; car_id: string | null; flags?: Record<string, string> }
 
 export function logout(): void {
+  loggedOut = true;
+  memAccount = null;
   try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
 }
 

@@ -44,11 +44,12 @@ export function BojuSong() {
 }
 
 // ------------------------------------------------------------------ lyrics (karaoke captions)
+// the recordings sing "Boju Boju o!" twice, then "Ṣé kí n ṣí?" twice, and go round again
 const LINES = [
   { yo: "Boju Boju o!", en: "Closing eyes, closing eyes!" },
-  { yo: "Ṣé kí n ṣí?", en: "Should I open them?" },
-  { yo: "Ṣé kí n ṣí?", en: "Should I open them?" },
   { yo: "Boju Boju o!", en: "Closing eyes, closing eyes!" },
+  { yo: "Ṣé kí n ṣí?", en: "Should I open them?" },
+  { yo: "Ṣé kí n ṣí?", en: "Should I open them?" },
 ];
 /** When each sung phrase starts (seconds), measured from the recordings: the four lines, twice. */
 const CUES: Record<string, number[]> = {

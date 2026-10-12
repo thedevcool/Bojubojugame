@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { serverFlags, setFlag } from "@/lib/api";
 import { net } from "@/lib/net";
+import { local } from "@/game/state";
 import { useGame } from "@/lib/store";
 import type { GroupState as Group } from "@/lib/types";
 import { useTip } from "./Coach";
@@ -28,14 +29,18 @@ export function endGuide(reason: "done" | "no" | "exit"): void {
   if (reason === "done") useGame.getState().toast("🎉 You've played your first Boju Boju — well done!", "good");
 }
 
-/** The practice game: private, three NPCs, a shorter search so the whole thing fits in a few minutes. */
+/**
+ * The practice game is the shortest one there is: you and one NPC (with two players the first round
+ * is also the last), the shortest hide and search times. Private, so nobody else wanders in.
+ */
 function startPractice(): void {
   const st = useGame.getState();
   const cfg = st.content?.config, maps = st.content?.maps;
   const arena = cfg?.cities[0]?.arenas[0] ?? "arena_park";
-  const opts = cfg?.game.search_time_options ?? [];
-  const search = opts.length ? Math.min(...opts) : cfg?.game.default_search_time ?? 180;
-  net.send({ t: "g_create", arena, hide: cfg?.game.default_hide_time ?? 30, search, safe: maps?.[arena]?.safe_houses[0]?.id ?? "", bots: 3, public: false });
+  const shortest = (opts: number[] | undefined, dflt: number) => (opts?.length ? Math.min(...opts) : dflt);
+  const hide = shortest(cfg?.game.hide_time_options, cfg?.game.default_hide_time ?? 30);
+  const search = shortest(cfg?.game.search_time_options, cfg?.game.default_search_time ?? 180);
+  net.send({ t: "g_create", arena, hide, search, safe: maps?.[arena]?.safe_houses[0]?.id ?? "", bots: 1, public: false });
 }
 
 /** From the Boju Boju app: a practice game with the guide on. */
@@ -47,7 +52,7 @@ export function startGuidedPractice(): void {
 const STEPS = ["Lobby", "Bus", "Circle", "Dice", "Hide", "Seek", "Result"] as const;
 interface Say { step: number; title?: string; text: string; glow?: string | null }
 
-function explain(g: Group, me: string, since: number): Say {
+function explain(g: Group, me: string, since: number, riding: boolean): Say {
   const r = g.round;
   const isBoju = r?.seeker === me;
   const mine = g.members.find((m) => m.id === me);
@@ -62,6 +67,7 @@ function explain(g: Group, me: string, since: number): Say {
         ? { step: 1, text: "You're on the bus to the arena. When you arrive, walk into the circle." }
         : { step: 1, text: "Everyone rides to the arena together. Follow the arrow to the 🚏 bus stop and tap Board.", glow: "board" };
     case "gather":
+      if (riding) return { step: 1, text: "You're on the bus to the arena 🚌. When you arrive, you'll walk into the circle." };
       return { step: 2, text: "Walk into the ⭕ circle with the others. The dice roll as soon as everyone is in." };
     case "dice":
       return { step: 3, text: "Pick a number 🎲. If the dice lands on yours, you're Boju — the seeker. Everyone else hides.", glow: "dice" };
@@ -77,6 +83,7 @@ function explain(g: Group, me: string, since: number): Say {
     case "seek":
       if (isBoju) return { step: 5, title: "FIND THEM! 👀", text: "Walk close to a hider to catch them — no button. Check behind walls, in buildings and behind hedges. Catch everyone to clear the round." };
       if (r?.state[me] === "found") return { step: 5, title: "Caught 😅", text: "Watch the rest of the round from the stands. The first person caught is the next Boju." };
+      if (since >= 6 && since < 16) return { step: 5, title: "Watch Boju from above 🛰️", text: "Tap 🛰️ Aerial to look down from the sky and see where Boju is going — then slip away the other way. Tap it again to come back.", glow: "aerial" };
       return { step: 5, title: "Boju is looking 🤫", text: "Stay out of sight. Your heartbeat speeds up when Boju is near — move away and break their line of sight. Last until the timer ends to win the round.", glow: since < 6 ? "safe" : null };
     case "result": {
       const lr = g.last_result;
@@ -151,18 +158,39 @@ export function GameGuide() {
     else if (!g && hadGame.current) { hadGame.current = false; endGuide("exit"); }
   }, [mode, over, g]);
 
-  const say = mode === "on" && g && me ? explain(g, me, since) : null;
+  const riding = useGame((s) => !!s.ride);
+  const say = mode === "on" && g && me ? explain(g, me, since, riding) : null;
+
+  // the phone gets out of the way: once the bus is called (guide on), and for everyone on reaching the stop
+  const travel = g?.phase === "travel";
+  useEffect(() => {
+    if (mode !== "on" || !travel) return;
+    const id = setTimeout(() => useGame.getState().closePhone(), 1500); // a moment to see the game has started
+    return () => clearTimeout(id);
+  }, [mode, travel]);
+  useEffect(() => {
+    if (!travel) return;
+    let closed = false;
+    const id = setInterval(() => {
+      const st = useGame.getState();
+      const stop = st.content?.maps.hub_plaza?.zones.find((z) => z.kind === "bus_stop")?.rect;
+      const there = !!stop && local.x >= stop[0] && local.x <= stop[2] && local.z >= stop[1] && local.z <= stop[3];
+      if (there && !closed) { closed = true; if (st.phoneOpen) st.closePhone(); } // the Board buttons are on screen
+      if (!there) closed = false;
+    }, 500);
+    return () => clearInterval(id);
+  }, [travel]);
   useGlow(say?.glow);
 
   if (!mode) return null;
   const top = phoneOpen ? "top-2" : "top-[3.9rem]";
-  const solid = phoneOpen ? { background: "rgba(14, 22, 40, 0.97)" } : undefined; // readable over the phone's screen
+  const solid = phoneOpen ? ({ "--glass": "rgba(10, 16, 34, 0.97)" } as React.CSSProperties) : undefined; // readable over the phone's screen
 
   if (mode === "ask") {
     const inGame = !!g;
     return (
       <div className={`pointer-events-none absolute inset-x-0 ${top} z-[57] flex justify-center px-3`} data-testid="guide-ask" data-keep-phone>
-        <div className="panel anim-banner pointer-events-auto flex w-full max-w-md items-center gap-3 p-3" style={solid}>
+        <div className="panel anim-banner guide-attn pointer-events-auto flex w-full max-w-md items-center gap-3 p-3" style={solid}>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-2xl leading-none">🙈</span>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-black leading-tight">{inGame ? "First game? Want a quick guide?" : "First time? Want a quick guide?"}</div>
@@ -187,7 +215,7 @@ export function GameGuide() {
   }
   return (
     <div className={`pointer-events-none absolute inset-x-0 ${top} z-[57] flex justify-center px-3`} data-testid="guide" data-keep-phone>
-      <div className="panel pointer-events-auto w-full max-w-md p-3" style={solid}>
+      <div key={say.title ?? say.text} className="panel guide-attn pointer-events-auto w-full max-w-md p-3" style={solid}>
         <div className="flex items-start gap-3">
           {tip && <span key={tip.key} className="anim-pop grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/25 text-2xl leading-none">{tip.icon}</span>}
           <div className="min-w-0 flex-1">

@@ -259,7 +259,7 @@ function AreaMap({ map }: { map: GameMap }) {
         ) : (
           <div className="text-xs opacity-75">Tap anywhere to drop a pin. Drag to move, pinch to zoom.</div>
         )}
-        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-0.5">
+        <div className="touch-scroll-x flex gap-1.5 overflow-x-auto pb-0.5">
           {places.map((p) => (
             <button key={p.label} className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold"
               onClick={() => { set({ pin: { kind: "here", map: map.id, x: p.x, z: p.z, label: p.label } }); Object.assign(view.current, { cx: p.x, cz: p.z }); }}>
@@ -319,7 +319,7 @@ function TravelMap() {
         ) : (
           <div className="text-xs opacity-75">Tap a city pin to plan a trip. You can explore any city venue, even without a game.</div>
         )}
-        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-0.5">
+        <div className="touch-scroll-x flex gap-1.5 overflow-x-auto pb-0.5">
           {dests.map((d) => (
             <button key={d.to} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${pin?.to === d.to ? "bg-[var(--accent)]" : "bg-white/10"}`}
               onClick={() => set({ pin: { kind: "trip", to: d.to, label: d.label } })}>{d.label}</button>

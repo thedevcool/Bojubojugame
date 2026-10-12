@@ -133,7 +133,7 @@ export function DecorateOverlay() {
           {store.length === 0 ? (
             <div className="px-1 pb-1 text-xs opacity-60">Everything is placed. Tap 📦 Store on an item to put it away.</div>
           ) : (
-            <div className="touch-scroll flex gap-2 overflow-x-auto pb-1">
+            <div className="touch-scroll-x flex gap-2 overflow-x-auto pb-1">
               {store.map((it) => (
                 <button key={it.id} className="choice flex w-20 shrink-0 flex-col items-center gap-0.5 p-2" data-on="false" onClick={() => placeFromStore(it)}>
                   <span className="text-2xl">{ITEM_ICON[it.item] ?? "📦"}</span>

@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.11.1",
+    date: "2026-10-12",
+    title: "A fresh new look ✨",
+    items: [
+      { emoji: "✨", title: "Neon glass look", text: "New colours, glowing buttons and glass panels across the game, and a brand-new sign-in screen." },
+      { emoji: "🧭", title: "A shorter, clearer guide", text: "The practice game is now one quick round with one NPC. New guide tips glow so you notice them, the phone gets out of the way at the bus stop, and the guide shows you how to watch Boju from above with 🛰️ Aerial." },
+      { emoji: "📱", title: "Swipe the phone shop", text: "Swipe left and right to see every phone (yes, the Odogwu one too)." },
+      { emoji: "🎤", title: "Song captions in time", text: "The Boju Boju song captions now match the singing." },
+    ],
+  },
+  {
     version: "2.11.0",
     date: "2026-10-12",
     title: "Akobo, new looks, and a guide for your first game 🙈",

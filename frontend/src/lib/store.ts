@@ -126,7 +126,7 @@ export const useGame = create<GameStore>((set, get) => ({
   toasts: [],
   ride: null,
   aerial: false,
-  controlMode: savedControls() ?? "joystick",
+  controlMode: savedControls() ?? "tap", // tap the ground to walk (the joystick is in Settings)
   bend: false,
   phoneOpen: false,
   phoneApp: null,

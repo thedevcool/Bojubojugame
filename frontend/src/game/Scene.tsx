@@ -129,9 +129,11 @@ function LocalPlayer({ map }: { map: GameMap }) {
     if (local.crouch) input.runToggle = false; // bending down ends a run
     const wantRun = (input.runHeld || input.runToggle || input.joyRun || autoRun || k.has("ShiftLeft") || k.has("ShiftRight")) && !local.crouch;
     local.run = wantRun && moving && local.stamina > 0;
+    // breath: drains while running, refills only while not running — exactly as the server counts it. (It used to
+    // refill while running too, so you'd run on after the server saw you out of breath and got dragged back.)
     if (local.run) local.stamina = Math.max(0, local.stamina - dt);
-    if (local.stamina <= 0) input.runToggle = false; // out of breath: tap Run again once the ring refills
     else local.stamina = Math.min(cfg.stamina_max_s, local.stamina + cfg.stamina_regen_per_s * dt);
+    if (local.stamina <= 0) input.runToggle = false; // out of breath: tap Run again once the ring refills
     local.moving = moving;
     let speed = 0;
     const st0g = useGame.getState();
@@ -217,7 +219,7 @@ function LocalPlayer({ map }: { map: GameMap }) {
       if (local.lie && !seat.current.lie) { local.lie = false; local.sit = true; useGame.getState().set({ sleeping: false, sitting: true }); }
       if (seat.current.ry !== null) local.ry = seat.current.ry;
     } else if (!resting) seat.current = null;
-    if (local.lie) local.stamina = Math.min(cfg.stamina_max_s, local.stamina + dt * 2); // a nap restores your breath
+    if (local.lie) local.stamina = Math.min(cfg.stamina_max_s, local.stamina + dt * 2); // a nap restores your breath (the server counts it too)
     motion.current.speed = myCar ? 0 : speed;
     motion.current.crouch = local.crouch;
     if (avatarGroup.current) avatarGroup.current.visible = !myCar;
@@ -411,6 +413,13 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   const avatarRef = useRef<THREE.Group>(null);
   const carRef = useRef<THREE.Group>(null);
   const carColor = useGame((s) => (r.car ? s.content?.config.cars.find((c) => c.id === r.car)?.color : undefined));
+  // once the dice has chosen, everyone can see who Boju is (until hiding time is over)
+  const boju = useGame((s) => {
+    const g = s.group;
+    if (!g) return false;
+    if (g.phase === "reveal") return g.pending_seeker === r.id;
+    return g.phase === "hide" && g.round?.seeker === r.id;
+  });
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
@@ -442,8 +451,28 @@ function RemotePlayer({ r, map }: { r: RosterEntry; map: GameMap }) {
   return (
     <group ref={group} visible={false}>
       <group ref={avatarRef}><Avatar av={r.av} motion={motion} lite={lite} label={shown ? (emote ? `${r.nick}: ${emote.text}` : r.nick) : undefined} tag={r.bot ? "NPC" : undefined} /></group>
+      {boju && shown && <BojuMarker />}
       <group ref={carRef} visible={false}>{carColor && <Vehicle kind="car" w={1.9} d={4.1} h={1.5} color={carColor} />}</group>
     </group>
+  );
+}
+
+/** Boju, marked for everyone: a 🙈 bobbing over their head and a glowing ring at their feet. */
+function BojuMarker() {
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 4) * 0.08);
+  });
+  return (
+    <>
+      <mesh ref={ring} position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.55, 0.8, 40]} />
+        <meshBasicMaterial color="#ff9f0a" transparent opacity={0.85} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <Html position={[0, 2.75, 0]} center zIndexRange={[21, 0]} style={{ pointerEvents: "none" }}>
+        <div className="boju-mark">🙈<span>Boju</span></div>
+      </Html>
+    </>
   );
 }
 

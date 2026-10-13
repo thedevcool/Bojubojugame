@@ -105,6 +105,7 @@ export function PhaseBar() {
     return label ? <Fleeting id={label} text={label} /> : null;
   }
   if (guiding && g.phase !== "over") return null; // the guide card is the Coach (with the timer) while it runs
+  if (g.phase === "dice" || g.phase === "reveal") return null; // the dice screen says it all (and has the timer)
   const r = g.round;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const hiding = r ? Object.values(r.state).filter((s) => s === "hiding").length : 0;
@@ -257,6 +258,7 @@ export function ActionButtons() {
       </button>
     ) });
   }
+  if (g && (g.phase === "dice" || g.phase === "reveal")) return null; // nothing to do but pick: keep the dice clear
   // folded away for a clean screen: only Run stays (and Aerial whenever it's the thing to press, or you're up there)
   const shown = tucked ? extras.filter((e) => e.key === "aerial" && (watchBoju || aerial)) : extras;
   return (

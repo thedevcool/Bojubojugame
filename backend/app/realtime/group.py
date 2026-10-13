@@ -386,6 +386,11 @@ class GroupRoom:
         self.broadcast_state("picked")
 
     def roll(self) -> None:
+        # only people still in the game can be Boju (someone may have left while the others picked)
+        self.dice_pool = [p for p in self.dice_pool if p in self.active] or self.active
+        if len(self.dice_pool) == 1:
+            self.begin_reveal(self.dice_pool[0], rolls=[])
+            return
         numbers = rules.fill_picks(self.picks, self.dice_pool, self.world.rng)
         self.picks = numbers
         rolls, seeker = rules.roll_for_seeker(numbers, self.world.rng)
@@ -537,7 +542,9 @@ class GroupRoom:
             if now >= self.phase_end or all(p in self.picks for p in self.dice_pool):
                 self.roll()
         elif self.phase == "reveal":
-            if now >= self.phase_end:
+            if self.pending_seeker not in self.active:  # the new Boju left before the round began: roll again
+                self.start_dice([p for p in self.dice_pool if p in self.active] or self.active)
+            elif now >= self.phase_end:
                 self.start_round()
         elif self.phase in LIVE_PHASES and self.round is not None:
             self.track_live(now, dt)

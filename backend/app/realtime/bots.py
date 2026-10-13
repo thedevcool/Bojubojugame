@@ -13,7 +13,7 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from app.engine.geometry import distance
+from app.engine.geometry import distance, has_line_of_sight
 
 if TYPE_CHECKING:
     from app.realtime.group import GroupRoom
@@ -45,8 +45,9 @@ FEMALE_NAMES = {"Bisi", "Kemi", "Ngozi", "Aisha", "Yemi", "Bola", "Ifeoma", "Zai
 
 HIDE_SPEED = 5.0
 WALK_SPEED = 3.0
-CHASE_SPEED = 4.6
+CHASE_SPEED = 5.3  # still under a running human (6.0): you can out-run Boju, but not by strolling
 FLEE_SPEED = 5.2
+HEAR_M = 4.5  # Boju hears someone this close, even round a corner (footsteps, breathing)
 
 
 @dataclass
@@ -59,6 +60,7 @@ class BotBrain:
     last_seen: tuple[float, float] | None = None
     visited: set[int] = field(default_factory=set)
     phase_seen: str = ""
+    search: list[int] = field(default_factory=list)  # hide spots to check first (round where someone vanished)
 
 
 def _step(s: Session, b: BotBrain, dt: float, now: float) -> None:
@@ -92,15 +94,30 @@ def _go(g: GroupRoom, s: Session, b: BotBrain, target: tuple[float, float], spee
 def _pick_spot(
     g: GroupRoom, rng: random.Random, away_from: tuple[float, float], min_dist: float, taken: set[tuple[float, float]]
 ) -> tuple[float, float] | None:
+    """A good hiding spot: far enough from `away_from`, out of its line of sight, not next to another hider.
+    Tries a handful at random and keeps the best (so NPCs hide properly, and not all in the same place)."""
     spots = g.map.hide_spots
     if not spots:
         return None
-    for _ in range(25):
+    best: tuple[float, tuple[float, float]] | None = None
+    for _ in range(24):
         cand = spots[rng.randrange(len(spots))]
-        if cand in taken or distance(*cand, *away_from) < min_dist:
+        if cand in taken:
             continue
-        return cand
-    return spots[rng.randrange(len(spots))]
+        d = distance(*cand, *away_from)
+        if d < min_dist:
+            continue
+        hidden = _hidden(g, away_from, cand, crouched=True)
+        crowd = min((distance(*cand, *t) for t in taken), default=99.0)
+        score = (10.0 if hidden else 0.0) + min(d, 40.0) * 0.15 + min(crowd, 12.0) * 0.3 + rng.random()
+        if best is None or score > best[0]:
+            best = (score, cand)
+    return best[1] if best else spots[rng.randrange(len(spots))]
+
+
+def _hidden(g: GroupRoom, frm: tuple[float, float], at: tuple[float, float], crouched: bool) -> bool:
+    h = g.cfg.movement.crouch_height if crouched else g.cfg.movement.stand_height
+    return not has_line_of_sight(frm[0], frm[1], at[0], at[1], h, g.map.near(frm[0], frm[1], at[0], at[1]))
 
 
 def drive_bots(g: GroupRoom, now: float, dt: float) -> None:
@@ -116,6 +133,7 @@ def drive_bots(g: GroupRoom, now: float, dt: float) -> None:
             b.next_think = now + rng.uniform(0.6, 2.5)
             if g.phase == "hide":
                 b.visited.clear()
+                b.search.clear()
                 b.last_seen = None
         if s.frozen:
             b.path = []
@@ -165,7 +183,14 @@ def _hide(g: GroupRoom, s: Session, b: BotBrain, now: float, rng: random.Random)
             _go(g, s, b, spot, FLEE_SPEED)
         return
     d = distance(s.x, s.z, seeker.x, seeker.z)
-    if d < 9 and g.can_see(seeker, s) and (not b.path or b.speed < FLEE_SPEED):
+    seen = g.can_see(seeker, s)
+    if not seen and d < 7 and not b.path and rng.random() < 0.35:
+        # Boju is close but hasn't seen me: slip away to a spot out of their sight, crouched
+        spot = _pick_spot(g, rng, (seeker.x, seeker.z), 12.0, set())
+        if spot and _go(g, s, b, spot, WALK_SPEED):
+            s.crouch = True
+            return
+    if d < 9 and seen and (not b.path or b.speed < FLEE_SPEED):
         can_safe = (
             safe is not None
             and r.safe_used.get(s.pid, 0) < g.cfg.game.safe_house_total_s - 4
@@ -183,46 +208,81 @@ def _hide(g: GroupRoom, s: Session, b: BotBrain, now: float, rng: random.Random)
 
 
 def _seek(g: GroupRoom, s: Session, b: BotBrain, now: float, rng: random.Random) -> None:
+    """A proper Boju: chases what it sees, hears footsteps round corners, searches where it last saw someone,
+    then sweeps the hiding spots nearest-first, ticking off the ones it can already see are empty."""
     r = g.round
     assert r is not None
     if now < b.next_think:
         return
-    b.next_think = now + 0.35
+    b.next_think = now + 0.3
     visible: list[tuple[float, Session]] = []
+    heard: Session | None = None
     for h in r.hiders:
         hs = g.session(h)
         if hs is None or r.state.get(h) != "hiding":
             continue
+        d = distance(s.x, s.z, hs.x, hs.z)
         if g.can_see(s, hs):
-            visible.append((distance(s.x, s.z, hs.x, hs.z), hs))
+            visible.append((d, hs))
+        elif d < HEAR_M * (0.6 if hs.crouch else 1.0) and h not in r.in_safe:
+            heard = hs
     if visible:
         d, target = min(visible, key=lambda v: v[0])
         b.last_seen = (target.x, target.z)
         if d <= g.cfg.game.tag_range_m * 0.9 and target.pid not in r.in_safe:
             b.path = []
             if b.react_at is None:
-                b.react_at = now + rng.uniform(0.35, 0.8)  # human-ish reaction time
+                b.react_at = now + rng.uniform(0.25, 0.55)  # human-ish reaction time
             elif now >= b.react_at:
                 b.react_at = None
                 g.tag(s)
             return
         b.react_at = None
         if target.pid in r.in_safe:
-            return  # can't tag in the safe house; wait nearby
-        _go(g, s, b, (target.x, target.z), CHASE_SPEED)
+            # can't tag in the safe house: wait by it — safe time runs out
+            if d > 6:
+                _go(g, s, b, (target.x, target.z), WALK_SPEED)
+            else:
+                b.path = []
+            return
+        # cut them off: aim a little ahead of where they're heading
+        lead = 0.6 if target.run else 0.25
+        tx = target.x + math.sin(target.ry) * lead * 4
+        tz = target.z + math.cos(target.ry) * lead * 4
+        if not _go(g, s, b, (tx, tz), CHASE_SPEED):
+            _go(g, s, b, (target.x, target.z), CHASE_SPEED)
         return
     b.react_at = None
+    if heard is not None and (not b.path or b.goal != (heard.x, heard.z)):
+        _go(g, s, b, (heard.x, heard.z), WALK_SPEED + 1.0)  # "I hear you…"
+        return
     if b.last_seen and not b.path:
-        _go(g, s, b, b.last_seen, WALK_SPEED + 0.6)
+        ls = b.last_seen
         b.last_seen = None
+        # check the spots round where they vanished first
+        near = [i for i, sp in enumerate(g.map.hide_spots) if i not in b.visited and distance(*sp, *ls) < 12]
+        b.search = sorted(near, key=lambda i: distance(*g.map.hide_spots[i], *ls))[:4]
+        _go(g, s, b, ls, WALK_SPEED + 0.8)
         return
     if not b.path:
         spots = g.map.hide_spots
         if not spots:
             return
-        for _ in range(12):
-            i = rng.randrange(len(spots))
-            if i not in b.visited:
-                break
+        # tick off spots Boju can already see are empty
+        for i, sp in enumerate(spots):
+            if i not in b.visited and distance(s.x, s.z, *sp) < 10 and not _hidden(g, (s.x, s.z), sp, crouched=True):
+                b.visited.add(i)
+        while b.search and b.search[0] in b.visited:
+            b.search.pop(0)
+        if b.search:
+            i = b.search.pop(0)
+        else:
+            left = [i for i in range(len(spots)) if i not in b.visited]
+            if not left:
+                b.visited.clear()
+                left = list(range(len(spots)))
+            # nearest unchecked spot (a little randomness so Boju isn't predictable)
+            left.sort(key=lambda i: distance(s.x, s.z, *spots[i]) + rng.uniform(0, 4))
+            i = left[0]
         b.visited.add(i)
-        _go(g, s, b, spots[i], WALK_SPEED)
+        _go(g, s, b, spots[i], WALK_SPEED + 0.6)

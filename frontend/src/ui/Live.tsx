@@ -112,7 +112,7 @@ export function WatchView() {
     const s = Math.min(w / (x1 - x0), h / (z1 - z0)) * 0.95;
     const colors: Record<string, string> = { seeker: "#ff3b30", hiding: "#2f7cf6", safe: "#30d158", found: "#8e8e93", idle: "#8e8e93" };
     const people: Dot[] = snap.players.map(([, nick, x, z, role, bot]) => ({ x, z, color: colors[role] ?? "#f7c500", label: `${role === "seeker" ? "🙈 " : ""}${nick}${bot ? " 🤖" : ""}` }));
-    draw(ctx, map, { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, s }, w, h, null, null, people);
+    draw(ctx, map, { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, s }, w, h, null, null, people, true);
   }, [snap, map]);
   if (!watching) return null;
   const stop = () => { net.send({ t: "watch", code: null }); set({ watching: null, wsnap: null }); };

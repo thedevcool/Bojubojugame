@@ -21,7 +21,7 @@ const ZONE_ICON: Record<string, string> = { bus_stop: "🚏", food: "🍽️", p
 /** Draws a district like a printed street map (roads, plots, houses, shops, people, your pin). */
 export interface Dot { x: number; z: number; color: string; label?: string }
 
-export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null, people?: Dot[]) {
+export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null, people?: Dot[], labels = false) {
   const X = (x: number) => (x - v.cx) * v.s + w / 2, Z = (z: number) => (z - v.cz) * v.s + h / 2;
   const R = (x0: number, z0: number, x1: number, z1: number) => ctx.fillRect(X(x0), Z(z0), (x1 - x0) * v.s, (z1 - z0) * v.s);
   ctx.fillStyle = map.kind === "hub" || map.id === "arena_akobo" ? "#e9dcc4" : "#cfe3b8"; // towns on paper, parks green
@@ -45,14 +45,25 @@ export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: nu
     if (p.kind !== "road" && p.kind !== "flyover") continue;
     ctx.fillStyle = "#ffffff";
     R(p.x - p.w / 2 - 0.4, p.z - p.d / 2 - 0.4, p.x + p.w / 2 + 0.4, p.z + p.d / 2 + 0.4);
-    ctx.fillStyle = "#9aa3ad";
+    ctx.fillStyle = "#8d969f";
     R(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2);
+    if (labels && v.s > 2 && Math.min(p.w, p.d) > 4) {
+      // a dashed centre line, like a real street map
+      ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.beginPath();
+      if (p.w > p.d) { ctx.moveTo(X(p.x - p.w / 2), Z(p.z)); ctx.lineTo(X(p.x + p.w / 2), Z(p.z)); }
+      else { ctx.moveTo(X(p.x), Z(p.z - p.d / 2)); ctx.lineTo(X(p.x), Z(p.z + p.d / 2)); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
   }
-  // buildings, walls, cars, trees (anything solid)
+  // buildings, walls, cars, hedges (anything solid): a soft shadow, then the roof
   for (const p of map.props) {
     const c = p.collider;
     if (!c || ["tree", "palm", "lamp", "pole"].includes(p.kind)) continue;
-    ctx.fillStyle = p.kind === "wall" && !p.win && !p.inner ? "#b3a48c" : p.kind === "car" || p.kind === "danfo" || p.kind === "keke" ? "#7a828c" : "#cdbfa8";
+    if (labels && (c[2] - c[0]) * v.s > 4 && (c[3] - c[1]) * v.s > 4) { ctx.fillStyle = "rgba(60,45,30,.18)"; ctx.fillRect(X(c[0]) + 2, Z(c[1]) + 2, (c[2] - c[0]) * v.s, (c[3] - c[1]) * v.s); }
+    ctx.fillStyle = p.kind === "hedge" || p.kind === "bush" ? "#5f9a4c"
+      : p.kind === "wall" && !p.win && !p.inner ? "#a8977c"
+      : p.kind === "car" || p.kind === "danfo" || p.kind === "keke" ? "#7a828c"
+      : p.color && labels ? p.color : "#cdbfa8";
     R(c[0], c[1], c[2], c[3]);
   }
   for (const p of map.props) {
@@ -74,6 +85,7 @@ export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: nu
     R(z.rect[0], z.rect[1], z.rect[2], z.rect[3]);
     ctx.globalAlpha = 1;
   }
+  if (labels) drawLabels(ctx, map, X, Z, v.s, w, h, myHome);
   if (people) {
     // spectator map: only the players we were given, no "you"
     ctx.font = "600 11px system-ui, sans-serif";
@@ -106,6 +118,42 @@ export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: nu
   ctx.beginPath(); ctx.moveTo(px, pz); ctx.arc(px, pz, 16, Math.PI / 2 - local.ry - 0.5, Math.PI / 2 - local.ry + 0.5); ctx.fill();
   ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(px, pz, 6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#2f7cf6"; ctx.beginPath(); ctx.arc(px, pz, 4.2, 0, Math.PI * 2); ctx.fill();
+}
+
+/** Place names, always on (not only when you tap): districts large and faint, places as pills, never overlapping. */
+function drawLabels(ctx: CanvasRenderingContext2D, map: GameMap, X: (x: number) => number, Z: (z: number) => number, s: number, w: number, h: number, myHome: string | null) {
+  const used: [number, number, number, number][] = [];
+  const free = (x0: number, y0: number, x1: number, y1: number) => x1 > 0 && y1 > 0 && x0 < w && y0 < h && !used.some((u) => x0 < u[2] && x1 > u[0] && y0 < u[3] && y1 > u[1]);
+  const pill = (text: string, x: number, y: number, bg: string, fg = "#ffffff") => {
+    ctx.font = "700 11px system-ui, sans-serif";
+    const tw = ctx.measureText(text).width + 12, th = 18;
+    const x0 = x - tw / 2, y0 = y - th / 2;
+    if (!free(x0, y0, x0 + tw, y0 + th)) return;
+    used.push([x0 - 2, y0 - 2, x0 + tw + 2, y0 + th + 2]);
+    ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.beginPath(); ctx.roundRect(x0 + 1, y0 + 2, tw, th, 9); ctx.fill();
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x0, y0, tw, th, 9); ctx.fill();
+    ctx.fillStyle = fg; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, x, y + 0.5);
+  };
+  // the places you go to first (they win any overlap)
+  for (const hm of map.homes ?? []) if (hm.id === myHome) pill("🏠 My house", X(hm.door[0]), Z(hm.door[1]) - 12, "#2fa84f");
+  for (const sh of map.safe_houses) pill(`🟢 ${sh.name}`, X((sh.rect[0] + sh.rect[2]) / 2), Z((sh.rect[1] + sh.rect[3]) / 2), "#1f8a4c");
+  for (const z of map.zones) pill(`${ZONE_ICON[z.kind] ?? "📍"} ${z.name}`, X((z.rect[0] + z.rect[2]) / 2), Z((z.rect[1] + z.rect[3]) / 2), "rgba(20,28,48,.88)");
+  // named buildings and signs on the map (shops, churches, stalls)
+  // (internal ids like "adeniji_7" aren't names: skip them)
+  if (s > 2.4) for (const p of map.props) if (p.label && p.collider && !/^[a-z]+(_[a-z]+)*_?\d+$/i.test(p.label)) pill(p.label, X(p.x), Z(p.z), "rgba(255,255,255,.92)", "#2a2f3a");
+  // districts: big, faint, uppercase — the way a printed map names neighbourhoods
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const sec of map.sections) {
+    const cx = X((sec.rect[0] + sec.rect[2]) / 2), cy = Z((sec.rect[1] + sec.rect[3]) / 2);
+    const size = Math.max(11, Math.min(20, ((sec.rect[2] - sec.rect[0]) * s) / 12));
+    ctx.font = `800 ${size}px system-ui, sans-serif`;
+    const text = sec.name.toUpperCase();
+    const tw = ctx.measureText(text).width;
+    if (!free(cx - tw / 2, cy - size / 2, cx + tw / 2, cy + size / 2)) continue;
+    used.push([cx - tw / 2, cy - size / 2, cx + tw / 2, cy + size / 2]);
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.strokeText(text, cx, cy);
+    ctx.fillStyle = "rgba(70,60,90,.72)"; ctx.fillText(text, cx, cy);
+  }
 }
 
 /** Small round map on the HUD; tap to open the full map. */
@@ -184,7 +232,7 @@ function AreaMap({ map }: { map: GameMap }) {
         const w = c.clientWidth, h = c.clientHeight;
         if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        draw(ctx, map, view.current, w, h, myHome, pin);
+        draw(ctx, map, view.current, w, h, myHome, pin, undefined, true);
       }
       raf = requestAnimationFrame(loop);
     };

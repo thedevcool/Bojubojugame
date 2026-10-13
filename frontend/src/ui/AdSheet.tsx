@@ -173,7 +173,7 @@ function Sheet({ spot }: { spot: AdSpot }) {
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center" onClick={close}>
-      <div data-testid="ad-sheet" className="panel anim-sheet max-h-[92%] w-full max-w-md overflow-y-auto rounded-b-none p-4 sm:rounded-b-3xl" onClick={(e) => e.stopPropagation()}>
+      <div data-testid="ad-sheet" className="panel anim-sheet touch-scroll max-h-[92%] w-full max-w-md overflow-y-auto rounded-b-none p-4 sm:rounded-b-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-400 text-2xl leading-none">📢</span>
           <div className="min-w-0 flex-1">

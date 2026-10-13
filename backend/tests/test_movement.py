@@ -152,3 +152,30 @@ async def test_travel_without_a_game_and_drive_your_car(db):
         x += 0.8
         await send(world, s, t="mv", x=round(x, 2), z=-40.0, ry=0, c=False, r=False, st=False, dr=False, s=i + 20)
     assert c.last("corr") is not None
+
+
+async def test_running_out_of_breath_never_snaps_back(db, monkeypatch):
+    """The phone and the server count breath the same way: run till you're out, walk, rest, run again —
+    the server never drags an honest runner back."""
+    from app.realtime.rooms import Session
+
+    monkeypatch.setattr(Session, "allow", lambda self, kind, rate, burst: True)
+    world, clock, s, c = await setup(db)
+    cfg = world.cfg.movement
+    stamina, x, seq, dt = cfg.stamina_max_s, 0.0, 0, 1 / 12
+    plan = [("run", 7.0), ("walk", 1.0), ("idle", 4.0), ("run", 4.0)]  # ~65 m of open road
+    for mode, secs in plan:
+        for _ in range(int(secs / dt)):
+            clock.t += dt
+            running = mode == "run" and stamina > 0  # what the phone does
+            if running:
+                stamina = max(0.0, stamina - dt)
+            else:
+                stamina = min(cfg.stamina_max_s, stamina + cfg.stamina_regen_per_s * dt)
+            if mode == "idle":
+                continue  # standing still sends nothing
+            x += (cfg.run_speed if running else cfg.walk_speed) * dt * 0.98
+            seq += 1
+            await send(world, s, t="mv", x=round(x, 3), z=-40.0, ry=0, c=False, r=running, st=False, s=seq)
+    assert c.last("corr") is None
+    assert abs(s.x - x) < 0.05

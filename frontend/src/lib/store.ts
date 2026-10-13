@@ -90,7 +90,7 @@ interface GameStore {
   /** onboarding guide target in the world (arrow + "walk me there") */
   guide: { x: number; z: number; label: string } | null;
   homeArea: string | null;
-  dice: { rolls: number[]; seeker: string; at: number } | null;
+  dice: { rolls: number[]; seeker: string; numbers: Record<string, number>; at: number } | null;
   over: { gameId: string; results: Standing[] } | null;
   emotes: { n: number; text: string; until: number }[];
   quality: Quality;

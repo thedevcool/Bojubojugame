@@ -486,3 +486,38 @@ async def test_closing_the_app_keeps_you_where_you_were(db):
     assert a.pid not in world.sessions
     s = await world.connect(a.pid, a.nick, Client())
     assert abs(s.x - spot[0]) < 1.5 and abs(s.z - spot[1]) < 1.5
+
+
+async def test_host_can_cancel_and_npc_lobby_closes(db):
+    world, clock, players = await setup(db, 2)
+    (a, ca), (b, cb) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    code = ca.last("g_state")["code"]
+    await send(world, b, t="g_join", code=code)
+    await send(world, b, t="g_cancel")  # not the host
+    assert "Only the host" in cb.last("err")["msg"] and code in world.groups
+    await send(world, a, t="g_cancel")
+    assert code not in world.groups and a.group is None and b.group is None
+    assert cb.last("g_left") is not None and any(m["t"] == "toast" and "cancelled" in m["msg"] for m in cb.msgs)
+    # a lobby left with only NPCs closes at once
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    code2 = ca.last("g_state")["code"]
+    await send(world, a, t="g_add_bot")
+    await send(world, a, t="g_leave")
+    assert code2 not in world.groups
+
+
+async def test_dice_never_picks_someone_who_left(db):
+    world, clock, players = await setup(db, 3)
+    (a, ca), (b, _), (c, _) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    for s in (b, c):
+        await send(world, s, t="g_join", code=ca.last("g_state")["code"])
+    await send(world, a, t="g_start")
+    g = a.group
+    await advance(world, clock, 61)
+    await gather_all(world, clock, g)
+    assert g.phase == "dice"
+    await send(world, c, t="g_leave")
+    await until(world, clock, g, "hide")
+    assert g.round.seeker != c.pid and c.pid not in g.round.hiders

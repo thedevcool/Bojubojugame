@@ -33,21 +33,35 @@ class Net {
   private watchLifecycle(): void {
     if (this.watching || typeof window === "undefined") return;
     this.watching = true;
-    const revive = () => {
-      if (this.closedByUs || !this.account || document.visibilityState !== "visible") return;
+    // wall-clock time: phones pause performance.now() while the app is in the background, so a socket that died
+    // while you were away still looked "fresh" — your taps went nowhere and the screen froze (e.g. on the dice)
+    let hiddenAt = 0;
+    const reconnect = () => {
+      if (this.closedByUs || !this.account) return;
       const ws = this.ws;
-      const fresh = ws?.readyState === WebSocket.OPEN && performance.now() - this.lastMsgAt < 6000;
-      if (fresh || ws?.readyState === WebSocket.CONNECTING) return;
       this.retry = 0;
       this.ws = null; // the old socket's close handler must not schedule another reconnect
       try { ws?.close(); } catch { /* already gone */ }
       this.open();
     };
+    const revive = () => {
+      if (this.closedByUs || !this.account) return;
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      const away = hiddenAt ? Date.now() - hiddenAt : 0;
+      hiddenAt = 0;
+      const ws = this.ws;
+      if (ws?.readyState === WebSocket.CONNECTING) return;
+      // back after more than a moment: always start a fresh connection (cheap, and never a silent dead one)
+      if (away > 2500 || ws?.readyState !== WebSocket.OPEN || Date.now() - this.lastMsgAt > 6000) reconnect();
+    };
     document.addEventListener("visibilitychange", revive);
     window.addEventListener("pageshow", revive);
     window.addEventListener("online", revive);
+    window.addEventListener("focus", revive);
     // a dead socket that never says so: no word from the server for a while while you're looking at the game
-    setInterval(() => { if (this.ws?.readyState === WebSocket.OPEN && performance.now() - this.lastMsgAt > 15000) revive(); }, 5000);
+    setInterval(() => {
+      if (document.visibilityState === "visible" && this.ws?.readyState === WebSocket.OPEN && Date.now() - this.lastMsgAt > 12000) reconnect();
+    }, 4000);
   }
 
   stop(): void {
@@ -67,13 +81,13 @@ class Net {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
-      this.lastMsgAt = performance.now();
+      this.lastMsgAt = Date.now();
       useGame.getState().set({ connected: true });
       if (this.pingTimer) clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => this.send({ t: "ping" }), 5000);
     };
     ws.onmessage = (ev) => {
-      this.lastMsgAt = performance.now();
+      this.lastMsgAt = Date.now();
       try {
         this.onMessage(decode(new Uint8Array(ev.data as ArrayBuffer)) as Msg);
       } catch (e) {
@@ -222,7 +236,7 @@ class Net {
         local.frozen = false;
         break;
       case "g_dice":
-        g.set({ dice: { rolls: m.rolls as number[], seeker: m.seeker as string, at: Date.now() } });
+        g.set({ dice: { rolls: m.rolls as number[], seeker: m.seeker as string, numbers: (m.numbers as Record<string, number>) ?? {}, at: Date.now() } });
         sound.play("dice");
         break;
       case "g_tag":

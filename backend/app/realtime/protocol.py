@@ -59,7 +59,7 @@ class GroupJoin(_In):
 
 
 class Bare(_In):
-    t: Literal["g_leave", "g_start", "g_tag", "ping", "g_add_bot", "g_return"]
+    t: Literal["g_leave", "g_start", "g_tag", "ping", "g_add_bot", "g_return", "g_cancel"]
 
 
 class RemoveBot(_In):
@@ -132,6 +132,7 @@ INBOUND: dict[str, type[_In]] = {
     "g_settings": GroupSettings,
     "g_join": GroupJoin,
     "g_leave": Bare,
+    "g_cancel": Bare,
     "g_start": Bare,
     "g_tag": Bare,
     "ping": Bare,

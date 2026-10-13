@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.13.0",
+    date: "2026-10-13",
+    title: "Roll the dice 🎲",
+    items: [
+      { emoji: "🎲", title: "A real dice", text: "Tap your number round the dice, watch it roll — the winning number glows, and Boju gets a 🙈 over their head for everyone to see." },
+      { emoji: "🏃🏾", title: "No more snapping back", text: "Running no longer drags you back a few steps." },
+      { emoji: "🧠", title: "Smarter NPCs", text: "NPC Boju hunts properly now (and hears you round corners!), and NPC hiders hide properly." },
+      { emoji: "🗺️", title: "A proper map", text: "Place names are always on the map." },
+    ],
+  },
+  {
     version: "2.12.0",
     date: "2026-10-13",
     title: "Your spot is safe 📌",

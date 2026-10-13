@@ -499,11 +499,14 @@ class World:
             return
         step = distance(s.x, s.z, m.x, m.z)
         s.move_budget = max(0.0, budget - step)
-        span = max(dt, 0.05)
+        # breath refills over real time, standing still too (no moves are sent then), like it does on the phone;
+        # a server that refilled only on moves saw an honest runner as out of breath and dragged them back
+        span = max(min(now - s.last_move_at, 60.0), 0.05)
         if m.r and step > 0:
             s.stamina -= step / mv.run_speed  # time spent running, independent of packet timing
         else:
-            s.stamina = min(mv.stamina_max_s, s.stamina + mv.stamina_regen_per_s * span)
+            regen = mv.stamina_regen_per_s + (2.0 if m.ly else 0.0)  # a nap restores it faster
+            s.stamina = min(mv.stamina_max_s, s.stamina + regen * span)
         s.x, s.z, s.ry, s.crouch, s.run, s.sit, s.lie = m.x, m.z, m.ry, m.c, m.r, m.st, m.ly
         s.driving = bool(m.dr and s.car and not in_game)
         s.last_move_at = now
@@ -702,6 +705,8 @@ class World:
                 g.remove_bot(s, msg.id)
             elif msg.t == "g_leave":
                 self.leave_group(s)
+            elif msg.t == "g_cancel":
+                self.cancel_group(s)
             elif msg.t == "g_return":
                 if g.phase != "over":
                     raise GroupError("Finish the game first")
@@ -750,6 +755,20 @@ class World:
         if not quiet and not isinstance(s.room, HubShard):
             self.join_hub(s, at=self.arrival_point())
         s.send({"t": "g_left"})
+        if g.phase == "lobby" and not g.humans:  # only NPCs left waiting: nobody will ever start it
+            self._drop_group(g.code, g)
+
+    def cancel_group(self, s: Session) -> None:
+        """The host calls the game off before it starts: everyone is told, and nobody is left in a dead lobby."""
+        g = s.group
+        if g is None:
+            return
+        if g.creator != s.pid or g.phase != "lobby":
+            raise GroupError("Only the host can cancel, before the game starts — you can Leave")
+        for p in g.humans:
+            if p != s.pid and (o := self.sessions.get(p)) is not None:
+                o.send({"t": "toast", "msg": f"{g.nicks.get(s.pid, 'The host')} cancelled game {g.code}"})
+        self._drop_group(g.code, g)
 
     # ------------------------------------------------------------ chat & emotes
     def chat_locked(self, s: Session) -> bool:

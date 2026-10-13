@@ -328,3 +328,55 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
 .ctl-attn { box-shadow: 0 0 0 2px var(--cyan), 0 0 22px rgba(62, 231, 255, 0.7); animation: ctl-attn 1.3s ease-in-out infinite; }
 @keyframes ctl-attn { 50% { box-shadow: 0 0 0 5px rgba(62, 231, 255, 0.25), 0 0 30px rgba(62, 231, 255, 0.9); transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { .ctl-attn, .ctl-slot { animation: none; } }
+
+/* ---------- the dice: a 3D die in the middle, the numbers round it ---------- */
+/* fits any frame, down to a small LagosLife window on a phone */
+.dice-ring { position: relative; width: min(300px, 92vw, calc(100dvh - 150px)); aspect-ratio: 1; margin-top: 24px; }
+.dice-ring::before { content: ""; position: absolute; inset: 12%; border-radius: 50%; background: radial-gradient(rgba(6, 10, 28, 0.55), rgba(6, 10, 28, 0.15) 60%, transparent 72%); pointer-events: none; }
+.dice-title {
+  position: absolute; left: 50%; top: -34px; transform: translateX(-50%); white-space: nowrap;
+  font: 700 18px/1.2 var(--font-display), system-ui, sans-serif; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; gap: 8px;
+}
+.dice-time { font-size: 13px; padding: 1px 8px; border-radius: 999px; background: rgba(10, 16, 34, 0.7); color: var(--accent); }
+.dice-num {
+  position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 999px; color: #fff;
+  display: grid; place-items: center; align-content: center; line-height: 1;
+  background: rgba(10, 16, 34, 0.62); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1.5px rgba(148, 180, 255, 0.35), 0 6px 16px rgba(2, 6, 20, 0.4);
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.25s, background 0.25s, opacity 0.25s;
+}
+.dice-num b { font: 700 24px/1 var(--font-display), system-ui, sans-serif; }
+.dice-num small { margin-top: 3px; font-size: 9px; opacity: 0.8; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dice-num:not(:disabled):active { transform: scale(0.9); }
+.dice-num[data-mine="true"] { background: var(--grad); box-shadow: 0 0 0 2px #fff6, 0 8px 22px rgba(109, 92, 255, 0.6); }
+.dice-num[data-taken="true"] { opacity: 0.55; }
+.dice-num[data-win="true"] { opacity: 1; background: #ff9f0a; color: #111; transform: scale(1.18);
+  box-shadow: 0 0 0 3px #fff, 0 0 34px 8px rgba(255, 159, 10, 0.85); animation: dice-win 0.9s ease-in-out infinite; }
+@keyframes dice-win { 50% { box-shadow: 0 0 0 3px #fff, 0 0 48px 14px rgba(255, 159, 10, 0.95); } }
+.dice-note { position: absolute; left: 50%; bottom: -30px; transform: translateX(-50%); white-space: nowrap; font-size: 12px;
+  padding: 3px 10px; border-radius: 999px; background: rgba(10, 16, 34, 0.75); }
+.die-stage { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; perspective: 520px; }
+.die-stage::before { content: ""; position: absolute; inset: 58px -10px -18px; border-radius: 50%; background: radial-gradient(rgba(0,0,0,.45), transparent 70%); }
+.die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(.2,1.4,.4,1); }
+.die-face {
+  position: absolute; inset: 0; border-radius: 14px; padding: 9px; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  background: linear-gradient(145deg, #ffffff, #dfe6f5); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), inset -4px -6px 12px rgba(40, 60, 120, 0.18);
+  backface-visibility: hidden;
+}
+.die-face span { place-self: center; width: 13px; height: 13px; border-radius: 50%; }
+.die-face span.pip { background: radial-gradient(circle at 35% 35%, #444b5e, #10131c); }
+.die-f1 span.pip { background: radial-gradient(circle at 35% 35%, #ff6b6b, #b0121c); width: 17px; height: 17px; }
+.die-f1 { transform: translateZ(38px); }
+.die-f6 { transform: rotateY(180deg) translateZ(38px); }
+.die-f3 { transform: rotateY(90deg) translateZ(38px); }
+.die-f4 { transform: rotateY(-90deg) translateZ(38px); }
+.die-f2 { transform: rotateX(90deg) translateZ(38px); }
+.die-f5 { transform: rotateX(-90deg) translateZ(38px); }
+.die-tumble { animation: die-tumble 0.55s linear infinite; transition: none; }
+@keyframes die-tumble { from { transform: rotateX(0) rotateY(0) rotateZ(0); } to { transform: rotateX(360deg) rotateY(720deg) rotateZ(180deg); } }
+/* Boju, marked over their head for everyone */
+.boju-mark { display: flex; flex-direction: column; align-items: center; font-size: 30px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); animation: boju-bob 1.2s ease-in-out infinite; }
+.boju-mark span { margin-top: 2px; font: 700 11px/1 var(--font-display), system-ui, sans-serif; padding: 2px 7px; border-radius: 999px; background: #ff9f0a; color: #111; }
+@keyframes boju-bob { 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .die-tumble, .boju-mark, .dice-num[data-win="true"] { animation: none; } }

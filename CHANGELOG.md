@@ -15,6 +15,62 @@ register in the release that ships them.
 
 ---
 
+## 2.13.0 — 2026-10-13
+Owner reports:
+- "A user cannot cancel a game".
+- After coming back, "I can't seem to click on the dice till the time ran out… the overlay is just like that there".
+- "The NPCs more competitive… more smart when hiding".
+- The dice should be "more minimal… an actual dice, the numbers round the dice… then the dice rolls for real… the
+  number glows… the person that will Boju will have the icon on his head".
+- "The you win cannot be scrolled up on this device size".
+- "The game logic is correct end to end".
+- "Redesign the maps a little more realistic… names of the places".
+- "Taking the player back a few frames back while walking or running is still happening".
+- Icons for the Vatar listing.
+
+Changes:
+- **Snapping back while running (root cause).** The phone kept refilling your breath while you ran, but the server
+  didn't. After a few seconds the server saw an honest runner as out of breath, capped them to walking speed and
+  dragged them back.
+  - Now both count breath the same way: it drains while running and refills only when you're not running.
+  - The server also refills it during a nap.
+  - Test: `test_running_out_of_breath_never_snaps_back`.
+- **Coming back to the app.** Phones pause the browser clock in the background, so a dead connection looked fresh
+  after you returned: taps went nowhere and the dice screen froze.
+  - Returning after more than about 2.5 s now always opens a fresh connection.
+  - The silent-socket watchdog uses wall-clock time.
+- **Dice (Changes `P10`).** If you don't pick in time, the server picks for you ("Time up — we picked 4 for you"),
+  and the screen never sits there waiting.
+  - **New dice:** a real 3D die in the middle with the six numbers in a ring around it. Tap yours (it shows "you"
+    and who holds the others). The die tumbles and lands, the winning number glows orange, and "<name> dey Boju!"
+    appears.
+  - **Boju marker:** Boju gets a 🙈 "Boju" badge over their head and an orange ring at their feet, for everyone,
+    until hiding time is over.
+  - **Cleaner screen:** the Coach card and the controls step aside while the dice is up.
+  - **Fits small screens:** the dice fits any frame, down to the LagosLife window on a phone.
+- **Cancel a game (Changes `P10`).** The host now has **Cancel game** in the lobby (everyone gets told and returns),
+  and others have Leave. A lobby left with only NPCs closes at once instead of lingering.
+- **Loophole closed.** If someone left while the others were picking, the dice could still land on them, giving a
+  wasted round with an absent Boju. Now only people still in the game can be Boju, and if the new Boju leaves before
+  the round starts, the dice rolls again. Test: `test_dice_never_picks_someone_who_left`.
+- **Smarter NPCs.**
+  - **As Boju:** it chases a step ahead of where you're running, at a bit faster than before but still slower than
+    a running human. It hears hiders within about 4.5 m round corners (less if they're bent down). It searches
+    the spots near where it last saw someone, then sweeps hiding spots nearest-first, ticking off ones it can
+    already see are empty. It waits by the safe house rather than leaving.
+  - **As hiders:** they pick spots out of Boju's sight from where Boju starts, spread out from each other, and slip
+    away quietly when Boju gets close without seeing them.
+- **Small screens.** The game-over, round-result and ad panels now scroll by touch. Game screens block touch
+  scrolling unless a panel allows it, and these didn't. The round result also fits narrow frames. Checked at
+  340×480.
+- **Map (Changes `P25`).** The area map now reads like a printed street map: dashed road centre lines, building
+  shadows, hedges in green. Place names are always shown and never overlap:
+  - district names, large and faint;
+  - safe houses, bus stops, shops and food spots as pills;
+  - "🏠 My house";
+  - named buildings when zoomed in (internal IDs like "adeniji_7" are skipped).
+- **Store assets.** `store/`: app icon (1024 and 512) and five 1080×1920 screenshots with captions.
+
 ## 2.12.0 — 2026-10-13
 Owner requests: "clear the screen better… a small round i", "when user minimize the app it shouldn't act weird by
 logging them out… replace them with an npc… (generally, for LagosLife and our full gameplay)", "when they said the
@@ -110,7 +166,7 @@ keep saying I can follow the arrows but none is indicative".
 - `P06` **What's New** — shows once per release for returning players only (never for new players), plus Settings → What's new.
 
 ### Playing Boju Boju
-- `P10` **Game flow** — lobby with code/invite/NPCs → bus to the arena → gather circle → dice pick → hide (song) → seek → result → game over; Quick game with NPCs, play with friends, public games, live games.
+- `P10` **Game flow** — lobby with code/invite/NPCs (host can cancel); 3D dice with numbers round it, auto-pick at time-up, Boju marked over their head → bus to the arena → gather circle → dice pick → hide (song) → seek → result → game over; Quick game with NPCs, play with friends, public games, live games.
 - `P11` **Coach bar** — the one thing to do now for your role, with the timer (tucks into a round ⓘ after a few seconds; tap to open); big RUN & HIDE / FIND THEM / BOJU IS COMING flashes.
 - `P12` **Boju Boju song** — male/female recordings while Boju counts, with lyric captions in sync ("Boju Boju o!" ×2, "Ṣé kí n ṣí?" ×2); Settings choice.
 - `P13` **Catching** — Boju catches by walking close (no button); safe house protects for 20 s in total; safe-house compass.
@@ -124,7 +180,7 @@ keep saying I can follow the arrows but none is indicative".
 - `P22` **Houses** — rent, walk in through your door, room & parlour, decorate, sleep and sit; neighbours knock.
 - `P23` **Cars & driving** — pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
-- `P25` **Map & travel** — minimap, full map with pins, real map of Naija, rides between cities and venues.
+- `P25` **Map & travel** — minimap, full map with pins and always-visible place names, real map of Naija, rides between cities and venues.
 - `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja.
 - `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass buttons on arcs round Run, foldable; Aerial glows while you hide.
 
@@ -145,6 +201,7 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.13.0 | 2026-10-13 | Real dice, smarter NPCs, no more snap-backs |
 | 2.12.0 | 2026-10-13 | Stand-ins, a cleaner screen, round controls |
 | 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |
 | 2.11.3 | 2026-10-12 | Run fixed, new controls, smoother LagosLife |

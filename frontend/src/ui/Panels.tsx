@@ -108,7 +108,11 @@ export function GroupPanel() {
         <div className="text-[11px] opacity-80">Friends type this in Boju Boju → Join with a code. Tap it to copy.</div>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button className="btn bg-white/20 py-1.5 text-sm" onClick={share}>📨 Share link</button>
-          <button className="btn bg-white/10 py-1.5 text-sm" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+          {g.phase === "lobby" && g.creator === me ? (
+            <button className="btn bg-white/10 py-1.5 text-sm" onClick={() => { if (confirm("Cancel this game for everyone?")) { net.send({ t: "g_cancel" }); close(); } }}>Cancel game</button>
+          ) : (
+            <button className="btn bg-white/10 py-1.5 text-sm" onClick={() => { net.send({ t: "g_leave" }); close(); }}>Leave</button>
+          )}
         </div>
       </div>
       {g.phase === "lobby" && <InviteFriends code={g.code} memberIds={active.map((m) => m.id)} />}
@@ -208,8 +212,30 @@ function Settings(p: {
   );
 }
 
-const DICE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+/** Pips on a die face (3×3 grid cells, 1 = top-left … 9 = bottom-right). */
+const PIPS: Record<number, number[]> = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+/** How to turn the cube so face n looks at you. */
+const SHOW: Record<number, string> = { 1: "rotateX(0deg) rotateY(0deg)", 2: "rotateX(-90deg)", 3: "rotateY(-90deg)", 4: "rotateY(90deg)", 5: "rotateX(90deg)", 6: "rotateY(180deg)" };
 
+/** A real-looking die: a 3D cube that tumbles while rolling and lands on `face`. */
+function Die({ face, rolling }: { face: number | null; rolling: boolean }) {
+  return (
+    <div className="die-stage">
+      <div className={`die ${rolling ? "die-tumble" : ""}`} style={!rolling && face ? { transform: SHOW[face] } : undefined}>
+        {[1, 2, 3, 4, 5, 6].map((n) => (
+          <div key={n} className={`die-face die-f${n}`}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => <span key={c} className={PIPS[n].includes(c) ? "pip" : ""} />)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Who go dey Boju? A die in the middle, the six numbers round it: pick yours. Then the die really rolls,
+ * lands, the winning number glows and Boju is named (and marked over their head in the game).
+ */
 export function DicePanel() {
   const g = useGame((s) => s.group);
   const me = useGame((s) => s.me?.id);
@@ -219,40 +245,51 @@ export function DicePanel() {
   useEffect(() => {
     if (!dice) return;
     setShown(0);
-    const id = setInterval(() => setShown((n) => (n < dice.rolls.length ? n + 1 : n)), 450);
+    const id = setInterval(() => setShown((n) => (n < dice.rolls.length ? n + 1 : n)), 420);
     return () => clearInterval(id);
   }, [dice]);
   if (!g || !["dice", "reveal"].includes(g.phase)) return null;
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
-  if (g.phase === "dice") {
-    const mine = g.members.find((m) => m.id === me)?.pick;
-    const inPool = me ? g.dice_pool.includes(me) : false;
-    const taken = new Set(g.members.map((m) => m.pick).filter(Boolean));
-    return (
-      <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4 text-center">
-        <div className="text-lg font-black">Who go dey Boju? 🎲</div>
-        <div className="mb-3 text-xs opacity-80">{inPool ? "Pick your number — if the dice lands on it, you seek!" : "Others are picking…"} ({left}s)</div>
-        <div data-guide="dice" className="grid grid-cols-3 gap-2">
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <button key={n} disabled={!inPool || (taken.has(n) && mine !== n)} onClick={() => net.send({ t: "g_pick", n })}
-              className={`btn text-3xl ${mine === n ? "btn-primary" : "btn-ghost"}`}>{DICE[n]}</button>
-          ))}
-        </div>
-        <div className="mt-2 text-xs opacity-80">{g.members.filter((m) => m.pick).map((m) => `${m.nick}: ${m.pick}`).join(" · ")}</div>
-      </div></div>
-    );
-  }
-  const rolling = dice && shown < dice.rolls.length;
-  const face = dice && dice.rolls.length ? dice.rolls[Math.max(0, Math.min(shown, dice.rolls.length) - 1)] : null;
+  const picking = g.phase === "dice";
+  const inPool = me ? g.dice_pool.includes(me) : false;
+  // who holds which number: live picks while picking; the final numbers (the server fills in anyone who didn't pick)
+  const holders: Record<number, string> = {};
+  if (picking) for (const m of g.members) { if (m.pick) holders[m.pick] = m.id; }
+  else if (dice) for (const [id, n] of Object.entries(dice.numbers)) holders[n] = id;
+  const mine = Object.entries(holders).find(([, id]) => id === me)?.[0];
+  const timeUp = picking && left <= 0;
+  const rolling = !picking && !!dice && shown < dice.rolls.length;
+  const face = !picking && dice?.rolls.length ? dice.rolls[Math.max(0, Math.min(shown, dice.rolls.length) - 1)] : null;
+  const landed = !picking && !rolling && face != null;
+  const autoPicked = !picking && dice && me && dice.numbers[me] && !g.members.find((m) => m.id === me)?.pick;
   return (
-    <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-5 text-center">
-      {face && <div className={`text-7xl ${rolling ? "dice-rolling" : ""}`}>{DICE[face]}</div>}
-      {!rolling && (
-        <div className="mt-2 text-xl font-black text-[var(--accent)]">
-          {g.pending_seeker === me ? "Na you dey Boju! 🙈" : `${nick(g.pending_seeker)} dey Boju!`}
+    <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center" data-testid="dice">
+      <div className="dice-ring anim-pop">
+        <div className="dice-title">
+          {picking
+            ? (timeUp ? "Rolling…" : inPool ? (mine ? "Fingers crossed 🤞🏾" : "Pick your number") : "Others are picking…")
+            : landed ? (g.pending_seeker === me ? "Na you dey Boju! 🙈" : `${nick(g.pending_seeker)} dey Boju!`) : "Rolling…"}
+          {picking && !timeUp && <span className="dice-time">{left}s</span>}
         </div>
-      )}
-    </div></div>
+        <Die face={face} rolling={rolling || timeUp} />
+        {[1, 2, 3, 4, 5, 6].map((n, i) => {
+          const a = ((-90 + i * 60) * Math.PI) / 180;
+          const holder = holders[n];
+          const win = landed && face === n;
+          const canPick = picking && !timeUp && inPool && (!holder || holder === me);
+          return (
+            <button key={n} data-guide={n === 1 ? "dice" : undefined} disabled={!canPick} aria-label={`Number ${n}`}
+              className="dice-num pointer-events-auto" data-mine={holder === me && !!me} data-taken={!!holder && holder !== me} data-win={win}
+              style={{ left: `${50 + Math.cos(a) * 37.5}%`, top: `${50 + Math.sin(a) * 37.5}%` }}
+              onClick={() => net.send({ t: "g_pick", n })}>
+              <b>{n}</b>
+              {holder && <small>{holder === me ? "you" : nick(holder).slice(0, 6)}</small>}
+            </button>
+          );
+        })}
+        {autoPicked && <div className="dice-note">Time up — we picked {dice?.numbers[me!]} for you</div>}
+      </div>
+    </div>
   );
 }
 
@@ -266,7 +303,7 @@ export function RoundResultPanel() {
   const nick = (id?: string | null) => g.members.find((m) => m.id === id)?.nick ?? "?";
   const mine = me ? r.deltas[me] : undefined;
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop p-4">
+    <div className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-80 max-w-[calc(100%-1rem)] -translate-x-1/2 -translate-y-1/2"><div className="panel anim-pop touch-scroll max-h-[80dvh] overflow-y-auto p-4">
       <div className="text-center text-lg font-black">Round {r.round} {r.skipped && "skipped"}</div>
       {mine !== undefined && <div className={`text-center text-2xl font-black ${mine >= 0 ? "text-green-400" : "text-red-400"}`}>{mine >= 0 ? "+" : ""}{naira(mine)}</div>}
       <div className="mt-2 space-y-1 text-sm">
@@ -332,7 +369,7 @@ export function GameOverPanel() {
   const explore = () => { set({ stayed: true }); if (!mini) useGame.getState().toast("Waka around! The 🚏 bus stop takes you home when you're ready.", "good"); };
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-3 backdrop-blur-[3px]" data-testid="game-over">
-      <div className="panel anim-pop relative max-h-[94%] w-[24rem] max-w-full overflow-y-auto overflow-x-hidden p-4">
+      <div className="panel anim-pop touch-scroll relative max-h-[94%] w-[24rem] max-w-full overflow-y-auto overflow-x-hidden p-4">
         <Confetti />
         <div className="text-center text-[11px] font-bold uppercase tracking-[0.2em] opacity-60">🏁 Game over</div>
 

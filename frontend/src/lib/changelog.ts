@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.14.0",
+    date: "2026-10-15",
+    title: "Keeping an eye on the game 👀",
+    items: [
+      { emoji: "📊", title: "A better view for the Boju team", text: "The team can now follow live games, visits and player activity more closely, helping keep Boju Boju running smoothly." },
+    ],
+  },
+  {
     version: "2.13.0",
     date: "2026-10-13",
     title: "Roll the dice 🎲",

@@ -233,6 +233,23 @@ export const getMyAds = (acc: Account) => get<{ ads: MyAd[] }>(acc, "/api/ads/mi
 export interface AdminAd extends MyAd { by: string; email: string; paid?: boolean }
 const admin = (token: string) => ({ "X-Admin-Token": token });
 export const adminListAds = async (token: string) => json<{ ads: AdminAd[] }>(await fetch(`${API_URL}/api/admin/ads`, { headers: admin(token) }));
+export interface AdminAnalytics {
+  generated_at: string;
+  period_days: number;
+  totals: {
+    players: number; active_players: number; new_players: number; visits: number; active_visits: number;
+    plays: number; completed_plays: number; current_plays: number; players_in_current_plays: number;
+  };
+  activity: { date: string; visits: number; new_players: number; plays: number }[];
+  leaderboards: {
+    seekers: { id: string; nickname: string; score: number }[];
+    hiders: { id: string; nickname: string; score: number }[];
+    playtime: { id: string; nickname: string; home_area: string; seconds: number; visits: number }[];
+  };
+  arenas: { id: string; name: string; plays: number }[];
+}
+export const adminAnalytics = async (token: string, days: number) =>
+  json<AdminAnalytics>(await fetch(`${API_URL}/api/admin/analytics?days=${days}`, { headers: admin(token) }));
 export const adminAct = async (token: string, id: string, action: "approve" | "reject" | "remove") =>
   json<{ ok: boolean; status: string }>(await fetch(`${API_URL}/api/admin/ads/${id}/${action}`, { method: "POST", headers: admin(token) }));
 export const adminAdImage = async (token: string, id: string) => {

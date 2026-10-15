@@ -20,8 +20,10 @@ from starlette.responses import Response
 from app import auth
 from app.accounts import Me, make_router
 from app.ads import make_router as make_ads_router
+from app.analytics import close_abandoned_visits
+from app.analytics import make_router as make_analytics_router
 from app.content import get_config, get_maps
-from app.db import Database, Device, Game, LedgerEntry, Player, Report, RoundStat
+from app.db import AnalyticsVisit, Database, Device, Game, LedgerEntry, Player, Report, RoundStat
 from app.life import make_router as make_life_router
 from app.realtime.protocol import BadMessage
 from app.realtime.rooms import writer
@@ -95,6 +97,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await db.create_all()
+        await close_abandoned_visits(db)
         await world.load_home_owners()
         task = asyncio.create_task(world.run()) if run_tick else None
         yield
@@ -157,6 +160,7 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     app.include_router(make_router(db, world, cfg))
     app.include_router(make_life_router(db, world, cfg))
     app.include_router(make_ads_router(db, cfg, maps))
+    app.include_router(make_analytics_router(db, world, maps))
     app.include_router(make_vatar_router(db, world, cfg))
 
     @app.get("/api/wallet")
@@ -283,6 +287,28 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             world.mini.add(p.id)
         await ws.accept()
         queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=512)
+        try:
+            async with db.sessions() as s, s.begin():
+                started_at = datetime.now(UTC)
+                previous_visits = (
+                    await s.scalars(
+                        select(AnalyticsVisit).where(AnalyticsVisit.player_id == pid, AnalyticsVisit.ended_at.is_(None))
+                    )
+                ).all()
+                for previous in previous_visits:
+                    previous.ended_at = started_at
+                    previous_started = (
+                        previous.started_at.replace(tzinfo=UTC)
+                        if previous.started_at.tzinfo is None
+                        else previous.started_at
+                    )
+                    previous.duration_seconds = max(0, int((started_at - previous_started).total_seconds()))
+                visit = AnalyticsVisit(player_id=pid)
+                s.add(visit)
+        except Exception:  # noqa: BLE001 - never leave an accepted socket without a recorded server session
+            log.exception("analytics visit open failed pid=%s", pid)
+            await ws.close(code=1011)
+            return
 
         def sender(data: bytes) -> None:
             if queue.full():
@@ -312,7 +338,6 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
         finally:
             world.disconnect(session, sender)
             out_task.cancel()
-            # never let a half-finished send to a dead socket keep this handler alive
             await asyncio.wait({out_task}, timeout=1.0)
 
     return app

@@ -22,6 +22,12 @@ bought, sold, withdrawn or cashed out.
   Paid ads wait for approval at `/admin`; rejected ads are refunded. Never on players' houses.
   Game naira stays virtual and separate. Setup: [DEPLOY.md](DEPLOY.md#wall-ads-real-money-paystack).
 
+The same protected `/admin` page includes backend-owned player and game analytics. It reports
+connected players, visits and measured connection time, active and completed games, activity
+trends, leaderboards and popular arenas. Visit tracking starts when this release is deployed;
+older visits and play time are not available retroactively. Set `ADMIN_TOKEN` in the backend
+environment to access analytics and review ads.
+
 ## New in 2.1 — real homes, cars & travel
 
 - **Room-and-parlour houses** (`backend/app/houses.py`): parlour + bedroom (duplex adds a kitchen),

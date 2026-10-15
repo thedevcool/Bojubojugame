@@ -212,6 +212,21 @@ class RoundStat(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class AnalyticsVisit(Base):
+    """One authenticated websocket visit, used for admin activity and time-spent metrics."""
+
+    __tablename__ = "analytics_visits"
+    __table_args__ = (
+        Index("ix_analytics_visits_started", "started_at"),
+        Index("ix_analytics_visits_ended", "ended_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     __table_args__ = (Index("ix_chat_channel_created", "channel", "created_at"),)

@@ -24,9 +24,13 @@ bought, sold, withdrawn or cashed out.
 
 The same protected `/admin` page includes backend-owned player and game analytics. It reports
 connected players, visits and measured connection time, active and completed games, activity
-trends, leaderboards and popular arenas. Visit tracking starts when this release is deployed;
-older visits and play time are not available retroactively. Set `ADMIN_TOKEN` in the backend
-environment to access analytics and review ads.
+trends, leaderboards and popular arenas. Admins can search and page through all players and inspect
+their profile, account state, visits, play time, gameplay, social/property counts and ad history.
+Credential hashes and device secrets are excluded. Visit tracking starts when enabled; previous
+visits and play time cannot be reconstructed. The ad earnings view counts only charges confirmed
+by Paystack, excludes fake checkout and LagosLife purchases, and subtracts recorded refunds. It
+reports gross charges and net after refunds, not the Paystack settlement payout after fees. Set
+`ADMIN_TOKEN` in the backend environment to access analytics and review ads.
 
 ## New in 2.1 — real homes, cars & travel
 

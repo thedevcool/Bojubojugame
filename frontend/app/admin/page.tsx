@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminAct, adminAdImage, adminAnalytics, adminListAds, naira, type AdminAd, type AdminAnalytics } from "@/lib/api";
+import {
+  adminAct, adminAdImage, adminAnalytics, adminListAds, adminPlayerDetail, adminPlayers, naira,
+  type AdminAd, type AdminAnalytics, type AdminPlayerDetail, type AdminPlayerRow,
+} from "@/lib/api";
 
 const duration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
@@ -17,6 +20,13 @@ export default function Admin() {
   const [input, setInput] = useState("");
   const [ads, setAds] = useState<AdminAd[] | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [players, setPlayers] = useState<{ total: number; players: AdminPlayerRow[] } | null>(null);
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [playerInput, setPlayerInput] = useState("");
+  const [playerOffset, setPlayerOffset] = useState(0);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [playerDetail, setPlayerDetail] = useState<AdminPlayerDetail | null>(null);
+  const [detailErr, setDetailErr] = useState("");
   const [days, setDays] = useState(14);
   const [imgs, setImgs] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
@@ -28,9 +38,12 @@ export default function Admin() {
   const load = useCallback(async (t: string, period = days) => {
     setErr("");
     try {
-      const [adResult, analyticsResult] = await Promise.all([adminListAds(t), adminAnalytics(t, period)]);
+      const [adResult, analyticsResult, playerResult] = await Promise.all([
+        adminListAds(t), adminAnalytics(t, period), adminPlayers(t, playerSearch, 50, playerOffset),
+      ]);
       setAds(adResult.ads);
       setAnalytics(analyticsResult);
+      setPlayers(playerResult);
       try { sessionStorage.setItem("boju.admin", t); } catch { /* ignore */ }
       for (const ad of adResult.ads) {
         if (imageIds.current.has(ad.id)) continue;
@@ -45,7 +58,7 @@ export default function Admin() {
       setErr(e instanceof Error ? e.message : "Failed");
       try { sessionStorage.removeItem("boju.admin"); } catch { /* ignore */ }
     }
-  }, [days]);
+  }, [days, playerSearch, playerOffset]);
 
   useEffect(() => { if (token) void load(token); }, [token, load]);
   useEffect(() => {
@@ -54,6 +67,17 @@ export default function Admin() {
     return () => window.clearInterval(timer);
   }, [token, load]);
 
+  useEffect(() => {
+    if (!token || !selectedPlayerId) { setPlayerDetail(null); return; }
+    let cancelled = false;
+    const refresh = () => adminPlayerDetail(token, selectedPlayerId)
+      .then((detail) => { if (!cancelled) { setPlayerDetail(detail); setDetailErr(""); } })
+      .catch((e: unknown) => { if (!cancelled) setDetailErr(e instanceof Error ? e.message : "Could not load player details"); });
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 15_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [token, selectedPlayerId]);
+
   const act = async (id: string, action: "approve" | "reject" | "remove") => {
     if (action !== "approve" && !confirm(action === "reject" ? "Reject and refund this ad?" : "Take this live ad down (no refund)?")) return;
     setBusy(id);
@@ -61,7 +85,7 @@ export default function Admin() {
     setBusy(null);
   };
 
-  if (!token || !ads || !analytics) {
+  if (!token || !ads || !analytics || !players) {
     return (
       <main className="flex min-h-full items-center justify-center p-6">
         <form className="panel w-full max-w-sm p-5" onSubmit={(e) => { e.preventDefault(); setToken(input.trim()); void load(input.trim()); }}>
@@ -119,6 +143,82 @@ export default function Admin() {
       </section>
 
       <section className="panel mt-4 p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><h2 className="text-lg font-bold">All players</h2><p className="text-xs opacity-60">{number(players.total)} accounts · select a player for their account and activity details</p></div>
+          <form className="flex w-full gap-2 sm:w-auto" onSubmit={(e) => { e.preventDefault(); setPlayerOffset(0); setPlayerSearch(playerInput.trim()); }}>
+            <input aria-label="Search players" className="field min-w-0 flex-1 py-2 text-sm sm:w-64" value={playerInput}
+              onChange={(e) => setPlayerInput(e.target.value)} placeholder="Search name, username or email" />
+            <button className="btn btn-ghost text-sm">Search</button>
+          </form>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left text-sm">
+            <thead className="text-xs opacity-55"><tr><th className="p-2">Player</th><th className="p-2">Home</th><th className="p-2">Joined</th><th className="p-2">Visits</th><th className="p-2">Games</th><th className="p-2">Status</th></tr></thead>
+            <tbody>{players.players.map((player) => (
+              <tr key={player.id} className={`cursor-pointer border-t border-white/5 hover:bg-white/5 ${selectedPlayerId === player.id ? "bg-white/5" : ""}`}
+                onClick={() => setSelectedPlayerId(player.id)}>
+                <td className="p-2"><span className="font-semibold">{player.nickname}</span><span className="ml-2 text-xs opacity-50">@{player.username ?? "mini player"}</span></td>
+                <td className="p-2">{player.home_area}</td><td className="p-2">{new Date(player.created_at).toLocaleDateString()}</td>
+                <td className="p-2 tabular-nums">{number(player.visits)}</td><td className="p-2 tabular-nums">{number(player.games_played)}</td>
+                <td className="p-2"><span className={player.online ? "text-emerald-300" : "opacity-50"}>{player.online ? "● Online" : "Offline"}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {players.players.length === 0 && <p className="p-5 text-center text-sm opacity-55">No matching players.</p>}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs opacity-70">
+          <span>Showing {players.total === 0 ? 0 : playerOffset + 1}–{Math.min(playerOffset + 50, players.total)} of {number(players.total)}</span>
+          <div className="flex gap-2">
+            <button className="btn btn-ghost text-xs" disabled={playerOffset === 0} onClick={() => setPlayerOffset(Math.max(0, playerOffset - 50))}>Previous</button>
+            <button className="btn btn-ghost text-xs" disabled={playerOffset + 50 >= players.total} onClick={() => setPlayerOffset(playerOffset + 50)}>Next</button>
+          </div>
+        </div>
+      </section>
+
+      {selectedPlayerId && <section className="panel mt-4 p-4 sm:p-5" aria-label="Selected player details">
+        <div className="flex items-start justify-between gap-3">
+          <div><h2 className="text-lg font-bold">Player details</h2><p className="text-xs opacity-60">Support and activity details for the selected account</p></div>
+          <button className="btn btn-ghost text-xs" onClick={() => setSelectedPlayerId(null)}>Close</button>
+        </div>
+        {detailErr && <p role="alert" className="mt-3 text-sm text-red-300">{detailErr}</p>}
+        {!playerDetail ? <p className="mt-4 text-sm opacity-60">Loading player…</p> : <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {([
+              ["Player ID", playerDetail.profile.id], ["Nickname", playerDetail.profile.nickname],
+              ["Username", playerDetail.profile.username ? `@${playerDetail.profile.username}` : "LagosLife account"],
+              ["Email", playerDetail.profile.email ?? "Not provided"], ["Home area", playerDetail.profile.home_area],
+              ["Account", playerDetail.profile.login_method], ["Joined", new Date(playerDetail.profile.created_at).toLocaleString()],
+              ["Current status", playerDetail.profile.online ? "Online" : "Offline"],
+              ["Account state", playerDetail.profile.locked_until ? `Locked until ${new Date(playerDetail.profile.locked_until).toLocaleString()}` : playerDetail.profile.must_change_password ? "Password change required" : "Normal"],
+              ["Home / rent", playerDetail.profile.home_id ? `${playerDetail.profile.home_id}${playerDetail.profile.rent_until ? ` · until ${new Date(playerDetail.profile.rent_until).toLocaleDateString()}` : ""}` : "No home"],
+              ["Phone / car", [playerDetail.profile.phone_id, playerDetail.profile.car_id].filter(Boolean).join(" / ") || "None"],
+              ["Avatar colors", playerDetail.profile.avatar.join(" · ")], ["Hunger", `${Math.round(playerDetail.profile.hunger)}%`],
+              ["Last visit", playerDetail.activity.last_visit_at ? new Date(playerDetail.activity.last_visit_at).toLocaleString() : "No visits"],
+            ] as [string, string][]).map(([label, value]) => <article key={label} className="rounded-xl bg-white/5 p-3"><div className="text-[11px] opacity-55">{label}</div><div className="mt-1 break-words text-sm font-semibold">{value}</div></article>)}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {([
+              ["Visits", number(playerDetail.activity.visits)], ["Time spent", duration(playerDetail.activity.time_spent_seconds)],
+              ["Games / rounds", `${number(playerDetail.gameplay.games_played)} / ${number(playerDetail.gameplay.rounds_played)}`],
+              ["Finds / hider survives", `${number(playerDetail.gameplay.finds)} / ${number(playerDetail.gameplay.survived_hider_rounds)}`],
+              ["Friends", number(playerDetail.activity.friends)], ["Registered devices", number(playerDetail.activity.registered_devices)],
+              ["Furniture items", number(playerDetail.activity.furniture_items)], ["Reports received", number(playerDetail.activity.reports_received)],
+              ["Virtual in-game naira earned", naira(playerDetail.gameplay.in_game_naira_earned)],
+            ] as [string, string][]).map(([label, value]) => <div key={label} className="rounded-xl bg-white/5 p-3"><div className="text-[11px] opacity-55">{label}</div><div className="mt-1 font-bold">{value}</div></div>)}
+          </div>
+          <div className="mt-4 rounded-xl bg-white/5 p-3">
+            <div className="flex flex-wrap justify-between gap-2"><h3 className="font-bold">Ad payments</h3><span className="text-xs opacity-60">Paystack verified: {naira(playerDetail.ad_payments.paystack_confirmed_total)} · refunds: {naira(playerDetail.ad_payments.paystack_refunded_total)}</span></div>
+            {playerDetail.ad_payments.transactions.length === 0 ? <p className="mt-2 text-sm opacity-50">No ads from this account.</p> : <ul className="mt-2 divide-y divide-white/5">
+              {playerDetail.ad_payments.transactions.map((ad) => <li key={ad.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                <span>{ad.title} <span className="text-xs opacity-50">· {ad.provider}{ad.paystack_verified ? " verified" : " not Paystack-confirmed"} · {ad.status}</span></span>
+                <span className="text-right">{naira(ad.amount)} <span className="text-xs opacity-50">{ad.paid_at ? new Date(ad.paid_at).toLocaleDateString() : "unpaid"}</span></span>
+              </li>)}
+            </ul>}
+          </div>
+        </>}
+      </section>}
+
+      <section className="panel mt-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div><h2 className="text-lg font-bold">Activity</h2><p className="text-xs opacity-60">Visits, new players and games started per day</p></div>
           <div className="flex gap-3 text-[11px] opacity-75"><span>🟦 Visits</span><span>🟪 New players</span><span>🟩 Plays</span></div>
@@ -172,6 +272,19 @@ export default function Admin() {
             </div>)}
           </div>
         )}
+      </section>
+
+      <section className="panel mt-4 p-4 sm:p-5" aria-label="Paystack ad revenue">
+        <div><h2 className="text-lg font-bold">💳 Ad charges confirmed by Paystack</h2>
+          <p className="mt-1 text-xs opacity-60">{analytics.ad_revenue.note} Amounts are gross charges, not Paystack settlement payouts after fees.</p></div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {([
+            ["Confirmed transactions", number(analytics.ad_revenue.confirmed_transactions)],
+            ["Gross collected", naira(analytics.ad_revenue.gross_collected)],
+            ["Refunded", naira(analytics.ad_revenue.refunded)],
+            ["Net after refunds", naira(analytics.ad_revenue.net_after_refunds)],
+          ] as [string, string][]).map(([label, value]) => <article key={label} className="rounded-xl bg-white/5 p-3"><div className="text-xs opacity-55">{label}</div><div className="mt-1 text-xl font-black tabular-nums">{value}</div></article>)}
+        </div>
       </section>
 
       <section className="mt-8">

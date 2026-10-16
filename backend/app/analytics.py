@@ -6,10 +6,10 @@ import hmac
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Path, Query
 from sqlalchemy import case, func, select
 
-from app.db import AnalyticsVisit, Database, Game, Player, RoundStat
+from app.db import Ad, AnalyticsVisit, Database, Device, Friendship, FurnitureItem, Game, Player, Report, RoundStat
 from app.realtime.world import World
 from app.settings import get_settings
 
@@ -56,6 +56,17 @@ def make_router(db: Database, world: World, maps: dict[str, Any]) -> APIRouter:
             if unclosed_visits:
                 await session.commit()
             total_players = int(await session.scalar(select(func.count()).select_from(Player)) or 0)
+            paystack_revenue = (
+                await session.execute(
+                    select(
+                        func.count(Ad.id).label("transactions"),
+                        func.coalesce(func.sum(Ad.price), 0).label("gross"),
+                        func.coalesce(func.sum(case((Ad.status == "refunded", Ad.price), else_=0)), 0).label(
+                            "refunded"
+                        ),
+                    ).where(Ad.provider == "paystack", Ad.paystack_verified.is_(True))
+                )
+            ).one()
             total_visits = int(await session.scalar(select(func.count()).select_from(AnalyticsVisit)) or 0)
             total_plays = int(await session.scalar(select(func.count()).select_from(Game)) or 0)
             completed_plays = int(
@@ -179,6 +190,14 @@ def make_router(db: Database, world: World, maps: dict[str, Any]) -> APIRouter:
                 "current_plays": len(live_games),
                 "players_in_current_plays": live_game_players,
             },
+            "ad_revenue": {
+                "currency": "NGN",
+                "confirmed_transactions": int(paystack_revenue.transactions),
+                "gross_collected": int(paystack_revenue.gross),
+                "refunded": int(paystack_revenue.refunded),
+                "net_after_refunds": int(paystack_revenue.gross - paystack_revenue.refunded),
+                "note": "Verified Paystack charges only; historical and test-mode payments are excluded.",
+            },
             "activity": [{"date": day.isoformat(), **values} for day, values in buckets.items()],
             "leaderboards": {
                 "seekers": [{"id": row.id, "nickname": row.nickname, "score": int(row.score or 0)} for row in seekers],
@@ -193,6 +212,206 @@ def make_router(db: Database, world: World, maps: dict[str, Any]) -> APIRouter:
                 }
                 for row in recent_games_by_arena
             ],
+        }
+
+    @router.get("/admin/players")
+    async def admin_players(
+        x_admin_token: Annotated[str, Header()] = "",
+        q: Annotated[str, Query(max_length=80)] = "",
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    ) -> dict[str, Any]:
+        """Searchable, paginated player directory. Never returns credential material."""
+        require_admin(x_admin_token)
+        connected = {p.pid for p in world.sessions.values() if p.connected and not p.bot}
+        async with db.sessions() as session:
+            query = select(Player)
+            if q.strip():
+                pattern = f"%{q.strip()}%"
+                query = query.where(
+                    Player.nickname.ilike(pattern) | Player.username.ilike(pattern) | Player.email.ilike(pattern)
+                )
+            total = int(await session.scalar(select(func.count()).select_from(query.subquery())) or 0)
+            players = (
+                await session.scalars(query.order_by(Player.created_at.desc(), Player.id).limit(limit).offset(offset))
+            ).all()
+            ids = [player.id for player in players]
+            visit_rows = (
+                (
+                    await session.execute(
+                        select(
+                            AnalyticsVisit.player_id,
+                            func.count(AnalyticsVisit.id).label("visits"),
+                            func.sum(AnalyticsVisit.duration_seconds).label("seconds"),
+                        )
+                        .where(AnalyticsVisit.player_id.in_(ids))
+                        .group_by(AnalyticsVisit.player_id)
+                    )
+                ).all()
+                if ids
+                else []
+            )
+            game_rows = (
+                (
+                    await session.execute(
+                        select(RoundStat.player_id, func.count(func.distinct(RoundStat.game_id)).label("games"))
+                        .where(RoundStat.player_id.in_(ids))
+                        .group_by(RoundStat.player_id)
+                    )
+                ).all()
+                if ids
+                else []
+            )
+        visits = {row.player_id: (int(row.visits), int(row.seconds or 0)) for row in visit_rows}
+        games = {row.player_id: int(row.games) for row in game_rows}
+        return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "players": [
+                {
+                    "id": player.id,
+                    "nickname": player.nickname,
+                    "username": player.username,
+                    "home_area": player.home_area,
+                    "created_at": _aware(player.created_at).isoformat(),
+                    "online": player.id in connected,
+                    "visits": visits.get(player.id, (0, 0))[0],
+                    "time_spent_seconds": visits.get(player.id, (0, 0))[1],
+                    "games_played": games.get(player.id, 0),
+                }
+                for player in players
+            ],
+        }
+
+    @router.get("/admin/players/{player_id}")
+    async def admin_player_detail(
+        player_id: Annotated[str, Path(max_length=32)],
+        x_admin_token: Annotated[str, Header()] = "",
+    ) -> dict[str, Any]:
+        """Admin support view with account, activity, game, and ad payment details."""
+        require_admin(x_admin_token)
+        connected = {p.pid for p in world.sessions.values() if p.connected and not p.bot}
+        now = datetime.now(UTC)
+        async with db.sessions() as session:
+            player = await session.get(Player, player_id)
+            if player is None:
+                raise HTTPException(404, "Player not found")
+            visit_rows = (
+                await session.scalars(
+                    select(AnalyticsVisit)
+                    .where(AnalyticsVisit.player_id == player_id)
+                    .order_by(AnalyticsVisit.started_at.desc())
+                )
+            ).all()
+            rounds = (
+                await session.scalars(
+                    select(RoundStat).where(RoundStat.player_id == player_id).order_by(RoundStat.created_at.desc())
+                )
+            ).all()
+            ads = (
+                await session.execute(
+                    select(
+                        Ad.id,
+                        Ad.title,
+                        Ad.status,
+                        Ad.price,
+                        Ad.provider,
+                        Ad.paystack_verified,
+                        Ad.paid_at,
+                        Ad.created_at,
+                    )
+                    .where(Ad.player_id == player_id)
+                    .order_by(Ad.created_at.desc())
+                )
+            ).all()
+            device_count = int(
+                await session.scalar(select(func.count()).select_from(Device).where(Device.player_id == player_id)) or 0
+            )
+            furniture_count = int(
+                await session.scalar(
+                    select(func.count()).select_from(FurnitureItem).where(FurnitureItem.player_id == player_id)
+                )
+                or 0
+            )
+            friendships = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Friendship)
+                    .where(
+                        ((Friendship.a_id == player_id) | (Friendship.b_id == player_id))
+                        & (Friendship.status == "accepted")
+                    )
+                )
+                or 0
+            )
+            reports_received = int(
+                await session.scalar(select(func.count()).select_from(Report).where(Report.target_id == player_id)) or 0
+            )
+        active = player_id in connected
+        total_seconds = sum(
+            max(0, int((now - _aware(visit.started_at)).total_seconds()))
+            if visit.ended_at is None and active
+            else max(0, int(visit.duration_seconds or 0))
+            for visit in visit_rows
+        )
+        seeker_rounds = [row for row in rounds if row.role == "seeker"]
+        hider_rounds = [row for row in rounds if row.role == "hider"]
+        verified_ads = [ad for ad in ads if ad.provider == "paystack" and ad.paystack_verified]
+        return {
+            "profile": {
+                "id": player.id,
+                "nickname": player.nickname,
+                "username": player.username,
+                "email": player.email,
+                "home_area": player.home_area,
+                "avatar": player.avatar,
+                "created_at": _aware(player.created_at).isoformat(),
+                "online": active,
+                "login_method": "LagosLife" if player.vatar_id else "Boju account",
+                "must_change_password": player.must_change_password,
+                "locked_until": _aware(player.locked_until).isoformat() if player.locked_until else None,
+                "phone_id": player.phone_id,
+                "car_id": player.car_id,
+                "home_id": player.home_id,
+                "rent_until": _aware(player.rent_until).isoformat() if player.rent_until else None,
+                "hunger": player.hunger,
+            },
+            "activity": {
+                "visits": len(visit_rows),
+                "time_spent_seconds": total_seconds,
+                "last_visit_at": _aware(visit_rows[0].started_at).isoformat() if visit_rows else None,
+                "registered_devices": device_count + 1,
+                "friends": friendships,
+                "furniture_items": furniture_count,
+                "reports_received": reports_received,
+            },
+            "gameplay": {
+                "games_played": len({row.game_id for row in rounds}),
+                "rounds_played": len(rounds),
+                "seeker_rounds": len(seeker_rounds),
+                "finds": sum(row.finds for row in seeker_rounds),
+                "hider_rounds": len(hider_rounds),
+                "survived_hider_rounds": sum(1 for row in hider_rounds if row.not_found),
+                "in_game_naira_earned": sum(row.earned for row in rounds),
+            },
+            "ad_payments": {
+                "paystack_confirmed_total": sum(ad.price for ad in verified_ads if ad.status != "refunded"),
+                "paystack_refunded_total": sum(ad.price for ad in verified_ads if ad.status == "refunded"),
+                "transactions": [
+                    {
+                        "id": ad.id,
+                        "title": ad.title,
+                        "status": ad.status,
+                        "amount": ad.price,
+                        "provider": ad.provider,
+                        "paystack_verified": ad.paystack_verified,
+                        "paid_at": _aware(ad.paid_at).isoformat() if ad.paid_at else None,
+                        "created_at": _aware(ad.created_at).isoformat(),
+                    }
+                    for ad in ads
+                ],
+            },
         }
 
     return router

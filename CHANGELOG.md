@@ -15,6 +15,10 @@ register in the release that ships them.
 
 ---
 
+## 2.15.0 — 2026-10-15
+- **Player directory.** Admins can search and page through all player accounts, then open a live detail view with profile, account state, visit time, gameplay, social/property counts and ad payment history. Credentials and device secrets are never returned.
+- **Paystack ad revenue.** Admin totals include only charges confirmed by Paystack's verify API or signed webhook, with refunds subtracted from net collected. Fake checkout and LagosLife ad purchases are excluded; net collected is not the Paystack settlement amount after fees.
+
 ## 2.14.0 — 2026-10-15
 - **Admin analytics.** The protected admin page now shows player and visit totals, connected players, current and completed games, activity by day, seeker and hider leaderboards, time-spent rankings, and popular arenas. The dashboard refreshes every 15 seconds and keeps wall-ad review.
 - **Visit and time tracking.** Authenticated game connections are recorded by the backend. Time spent is measured from those connections; earlier visits cannot be reconstructed. Abandoned open sessions are closed when the backend starts again.

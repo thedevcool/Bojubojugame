@@ -77,3 +77,35 @@ def test_bad_images_and_webhook_signature(c):
     headers = {"x-paystack-signature": sig, "content-type": "application/json"}
     ok = c.post("/api/paystack/webhook", content=body, headers=headers)
     assert ok.status_code == 200
+
+    # Fake checkout completions do not count as real Paystack receipts. A valid signed
+    # success event does, even while fake checkout mode is enabled for this test app.
+    buyer = reg(c, "webhookbuyer")
+    placed = ad(c, buyer)
+    payment = placed.json()
+    bad_event = json.dumps(
+        {
+            "event": "charge.success",
+            "data": {"reference": payment["reference"], "amount": payment["price"] * 100 + 1, "currency": "NGN"},
+        }
+    )
+    bad_signature = hmac.new(b"sk_test_dummy", bad_event.encode(), hashlib.sha512).hexdigest()
+    assert (
+        c.post("/api/paystack/webhook", content=bad_event, headers={"x-paystack-signature": bad_signature}).status_code
+        == 200
+    )
+    no_receipt = c.get("/api/admin/analytics", headers={"X-Admin-Token": "admin-secret-123"}).json()["ad_revenue"]
+    assert no_receipt["confirmed_transactions"] == 0
+
+    event = json.dumps(
+        {
+            "event": "charge.success",
+            "data": {"reference": payment["reference"], "amount": payment["price"] * 100, "currency": "NGN"},
+        }
+    )
+    signature = hmac.new(b"sk_test_dummy", event.encode(), hashlib.sha512).hexdigest()
+    receipt = c.post("/api/paystack/webhook", content=event, headers={"x-paystack-signature": signature})
+    assert receipt.status_code == 200
+    earnings = c.get("/api/admin/analytics", headers={"X-Admin-Token": "admin-secret-123"}).json()["ad_revenue"]
+    assert earnings["confirmed_transactions"] == 1
+    assert earnings["gross_collected"] == payment["price"]

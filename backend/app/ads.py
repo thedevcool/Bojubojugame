@@ -162,15 +162,17 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
             "image": f"/api/ads/{a.id}/image",
         }  # fmt: skip
 
-    async def mark_paid(ref: str, amount_kobo: int, currency: str) -> Ad | None:
+    async def mark_paid(ref: str, amount_kobo: int, currency: str, *, verified_paystack: bool = False) -> Ad | None:
         async with db.sessions() as ses, ses.begin():
             a = await ses.scalar(select(Ad).where(Ad.reference == ref).with_for_update())
             if a is None:
                 return None
+            if currency != "NGN" or amount_kobo != a.price * 100:
+                log.warning("ad %s paid wrong amount %s %s", a.id, amount_kobo, currency)
+                return a
+            if verified_paystack:
+                a.paystack_verified = True
             if a.status == "awaiting_payment":
-                if currency != "NGN" or amount_kobo < a.price * 100:
-                    log.warning("ad %s paid wrong amount %s %s", a.id, amount_kobo, currency)
-                    return a
                 a.status, a.paid_at = "review", _now()
                 log.info("ad_paid ad=%s price=%s", a.id, a.price)
             return a
@@ -272,7 +274,12 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
         else:
             data = (await paystack("GET", f"/transaction/verify/{reference}"))["data"]
             ad = (
-                await mark_paid(reference, int(data.get("amount", 0)), str(data.get("currency", "")))
+                await mark_paid(
+                    reference,
+                    int(data.get("amount", 0)),
+                    str(data.get("currency", "")),
+                    verified_paystack=True,
+                )
                 if data.get("status") == "success"
                 else None
             )
@@ -296,7 +303,7 @@ def make_router(db: Database, cfg: GameConfig, maps: dict[str, MapData]) -> APIR
             data = event.get("data") or {}
             ref = str(data.get("reference", ""))
             if ref.startswith("bojuad_"):
-                await mark_paid(ref, int(data.get("amount", 0)), str(data.get("currency", "")))
+                await mark_paid(ref, int(data.get("amount", 0)), str(data.get("currency", "")), verified_paystack=True)
         return {"ok": True}
 
     @r.get("/ads/mine")

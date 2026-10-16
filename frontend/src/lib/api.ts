@@ -247,9 +247,46 @@ export interface AdminAnalytics {
     playtime: { id: string; nickname: string; home_area: string; seconds: number; visits: number }[];
   };
   arenas: { id: string; name: string; plays: number }[];
+  ad_revenue: {
+    currency: string; confirmed_transactions: number; gross_collected: number; refunded: number;
+    net_after_refunds: number; note: string;
+  };
 }
 export const adminAnalytics = async (token: string, days: number) =>
   json<AdminAnalytics>(await fetch(`${API_URL}/api/admin/analytics?days=${days}`, { headers: admin(token) }));
+export interface AdminPlayerRow {
+  id: string; nickname: string; username: string | null; home_area: string; created_at: string; online: boolean;
+  visits: number; time_spent_seconds: number; games_played: number;
+}
+export interface AdminPlayerDetail {
+  profile: {
+    id: string; nickname: string; username: string | null; email: string | null; home_area: string;
+    avatar: number[]; created_at: string; online: boolean; login_method: string; must_change_password: boolean;
+    locked_until: string | null; phone_id: string | null; car_id: string | null; home_id: string | null;
+    rent_until: string | null; hunger: number;
+  };
+  activity: {
+    visits: number; time_spent_seconds: number; last_visit_at: string | null; registered_devices: number;
+    friends: number; furniture_items: number; reports_received: number;
+  };
+  gameplay: {
+    games_played: number; rounds_played: number; seeker_rounds: number; finds: number; hider_rounds: number;
+    survived_hider_rounds: number; in_game_naira_earned: number;
+  };
+  ad_payments: {
+    paystack_confirmed_total: number; paystack_refunded_total: number;
+    transactions: { id: string; title: string; status: string; amount: number; provider: string;
+      paystack_verified: boolean; paid_at: string | null; created_at: string }[];
+  };
+}
+export const adminPlayers = async (token: string, q: string, limit: number, offset: number) => {
+  const params = new URLSearchParams({ q, limit: String(limit), offset: String(offset) });
+  return json<{ total: number; limit: number; offset: number; players: AdminPlayerRow[] }>(
+    await fetch(`${API_URL}/api/admin/players?${params}`, { headers: admin(token) }),
+  );
+};
+export const adminPlayerDetail = async (token: string, id: string) =>
+  json<AdminPlayerDetail>(await fetch(`${API_URL}/api/admin/players/${encodeURIComponent(id)}`, { headers: admin(token) }));
 export const adminAct = async (token: string, id: string, action: "approve" | "reject" | "remove") =>
   json<{ ok: boolean; status: string }>(await fetch(`${API_URL}/api/admin/ads/${id}/${action}`, { method: "POST", headers: admin(token) }));
 export const adminAdImage = async (token: string, id: string) => {

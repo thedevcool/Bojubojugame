@@ -1,5 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
+import { ensureMap } from "./maps";
 import { useGame } from "./store";
 import type { ChatMsg, GroupState, Home, PlacedItem, RosterEntry, Standing } from "./types";
 import { setAllFurniture, setHomeFurniture } from "@/game/furniture";
@@ -138,6 +139,7 @@ class Net {
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
+        void ensureMap(m.map as string); // fetch this place now (the ride screen covers it)
         break;
       case "tp":
         local.x = m.x as number;

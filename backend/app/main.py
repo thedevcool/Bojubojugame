@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -136,9 +138,28 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
             "online": sum(1 for s in world.sessions.values() if s.connected),
         }
 
+    # Each place's heavy part (its props: buildings, walls, trees…) is only sent when a player goes there
+    # (GET /api/maps/{id}); the start-up download carries just a summary of every place.
+    heavy = {"props", "npc_paths", "vendors", "vehicles", "walkers"}
+    summaries = {  # heavy lists left empty (not missing) so code reading them never breaks
+        k: {**m.raw, **{f: [] for f in heavy if f in m.raw}, "props": [], "full": False} for k, m in maps.items()
+    }
+    map_etag = {k: hashlib.sha1(json.dumps(m.raw, sort_keys=True).encode()).hexdigest()[:16] for k, m in maps.items()}
+
     @app.get("/api/content")
     async def content() -> dict[str, Any]:
-        return {"config": cfg.model_dump(), "maps": {k: m.raw for k, m in maps.items()}}
+        return {"config": cfg.model_dump(), "maps": summaries}
+
+    @app.get("/api/maps/{map_id}")
+    async def one_map(map_id: str, request: Request) -> Response:
+        m = maps.get(map_id)
+        if m is None:
+            raise HTTPException(404, "Unknown place")
+        tag = f'"{map_etag[map_id]}"'
+        headers = {"ETag": tag, "Cache-Control": "public, max-age=300"}
+        if request.headers.get("if-none-match") == tag:
+            return Response(status_code=304, headers=headers)
+        return Response(json.dumps({**m.raw, "full": True}), media_type="application/json", headers=headers)
 
     @app.post("/api/auth/refresh")
     async def refresh(body: RefreshIn) -> dict[str, Any]:

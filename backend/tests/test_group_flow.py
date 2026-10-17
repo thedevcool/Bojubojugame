@@ -573,14 +573,14 @@ async def test_match_me_alone_plays_npcs(db):
     assert any(m["t"] == "toast" and "NPC" in m["msg"] for m in ca.msgs)
 
 
-async def test_ibadan_players_live_in_akobo(db):
+async def test_ibadan_players_live_at_agodi(db):
     world, clock, players = await setup(db, 1)
     ((a, ca),) = players
     world.set_city(a.pid, "ibadan")
-    assert a.room is world.explore["arena_akobo"]
+    assert a.room is world.explore["arena_ibadan"]  # Agodi Gardens
     # a match from Ibadan is played in Ibadan, and boarding works from Ibadan's bus stop
     await send(world, a, t="g_match")
-    assert a.group.settings["arena"] in ("arena_ibadan", "arena_akobo")
+    assert a.group.settings["arena"] == "arena_ibadan"  # never Akobo: that's for events
 
 
 async def test_streaks_count_wins_and_hides(db):

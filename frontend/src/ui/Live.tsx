@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { getLiveGames, loadAccount, type LiveGame } from "@/lib/api";
 import { net } from "@/lib/net";
+import { ensureMap } from "@/lib/maps";
 import { useGame } from "@/lib/store";
 import { draw, type Dot } from "./MapView";
 import { fmtTime, useSecondsLeft } from "./hooks";
@@ -101,6 +102,7 @@ export function WatchView() {
   const ref = useRef<HTMLCanvasElement>(null);
   const left = useSecondsLeft(snap?.phase_end);
   const map = snap && maps ? maps[snap.arena] : null;
+  useEffect(() => { if (snap?.arena) void ensureMap(snap.arena); }, [snap?.arena]); // its streets, for the map
   useEffect(() => {
     const c = ref.current, ctx = c?.getContext("2d");
     if (!c || !ctx || !map || !snap) return;

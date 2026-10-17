@@ -9,6 +9,15 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.17.0",
+    date: "2026-10-17",
+    title: "Lighter and faster 🪶",
+    items: [
+      { emoji: "🪶", title: "Only where you are", text: "Your phone now loads just the place you're in — the next one gets ready while you ride there. Less waiting, less lag." },
+      { emoji: "🌳", title: "Ibadan: welcome to Agodi", text: "Ibadan players now live at Agodi Gardens." },
+    ],
+  },
+  {
     version: "2.16.0",
     date: "2026-10-17",
     title: "Na Boju Boju we dey play 🙈",

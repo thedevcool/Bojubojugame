@@ -68,7 +68,7 @@ class RematchAsk:
     code: str | None = None  # the rematch game, once someone said yes
 
 
-IBADAN_HOME = "arena_akobo"  # Ibadan players live (and always spawn) in Akobo
+IBADAN_HOME = "arena_ibadan"  # Ibadan players live (and always spawn) at Agodi Gardens
 MATCH_SIZE = 4  # "Match me" fills a game to this many real players…
 MATCH_WAIT_S = 12.0  # …or starts this long after a second player joins
 MATCH_ALONE_S = 40.0  # nobody else came: NPCs fill in and it starts

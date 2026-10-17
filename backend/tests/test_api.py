@@ -71,3 +71,17 @@ async def test_route_cache_is_used(db):
         s.add(RouteCache(key="road:Yaba:arena_park", coords=[[3.37, 6.5], [3.39, 6.45]]))
     coords, source = await get_route(db.sessions, (3.37, 6.5), (3.39, 6.45), "road:Yaba:arena_park", "road")
     assert source == "cache" and coords == [[3.37, 6.5], [3.39, 6.45]]
+
+
+def test_places_load_one_at_a_time(tmp_path):
+    """Start-up content carries a summary of each place; a place's props come only when asked for (and cache)."""
+    app = create_app(f"sqlite+aiosqlite:///{tmp_path}/maps.db", run_tick=False)
+    with TestClient(app) as client:
+        maps = client.get("/api/content").json()["maps"]
+        assert maps["arena_park"]["full"] is False and maps["arena_park"]["props"] == []
+        assert maps["arena_park"]["safe_houses"] and maps["arena_park"]["zones"]  # the summary still has these
+        r = client.get("/api/maps/arena_park")
+        full = r.json()
+        assert full["full"] is True and len(full["props"]) > 10
+        assert client.get("/api/maps/arena_park", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
+        assert client.get("/api/maps/nowhere").status_code == 404

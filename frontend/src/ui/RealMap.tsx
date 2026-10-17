@@ -43,10 +43,17 @@ export function RideMap() {
     };
     setProgress(0);
     raf = requestAnimationFrame(tick);
-    const done = setTimeout(() => {
+    // the ride is the loader: it ends when the time is up AND the place you're going to is downloaded and built
+    // (a slow phone gets a little longer on the bus, never a half-built place); 25 s at most, whatever happens
+    let wait = 0;
+    const finish = () => {
+      const s = useGame.getState();
+      const m = s.mapId ? s.content?.maps[s.mapId] : undefined;
+      if ((m?.full === false || s.building) && Date.now() - start < total + 25000) { wait = window.setTimeout(finish, 250); return; }
       set({ ride: null });
-    }, total + 900);
-    return () => { cancelAnimationFrame(raf); clearTimeout(done); };
+    };
+    const done = setTimeout(finish, total + 900);
+    return () => { cancelAnimationFrame(raf); clearTimeout(done); clearTimeout(wait); };
   }, [ride, set]);
 
   if (!ride || !plan) return null;

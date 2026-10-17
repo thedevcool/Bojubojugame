@@ -15,6 +15,30 @@ register in the release that ships them.
 
 ---
 
+## 2.17.0 — 2026-10-17
+Owner requests:
+- Don't unpack everything at once. Unpack only where the player is; the ride is the loader; pack away the place
+  they left.
+- "Agodi garden… where they are spawned to when they choose Ibadan".
+- "Akobo will be the hardest place, so it will be for the event, we won't match people to play there yet".
+
+Changes:
+- Changes `P41`: **places load one at a time.**
+  - The start-up download carries only a summary of each place: names, zones, safe houses, bounds. Its props were
+    the bulk; the download is now about 20 KB in total.
+  - A place's full plan is fetched from `GET /api/maps/{id}` (cached, with an ETag) when you go there.
+  - The ride screen is the loader: it ends when its time is up *and* the place is downloaded and built. A slow
+    phone stays on the bus a little longer rather than arriving in a half-built place (25 s at most).
+  - Only where you are and where you just were stay on the phone; anything older is packed away. The 3D of the
+    place you left is freed, its ground texture included.
+  - Watching a game fetches that place's plan only for the watch screen.
+  - Low-end check: on start only Lagos was downloaded; the arena was fetched during an 8 s ride; the ride screen
+    lifted at 9.7 s with the place built; no main-thread task over 1 s; no errors.
+  - Test: `test_places_load_one_at_a_time`.
+- Changes `P26`: **Ibadan players live at Agodi Gardens** (they spawn there). **Akobo is for events only**: it
+  moved to the city's `event_arenas`, so Match me and quick games never send anyone there; it still exists for
+  events.
+
 ## 2.16.0 — 2026-10-17
 Owner request: "let's pack the buy house, etc and just make it about the game only". Users come in to a storefront
 where a Yoruba man introduces the game. With anyone else online they get "Play with online players" (Match me, or
@@ -247,7 +271,7 @@ keep saying I can follow the arrows but none is indicative".
 - `P23` **Cars & driving** — (packed away by GAME_ONLY) pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
 - `P25` **Map & travel** — minimap, full map with pins and always-visible place names; your city (Lagos or Ibadan, from location or chosen) is where you spawn; buses to games and home (Naija trips packed away).
-- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja.
+- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja. Ibadan home is Agodi Gardens; Akobo is for events only.
 - `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass buttons on arcs round Run, foldable; Aerial glows while you hide.
 
 ### Money, ads & LagosLife
@@ -259,7 +283,7 @@ keep saying I can follow the arrows but none is indicative".
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
-- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar.
+- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar. Places load one at a time (the ride is the loader; the place you left is packed away).
 - `P42` **iPhone layout** — safe areas respected when installed; Install app.
 
 ---
@@ -268,6 +292,7 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.17.0 | 2026-10-17 | Places load one at a time; Agodi is Ibadan's home; Akobo for events |
 | 2.16.0 | 2026-10-17 | Just the game: storefront, Match me, your city, streaks |
 | 2.15.1 | 2026-10-17 | Solo games pause while you're away |
 | 2.15.0 | 2026-10-15 | Admin player directory and Paystack ad revenue |

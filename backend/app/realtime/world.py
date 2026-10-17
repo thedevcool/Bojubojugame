@@ -707,6 +707,8 @@ class World:
                 self.leave_group(s)
             elif msg.t == "g_cancel":
                 self.cancel_group(s)
+            elif msg.t in ("g_pause", "g_resume"):
+                g.pause_requested = msg.t == "g_pause"  # only acted on in a solo game (see GroupRoom.update_pause)
             elif msg.t == "g_return":
                 if g.phase != "over":
                     raise GroupError("Finish the game first")

@@ -521,3 +521,42 @@ async def test_dice_never_picks_someone_who_left(db):
     await send(world, c, t="g_leave")
     await until(world, clock, g, "hide")
     assert g.round.seeker != c.pid and c.pid not in g.round.hiders
+
+
+async def test_solo_game_pauses_and_resumes(db):
+    """LagosLife rule 4: with only NPCs, the game's timers stop while the player's app is paused or closed."""
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse", bots=1)
+    g = a.group
+    await send(world, a, t="g_start")
+    a.x, a.z = zone_point("bus_stop")
+    await send(world, a, t="g_board", fare="danfo")
+    await until(world, clock, g, "hide")
+    left = g.phase_end - clock.t
+    await send(world, a, t="g_pause")
+    await advance(world, clock, 120)  # far longer than the hide time
+    assert g.phase == "hide" and g.paused_at is not None
+    await send(world, a, t="g_resume")
+    await advance(world, clock, 0.2)
+    assert g.paused_at is None and g.phase == "hide"
+    assert abs((g.phase_end - clock.t) - left) < 0.5, "the countdown carries on from where it stopped"
+    # Closing the app (socket gone) pauses too; coming back resumes.
+    world.disconnect(a, a.sender)
+    await advance(world, clock, 60)
+    assert g.phase == "hide" and g.paused_at is not None
+    s = await world.connect(a.pid, a.nick, Client())
+    assert s.group is g
+    await advance(world, clock, 0.2)
+    assert g.paused_at is None and g.phase == "hide"
+
+
+async def test_multiplayer_game_never_pauses(db):
+    """Other people are playing: one player's pause must not stop their game (the stand-in holds your place)."""
+    world, clock, players = await setup(db, 2)
+    (a, _), (b, _) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    g = a.group
+    await send(world, b, t="g_join", code=g.code)
+    await send(world, a, t="g_pause")
+    assert not g.solo and g.paused_at is None

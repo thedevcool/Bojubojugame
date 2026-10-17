@@ -15,6 +15,19 @@ register in the release that ships them.
 
 ---
 
+## 2.15.1 — 2026-10-17
+Owner reports:
+- LagosLife review rule 4: "Handle onPause and onResume so sound and timers stop."
+
+Changes:
+- **Solo games pause (Changes `P33`).** In a game with only you and NPCs, the whole game stops while you're away:
+  LagosLife's pause, minimising or closing the app. The countdown, the bus ride, the circle and the NPCs all
+  freeze, and everything carries on from the same second when you're back.
+  - LagosLife: `onPause` sends `g_pause`, `onResume` sends `g_resume`. A fresh connection un-pauses too, in case
+    the resume was sent while offline.
+  - A game with other people never pauses, because they're still playing; your stand-in holds your place as before.
+  - Tests: `test_solo_game_pauses_and_resumes`, `test_multiplayer_game_never_pauses`.
+
 ## 2.15.0 — 2026-10-15
 - **Player directory.** Admins can search and page through all player accounts, then open a live detail view with profile, account state, visit time, gameplay, social/property counts and ad payment history. Credentials and device secrets are never returned.
 - **Paystack ad revenue.** Admin totals include only charges confirmed by Paystack's verify API or signed webhook, with refunds subtracted from net collected. Fake checkout and LagosLife ad purchases are excluded; net collected is not the Paystack settlement amount after fees.
@@ -196,7 +209,7 @@ keep saying I can follow the arrows but none is indicative".
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back.
+- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back. In a solo game (you + NPCs) the whole game pauses instead, and carries on when you're back.
 - `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
@@ -210,6 +223,9 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.15.1 | 2026-10-17 | Solo games pause while you're away |
+| 2.15.0 | 2026-10-15 | Admin player directory and Paystack ad revenue |
+| 2.14.0 | 2026-10-15 | Admin analytics |
 | 2.13.0 | 2026-10-13 | Real dice, smarter NPCs, no more snap-backs |
 | 2.12.0 | 2026-10-13 | Stand-ins, a cleaner screen, round controls |
 | 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |

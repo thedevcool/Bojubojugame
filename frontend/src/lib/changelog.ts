@@ -9,6 +9,14 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.15.1",
+    date: "2026-10-17",
+    title: "Practice games wait for you ⏸️",
+    items: [
+      { emoji: "⏸️", title: "Step away, the game waits", text: "In a game with just you and NPCs, the timer and the NPCs now stop while you're away, and carry on from the same second when you're back. Games with other people keep going, and your stand-in holds your place." },
+    ],
+  },
+  {
     version: "2.15.0",
     date: "2026-10-15",
     title: "Keeping Boju running smoothly 🛠️",

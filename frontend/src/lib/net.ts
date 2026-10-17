@@ -118,6 +118,8 @@ class Net {
         g.set({ me: m.me as { id: string; nick: string; n: number }, home: (m.home as Home | null) ?? null });
         // the server says we're not in a game (it ended while we were away): drop any stale game screens
         if (m.in_group === false && g.group) { g.set({ group: null, over: null, dice: null, stayed: false, rematch: null }); local.frozen = false; }
+        // back on a fresh socket while looking at the game: un-pause a solo game (a "resume" sent while offline was lost)
+        if (m.in_group === true && document.visibilityState === "visible") this.send({ t: "g_resume" });
         break;
       }
       case "pong":

@@ -5,6 +5,7 @@ import { setMemoryAccount, vatarSignIn } from "@/lib/api";
 import { useGame } from "@/lib/store";
 import { claimAdPurchase, loadSdk, vatarMessage } from "@/lib/vatar";
 import { sound } from "@/game/sound";
+import { net } from "@/lib/net";
 import PlayPage from "../play/page";
 
 /**
@@ -25,8 +26,16 @@ export default function LagosLifeMini() {
         setMemoryAccount(acc);
         useGame.getState().set({ mini: { mode, name: player.name } });
         off = [
-          v.onPause(() => sound.pause(true)),
-          v.onResume(() => sound.pause(false)),
+          // LagosLife rule 4: sound and timers stop. The server only freezes a solo game (you + NPCs);
+          // a game with other people keeps going and your stand-in holds your place.
+          v.onPause(() => {
+            sound.pause(true);
+            if (useGame.getState().group) net.send({ t: "g_pause" });
+          }),
+          v.onResume(() => {
+            sound.pause(false);
+            if (useGame.getState().group) net.send({ t: "g_resume" });
+          }),
           v.onPurchase((p) => void claimAdPurchase(p)), // paid while we were away (e.g. a bank page)
         ];
         setReady(true);

@@ -18,6 +18,10 @@ export interface Prop {
   line?: string;
   style?: string;
   y?: number;
+  /** flat ground pieces (roads, red-earth streets) can be turned to follow the real street (radians, about y) */
+  ry?: number;
+  /** built from this OpenStreetMap feature */
+  osm?: string;
   win?: boolean;
   inner?: boolean;
   collider: [number, number, number, number, number] | null;
@@ -47,6 +51,11 @@ export interface GameMap {
   vehicles?: { kind: string; pts: [number, number][]; speed: number; n: number }[];
   city?: string;
   venue?: { name: string; lat: number; lng: number };
+  /** a town street map (paper-coloured), not a park */
+  town?: boolean;
+  /** ground heights round the place (m from its centre, n x n grid over ±r): the hills beyond the fence.
+   *  Only in the full plan; the play area itself stays level. */
+  terrain?: { r: number; n: number; base_m: number; h: number[] };
 }
 
 export interface Home {

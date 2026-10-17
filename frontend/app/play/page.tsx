@@ -40,6 +40,10 @@ export default function PlayPage() {
   const me = useGame((s) => s.me);
   const map = useMap();
   const fullMap = useFullMap(); // the 3D world waits for this place's full plan (it arrives during the ride)
+  // Once there is a 3D view it stays: between places only the world inside it changes. Dropping it on every trip
+  // destroyed and remade the graphics context, freezing a low-end phone for over a second as the bus left.
+  const [sceneOn, setSceneOn] = useState(false);
+  useEffect(() => { if (fullMap) setSceneOn(true); }, [fullMap]);
   const placeId = useGame((s) => (s.content ? s.mapId : null));
   useEffect(() => { if (placeId) void ensureMap(placeId); }, [placeId]); // also if we arrived before the content
   const decor = useGame((s) => !!s.decor);
@@ -163,7 +167,7 @@ export default function PlayPage() {
     <main className="game-root overflow-hidden">
       {map ? (
         <>
-          <div className="absolute inset-0">{fullMap && <Scene map={fullMap} />}</div>
+          <div className="absolute inset-0">{sceneOn && <Scene map={fullMap} />}</div>
           <Controls disabled={decor} />
           <div className="pointer-events-none absolute safe-inset">
             <TopBar />

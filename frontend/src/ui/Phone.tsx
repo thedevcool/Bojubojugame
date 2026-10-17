@@ -1,5 +1,6 @@
 "use client";
 
+import { GAME_ONLY } from "@/lib/scope";
 import { useEffect, useRef, useState } from "react";
 import { local } from "@/game/state";
 import { walkTo } from "@/game/nav";
@@ -63,7 +64,7 @@ export default function Phone() {
   const close = useGame((s) => s.closePhone);
   const model = useGame((s) => s.content?.config.phones.find((p) => p.id === s.life.phoneId));
   const mini = useGame((s) => !!s.mini);
-  const hasPhone = !!model || mini;
+  const hasPhone = !!model || mini || GAME_ONLY; // everyone gets a phone
   const inGroup = useGame((s) => !!s.group);
   const device = useRef<HTMLDivElement>(null);
 
@@ -169,10 +170,9 @@ function Wallpaper({ color }: { color?: string }) {
 
 function StatusBar({ dark }: { dark: boolean }) {
   useTicker(10000);
-  const hunger = useGame((s) => s.hunger);
   const connected = useGame((s) => s.connected);
   const now = new Date();
-  const level = Math.max(0.06, Math.min(1, hunger / 100));
+  const level = 0.92; // just a phone battery now (belle is packed away)
   return (
     <div className={`relative z-20 flex h-11 shrink-0 items-center justify-between px-7 pt-1 text-[14px] font-semibold ${dark ? "" : "bg-[rgba(11,17,32,.72)]"}`}>
       <span className="tabular-nums tracking-tight">{now.getHours()}:{String(now.getMinutes()).padStart(2, "0")}</span>
@@ -184,9 +184,9 @@ function StatusBar({ dark }: { dark: boolean }) {
           {[0, 1, 2, 3].map((i) => <rect key={i} x={i * 4.5} y={8 - i * 2.6} width="3" height={3 + i * 2.6} rx="0.8" fill={connected || i === 0 ? "white" : "rgba(255,255,255,.3)"} />)}
         </svg>
         <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 2.2c2.4 0 4.6.9 6.2 2.5l1.1-1.1A10.3 10.3 0 0 0 7.5.6 10.3 10.3 0 0 0 .2 3.6l1.1 1.1A8.8 8.8 0 0 1 7.5 2.2Zm0 3.2c1.5 0 2.9.6 3.9 1.6l1.1-1.1a7 7 0 0 0-10 0L3.6 7c1-1 2.4-1.6 3.9-1.6Zm0 3.2c-.6 0-1.2.3-1.6.7l1.6 1.6 1.6-1.6c-.4-.4-1-.7-1.6-.7Z" fill={connected ? "white" : "rgba(255,255,255,.3)"} /></svg>
-        <span className="flex items-center" title="Battery = your belle">
+        <span className="flex items-center">
           <span className="relative h-[11px] w-[22px] rounded-[3.5px] border border-white/45 p-[1.5px]">
-            <span className={`block h-full rounded-[2px] ${hunger < 25 ? "bg-[#ff453a]" : "bg-white"}`} style={{ width: `${level * 100}%` }} />
+            <span className={`block h-full rounded-[2px] bg-white`} style={{ width: `${level * 100}%` }} />
           </span>
           <span className="ml-[1px] h-1 w-[1.5px] rounded-r bg-white/45" />
         </span>
@@ -203,9 +203,10 @@ const greeting = () => {
 function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
   const openApp = useGame((s) => s.openApp);
   const mini = useGame((s) => !!s.mini);
-  const apps = mini ? MINI_APPS : APPS, dock = mini ? MINI_DOCK : DOCK;
+  const apps = mini ? MINI_APPS : GAME_ONLY ? APPS.filter((a) => a.id !== "houses") : APPS, dock = mini ? MINI_DOCK : DOCK;
   const balance = useGame((s) => s.balance);
   const username = useGame((s) => s.mini?.name || s.life.username || s.me?.nick || "");
+  const streaks = useGame((s) => s.streaks);
   const home = useGame((s) => s.home);
   const group = useGame((s) => s.group);
   const badges: Record<string, number> = {
@@ -259,7 +260,7 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
           <div className="text-[10px] opacity-60">in-game · not real money</div>
         </button>
         )}
-        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp(group ? "boju" : mini ? "match" : "houses")}>
+        <button className="glass rounded-[1.4rem] p-3 text-left active:scale-[.97]" style={{ transition: "transform .25s var(--ease-spring)" }} onClick={() => openApp(group || GAME_ONLY ? "boju" : mini ? "match" : "houses")}>
           {group ? (
             <>
               <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#2f7cf6] text-[11px]">🙈</span>Boju Boju</div>
@@ -271,6 +272,12 @@ function HomeScreen({ hasPhone }: { hasPhone: boolean }) {
               <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#059669] text-[11px]">🤝</span>Friends</div>
               <div className="mt-1 text-[15px] font-bold leading-tight">Play a match</div>
               <div className="text-[10px] opacity-60">share a 6-letter code</div>
+            </>
+          ) : GAME_ONLY ? (
+            <>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-80"><span className="ios-glyph h-5 w-5 rounded-md bg-[#ff9f0a] text-[11px]">🔥</span>Streaks</div>
+              <div className="mt-1 text-[15px] font-bold leading-tight">🥷 {streaks.hide} · 🏆 {streaks.win}</div>
+              <div className="text-[10px] opacity-60">hide streak · win streak</div>
             </>
           ) : (
             <>

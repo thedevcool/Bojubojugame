@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.16.0",
+    date: "2026-10-17",
+    title: "Na Boju Boju we dey play 🙈",
+    items: [
+      { emoji: "👴🏾", title: "Meet Baba Boju", text: "He welcomes you at his stall — then it's straight to the game." },
+      { emoji: "⚡", title: "Match me", text: "When others are online, tap Match me and we find you a game. Nobody around? Play with NPCs and train." },
+      { emoji: "📍", title: "Your city", text: "Lagos or Ibadan — from your location, or you choose. That's where you always start." },
+      { emoji: "🔥", title: "Streaks", text: "Your hide streak (rounds nobody found you) and win streak sit up top, next to your money. Keep them going!" },
+    ],
+  },
+  {
     version: "2.15.1",
     date: "2026-10-17",
     title: "Practice games wait for you ⏸️",

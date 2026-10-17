@@ -124,9 +124,6 @@ async def test_travel_without_a_game_and_drive_your_car(db):
     await send(world, s, t="trip", to="arena_park", mode="danfo", key="trip-key-002")
     assert s.room is world.explore["arena_park"] and c.last("ride")["dir"] == "go"
     assert await world.economy.balance(s.pid) < bal0
-    # no starting games from a trip
-    await send(world, s, t="g_create", arena="arena_park", hide=30, search=180, safe="", bots=1)
-    assert "Lagos" in c.last("err")["msg"]
     # own car: needs one; then drive home from anywhere for free
     await send(world, s, t="trip", to="hub", mode="own_car", key="trip-key-003")
     assert "car" in c.last("err")["msg"]

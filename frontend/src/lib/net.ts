@@ -218,7 +218,10 @@ class Net {
       }
       case "wallet":
         if ((m.balance as number) > g.balance && g.balance > 0) sound.play("coin");
-        g.set({ balance: m.balance as number, hunger: m.hunger as number });
+        g.set({
+          balance: m.balance as number,
+          streaks: { hide: (m.hide_streak as number) ?? 0, win: (m.win_streak as number) ?? 0, bestHide: (m.best_hide_streak as number) ?? 0, bestWin: (m.best_win_streak as number) ?? 0 },
+        });
         break;
       case "g_state": {
         const gs = m as unknown as GroupState;

@@ -1,5 +1,6 @@
 "use client";
 
+import { GAME_ONLY } from "@/lib/scope";
 import { useEffect, useRef, useState } from "react";
 import { walkTo } from "@/game/nav";
 import { local, remotes, sample } from "@/game/state";
@@ -193,7 +194,7 @@ export function MapScreen() {
   const map = useMap();
   const [tab, setTab] = useState<"here" | "naija">("here");
   const set = useGame((s) => s.set);
-  const mini = useGame((s) => !!s.mini); // LagosLife is just the game: the map is this area, no trips round Naija
+  const mini = useGame((s) => !!s.mini) || GAME_ONLY; // just the game: the map is this area, no trips round Naija
   if (!open || !map) return null;
   return (
     <div className="anim-fade pointer-events-auto absolute inset-0 z-[52] flex flex-col bg-[#0a1324]">

@@ -93,6 +93,11 @@ class GroupRoom:
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
         self.public = True
+        self.matchmade = (
+            False  # made by "Match me": starts itself once enough players are in (see World.tick_matchmaking)
+        )
+        self.match_ready_at: float | None = None  # when a second real player joined
+        self.created_at = world.now()
         self.pause_requested = False  # the only human's app sent "paused" (LagosLife onPause)
         self.paused_at: float | None = None
         self.arena = ArenaRoom(f"arena:{game_id}", self.map, self)
@@ -234,6 +239,7 @@ class GroupRoom:
             "code": self.code,
             "creator": self.creator,
             "settings": self.settings,
+            "matchmade": self.matchmade,
             "phase": self.phase,
             "phase_end": int(self.phase_end * 1000),
             "members": [
@@ -314,21 +320,13 @@ class GroupRoom:
             raise GroupError(f"Waiting for {', '.join(offline)} to come online")
         if not self.humans:
             raise GroupError("At least one real player is needed")
-        hungry = []
-        for p in self.humans:
-            if p in self.world.mini:
-                continue
-            if await self.world.economy.get_hunger(p) < self.cfg.game.min_hunger_to_play:
-                hungry.append(self.nicks[p])
-        if hungry:
-            raise GroupError(f"Too hungry to play: {', '.join(hungry)}. Go and chop first!")
         if self.phase != "lobby":
             return
         self.broadcast({"t": "g_event", "e": "group_started"})
         self.set_phase("travel", self.cfg.game.travel_window_s, "travel_started")
-        # everybody in Lagos is taken straight to the motor park to board
+        # everybody is taken straight to their bus stop to board (Lagos motor park, or Ibadan's)
         for p in self.humans:
-            if (h := self.session(p)) is not None and h.room is not None and h.room.map.kind == "hub":
+            if (h := self.session(p)) is not None and h.room is not None and h.room is not self.arena:
                 stop = h.room.map.zones.get("bus_stop")
                 if stop is not None:
                     x0, z0, x1, z1 = stop["rect"]
@@ -347,7 +345,7 @@ class GroupRoom:
         fare = next((f for f in self.cfg.fares_for(self.settings["arena"]) if f.id == fare_id), None)
         if fare is None:
             raise GroupError("Unknown ride")
-        zone = s.room.map.zones.get("bus_stop") if s.room and s.room.map.kind == "hub" else None
+        zone = s.room.map.zones.get("bus_stop") if s.room and s.room is not self.arena else None
         if zone is None or not in_rect(zone["rect"], s.x, s.z):
             raise GroupError("Walk to the bus stop first")
         self.boarded.add(s.pid)  # reserve before awaiting to block double-boarding
@@ -778,6 +776,11 @@ class GroupRoom:
                     s.place(*self.arena_spot(s.x, s.z, i), self.world.now())
         self.broadcast_state("game_over")
         self.broadcast({"t": "g_over", "game_id": self.id, "results": self.final_results})
+        # win streak: games in a row you finished first (anyone who left loses theirs)
+        winner = self.final_results[0]["id"] if self.final_results else None
+        await self.world.bump_streaks(
+            {p: {"win": p == winner and p not in self.left} for p in self.members if p not in self.bots}
+        )
         await self.world.save_game_results(self.id, self.final_results)
         for hook in self.world.game_over_hooks:
             try:

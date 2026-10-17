@@ -321,22 +321,6 @@ async def test_retired_boju_goes_to_the_stands(db):
     assert abs(boju.z - fz) < 0.01  # in the stands, not standing where they were seeking
 
 
-async def test_hungry_player_cannot_start(db):
-    world, clock, players = await setup(db, 2)
-    (a, ca), (b, cb) = players
-    await world.economy.change_hunger(b.pid, -100)
-    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
-    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
-    await send(world, a, t="g_start")
-    assert "hungry" in ca.last("err")["msg"]
-    # Buying food requires being at the food spot.
-    await send(world, b, t="buy", item="suya", key="abcdefgh1")
-    assert "Walk to" in cb.last("err")["msg"]
-    b.x, b.z = zone_point("suya")
-    await send(world, b, t="buy", item="suya", key="abcdefgh1")
-    assert cb.last("wallet")["hunger"] >= 20
-
-
 async def test_movement_validation(db):
     world, clock, players = await setup(db, 1)
     ((a, ca),) = players
@@ -560,3 +544,50 @@ async def test_multiplayer_game_never_pauses(db):
     await send(world, b, t="g_join", code=g.code)
     await send(world, a, t="g_pause")
     assert not g.solo and g.paused_at is None
+
+
+async def test_match_me_pairs_players_and_starts_itself(db):
+    """Match me: the second player lands in the first one's waiting match; it starts by itself soon after."""
+    world, clock, players = await setup(db, 3)
+    (a, ca), (b, _), (c, _) = players
+    await send(world, a, t="g_match")
+    g = a.group
+    assert g is not None and g.matchmade and g.phase == "lobby"
+    await send(world, b, t="g_match")
+    assert b.group is g and len(g.humans) == 2
+    await advance(world, clock, 5)
+    assert g.phase == "lobby"  # waits a moment for more players
+    await send(world, c, t="g_match")
+    assert c.group is g
+    await advance(world, clock, 13)
+    assert g.phase == "travel" and not g.bots
+
+
+async def test_match_me_alone_plays_npcs(db):
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    await send(world, a, t="g_match")
+    g = a.group
+    await advance(world, clock, 41)
+    assert g.phase == "travel" and len(g.bots) == 2
+    assert any(m["t"] == "toast" and "NPC" in m["msg"] for m in ca.msgs)
+
+
+async def test_ibadan_players_live_in_akobo(db):
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    world.set_city(a.pid, "ibadan")
+    assert a.room is world.explore["arena_akobo"]
+    # a match from Ibadan is played in Ibadan, and boarding works from Ibadan's bus stop
+    await send(world, a, t="g_match")
+    assert a.group.settings["arena"] in ("arena_ibadan", "arena_akobo")
+
+
+async def test_streaks_count_wins_and_hides(db):
+    world, clock, players = await setup(db, 2)
+    (a, _), (b, _) = players
+    await world.bump_streaks({a.pid: {"hide": True, "win": True}, b.pid: {"hide": False}})
+    await world.bump_streaks({a.pid: {"hide": True, "win": False}})
+    sa, sb = await world.get_streaks(a.pid), await world.get_streaks(b.pid)
+    assert sa["hide_streak"] == 2 and sa["win_streak"] == 0 and sa["best_win_streak"] == 1
+    assert sb["hide_streak"] == 0

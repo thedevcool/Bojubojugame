@@ -159,7 +159,7 @@ export function accountKey(base: string): string {
 
 /** Per-account UI progress (tour step, first-game guide). Fire and forget. */
 export const serverFlags: Record<string, string> = {};
-export function setFlag(key: "tour" | "guide", value: string): void {
+export function setFlag(key: "tour" | "guide" | "city", value: string): void {
   serverFlags[key] = value;
   const acc = loadAccount();
   if (acc) send<{ ok: boolean }>(acc, "/api/me/flag", { key, value }).catch(() => {});

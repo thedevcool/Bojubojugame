@@ -25,6 +25,7 @@ import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
 import { GameGuide } from "@/ui/GameGuide";
+import Storefront from "@/ui/Storefront";
 import Onboarding, { MoveHint, onboardingDone, savedTourStep } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -179,6 +180,7 @@ export default function PlayPage() {
             <RoundResultPanel />
             <GameOverPanel />
             <Toasts />
+            <Storefront />
             <Onboarding />
             <MoveHint />
             <Phone />

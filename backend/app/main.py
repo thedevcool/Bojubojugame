@@ -163,6 +163,15 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     app.include_router(make_analytics_router(db, world, maps))
     app.include_router(make_vatar_router(db, world, cfg))
 
+    @app.get("/api/online")
+    async def online(pid: str = "") -> dict[str, int]:
+        """For the storefront: how many other real players are on now, and how many are waiting for a match."""
+        others = sum(1 for x in world.sessions.values() if x.connected and not x.bot and x.pid != pid)
+        waiting = sum(
+            len(g.humans) for g in world.groups.values() if g.matchmade and g.phase == "lobby" and pid not in g.members
+        )
+        return {"online": others, "waiting": waiting}
+
     @app.get("/api/wallet")
     async def wallet(pid: Me) -> dict[str, Any]:
         async with db.sessions() as s:
@@ -318,7 +327,13 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
 
         out_task = asyncio.create_task(writer(queue, ws.send_bytes))
         session = await world.connect(
-            pid, p.nickname, sender, avatar=list(p.avatar or [0, 0, 0]), home_id=p.home_id, car=p.car_id
+            pid,
+            p.nickname,
+            sender,
+            avatar=list(p.avatar or [0, 0, 0]),
+            home_id=p.home_id,
+            car=p.car_id,
+            city=(p.flags or {}).get("city"),
         )
         strikes = 0
         try:

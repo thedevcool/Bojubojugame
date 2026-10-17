@@ -147,6 +147,8 @@ export interface Standing { id: string; nick: string; earned: number; finds: num
 export type Phase = "lobby" | "travel" | "gather" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
 
 export interface GroupState {
+  /** made by "Match me": starts itself when enough players are in */
+  matchmade?: boolean;
   id: string;
   code: string;
   creator: string;

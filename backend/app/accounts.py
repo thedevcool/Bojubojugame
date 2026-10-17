@@ -98,7 +98,7 @@ class AvatarIn(BaseModel):
 
 
 class FlagIn(BaseModel):
-    key: Literal["tour", "guide"]
+    key: Literal["tour", "guide", "city"]
     value: str = Field(min_length=1, max_length=16, pattern=r"^[a-z_]+$")
 
 
@@ -346,7 +346,11 @@ def make_router(db: Database, world: World, cfg: GameConfig) -> APIRouter:
             p = await s.get(Player, pid, with_for_update=True)
             if p is None:
                 raise HTTPException(404, "Unknown player")
+            if body.key == "city" and body.value not in ("lagos", "ibadan"):
+                raise HTTPException(422, "Choose Lagos or Ibadan")
             p.flags = {**(p.flags or {}), body.key: body.value}
+        if body.key == "city":
+            world.set_city(pid, body.value)  # you live there from now on: move there if you're not in a game
         return {"ok": True}
 
     return r

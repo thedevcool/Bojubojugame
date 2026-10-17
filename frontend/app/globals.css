@@ -387,6 +387,7 @@ button:active > .app-icon { transform: scale(0.88); filter: brightness(0.85); }
   border-radius: 18px 18px 6px 6px; background: repeating-linear-gradient(90deg, #ff9f0a 0 26px, #fff4e0 26px 52px); box-shadow: 0 10px 30px rgba(0,0,0,.4); display: grid; place-items: center; }
 .sf-stall span { font: 800 22px/1 var(--font-display), system-ui, sans-serif; letter-spacing: 0.18em; color: #1a1030; background: rgba(255,255,255,.88); padding: 6px 14px; border-radius: 10px; }
 .sf-baba { width: min(13rem, 52vw); height: min(19rem, 38dvh); flex-shrink: 1; min-height: 9rem; }
+.sf-baba-wide { width: min(26rem, 94vw); height: min(24rem, 44dvh); }
 .sf-speech { position: relative; }
 .sf-speech::before { content: ""; position: absolute; top: -9px; left: 50%; margin-left: -9px; border: 9px solid transparent; border-top: 0; border-bottom-color: rgba(148, 180, 255, 0.35); }
 .sf-caret { animation: sf-blink 0.8s steps(1) infinite; opacity: 0.7; }

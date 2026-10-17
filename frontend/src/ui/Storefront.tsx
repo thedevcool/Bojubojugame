@@ -18,6 +18,8 @@ const CITIES = {
   ibadan: { name: "Ibadan", lat: 7.3775, lng: 3.947, km: 45, arena: "arena_ibadan", safe: "hunter_hut" },
 } as const;
 type City = keyof typeof CITIES;
+/** ?realchars=1: preview the realistic characters (not shown to players yet) */
+const realPreview = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("realchars");
 
 function km(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
@@ -99,7 +101,8 @@ export default function Storefront() {
       <div className="bg-grid" aria-hidden />
       <div className="relative flex min-h-0 flex-1 flex-col items-center justify-end px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-[max(env(safe-area-inset-top),10px)]">
         <div className="sf-stall" aria-hidden><span>BOJU BOJU</span></div>
-        <AvatarPreview av={BABA} className="sf-baba" />
+        {/* ?realchars=1: preview of the realistic characters beside Baba */}
+        <AvatarPreview av={BABA} className={realPreview ? "sf-baba sf-baba-wide" : "sf-baba"} real={realPreview ? [0, 0, 0] : undefined} />
         <div className="panel anim-rise sf-speech w-full max-w-md p-4" onClick={() => setShown(speech.length)}>
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--accent)]">Baba Boju</div>
           <p className="mt-1 text-[14.5px] leading-snug">{speech.slice(0, shown)}{talking && <span className="sf-caret">▍</span>}</p>

@@ -1,12 +1,13 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { FurnitureSpec, GameMap, Rect } from "@/lib/types";
 import { FurnitureMesh } from "./FurnitureMeshes";
 import Avatar, { type Motion } from "./Avatar";
 import { MapProps, Vehicle } from "./props";
+import RealAvatar from "./RealAvatar";
 import { grass } from "./textures";
 
 /** Small, cheap canvases for menus: low DPR, no shadows, rendered only while open. */
@@ -20,12 +21,19 @@ function Turntable({ children, speed = 0.5 }: { children: React.ReactNode; speed
   return <group ref={g}>{children}</group>;
 }
 
-/** Live 3D preview of the player's avatar while they pick skin/shirt/trousers. */
-export function AvatarPreview({ av, className }: { av: number[]; className?: string }) {
+/** Live 3D preview of the player's avatar while they pick skin/shirt/trousers.
+ *  ``real``: also stand the realistic man and woman (in this look's colours) either side — a preview for now. */
+export function AvatarPreview({ av, className, real }: { av: number[]; className?: string; real?: number[] }) {
   const motion = useRef<Motion>({ speed: 0, crouch: false });
   return (
     <div className={className}>
-      <Canvas dpr={[1, 1.5]} gl={GL} camera={{ fov: 30, position: [0, 1.35, 4.6] }} onCreated={({ camera }) => camera.lookAt(0, 1.05, 0)}>
+      <Canvas dpr={[1, 1.5]} gl={GL} camera={{ fov: 30, position: [0, 1.35, real ? 6.2 : 4.6] }} onCreated={({ camera }) => camera.lookAt(0, real ? 0.95 : 1.05, 0)}>
+        {real && (
+          <Suspense fallback={null}>
+            <group position={[-0.95, 0, 0.3]} rotation={[0, 0.35, 0]}><RealAvatar av={[real[0], real[1], real[2], 0]} /></group>
+            <group position={[0.95, 0, 0.3]} rotation={[0, -0.35, 0]}><RealAvatar av={[real[0], real[1], real[2], 1]} /></group>
+          </Suspense>
+        )}
         <hemisphereLight args={["#eaf2ff", "#3a4a6a", 1.2]} />
         <directionalLight position={[2, 4, 3]} intensity={2} />
         <Turntable speed={0.6}>

@@ -12,7 +12,7 @@ import { BOTTOMS, SKIN, TOPS } from "./palette";
  * one material, three 1K maps. Skin tone, top and bottom colours come from the look picker through the mesh's tint
  * mask (vertex colour: R skin, G top, B bottom), so one file serves every look.
  */
-export const CHARACTER_URL = { male: "/characters/male.glb", female: "/characters/female.glb" } as const;
+export const CHARACTER_URL = { male: "/characters/male.glb", female: "/characters/female.glb", elder: "/characters/elder.glb" } as const;
 
 const tintCache = new Map<string, THREE.MeshStandardMaterial>();
 
@@ -50,27 +50,22 @@ const ARMS: [string, number][] = [["upperarm01L", 1], ["upperarm01R", -1]];
 const Z = new THREE.Vector3(0, 0, 1);
 const X = new THREE.Vector3(1, 0, 0);
 
-export default function RealAvatar({ av, breathe = true }: { av: number[]; breathe?: boolean }) {
+/** ``elder``: Baba Boju (older body, grey hair and beard, face cap in the top colour). */
+export default function RealAvatar({ av, breathe = true, elder }: { av: number[]; breathe?: boolean; elder?: boolean }) {
   const [s, t, b, gender = 0] = av;
   const female = gender === 1;
-  const gltf = useGLTF(female ? CHARACTER_URL.female : CHARACTER_URL.male);
-  const scene = useMemo(() => clone(gltf.scene), [gltf.scene]);
-  const spine = useRef<THREE.Bone | null>(null);
-
-  useEffect(() => {
-    scene.updateMatrixWorld(true);
-    const bones = new Map<string, THREE.Bone>();
-    scene.traverse((o) => {
-      if ((o as THREE.Bone).isBone) bones.set(o.name.replace(/[.\s]/g, ""), o as THREE.Bone);
-      const mesh = o as THREE.SkinnedMesh;
-      if (mesh.isSkinnedMesh) {
-        if (/lod1/i.test(mesh.name)) mesh.visible = false; // the far version, for later
-        mesh.material = tinted(mesh.material as THREE.MeshStandardMaterial, SKIN[s % 8], TOPS[t % 8], BOTTOMS[b % 8]);
-        mesh.frustumCulled = false;
-      }
+  const gltf = useGLTF(elder ? CHARACTER_URL.elder : female ? CHARACTER_URL.female : CHARACTER_URL.male);
+  // a fresh copy, posed once in its own space (before it joins the scene, so a turntable or a turned player
+  // can't skew the pose)
+  const { scene, bones } = useMemo(() => {
+    const root = clone(gltf.scene);
+    root.updateMatrixWorld(true);
+    const found = new Map<string, THREE.Bone>();
+    root.traverse((o) => {
+      if ((o as THREE.Bone).isBone) found.set(o.name.replace(/[.\s]/g, ""), o as THREE.Bone);
     });
     for (const [name, side] of ARMS) {
-      const bone = bones.get(name);
+      const bone = found.get(name);
       if (!bone || !bone.parent) continue;
       const rest = bone.getWorldQuaternion(new THREE.Quaternion());
       const parent = bone.parent.getWorldQuaternion(new THREE.Quaternion());
@@ -79,8 +74,22 @@ export default function RealAvatar({ av, breathe = true }: { av: number[]; breat
         .multiply(new THREE.Quaternion().setFromAxisAngle(Z, (-45 * side * Math.PI) / 180));
       bone.quaternion.copy(parent.invert().multiply(turn).multiply(rest));
     }
+    return { scene: root, bones: found };
+  }, [gltf.scene]);
+  const spine = useRef<THREE.Bone | null>(null);
+
+  useEffect(() => {
+    scene.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (mesh.isSkinnedMesh) {
+        if (/lod1/i.test(mesh.name)) mesh.visible = false; // the far version, for later
+        mesh.userData.base ??= mesh.material; // tint from the original, not an earlier tinted copy
+        mesh.material = tinted(mesh.userData.base as THREE.MeshStandardMaterial, SKIN[s % 8], TOPS[t % 8], BOTTOMS[b % 8]);
+        mesh.frustumCulled = false;
+      }
+    });
     spine.current = bones.get("spine03") ?? null;
-  }, [scene, s, t, b]);
+  }, [scene, bones, s, t, b]);
 
   const rest = useRef<THREE.Quaternion | null>(null);
   useFrame(() => {

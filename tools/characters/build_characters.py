@@ -39,6 +39,8 @@ MH_RAW = "https://raw.githubusercontent.com/makehumancommunity/makehuman/master/
 BODIES = {
     "male": {"gender": 1.0, "muscle": 0.62, "weight": 0.52, "height": 0.5, "proportions": 0.6, "tall": 1.76},
     "female": {"gender": 0.0, "muscle": 0.5, "weight": 0.62, "height": 0.5, "proportions": 0.6, "tall": 1.64},
+    # Baba Boju: about 65, grey hair and beard, his face cap in his favourite ankara
+    "elder": {"gender": 1.0, "age": 0.81, "muscle": 0.42, "weight": 0.6, "height": 0.45, "proportions": 0.5, "tall": 1.72},
 }
 ETHNIC = {"african": 1.0, "asian": 0.0, "caucasian": 0.0}
 
@@ -107,7 +109,8 @@ def shaped(base: np.ndarray, t: np.lib.npyio.NpzFile, b: dict) -> np.ndarray:
         v[t[f"{key}.index"]] += t[f"{key}.vector"].astype(np.float64) * 1e-3 * w
 
     gender = {"female": 1 - b["gender"], "male": b["gender"]}
-    age = {"young": 1.0}  # 25 years
+    av = b.get("age", 0.5)  # MakeHuman's age slider: 0.5 = 25 years, 1 = 90
+    age = {"young": 1.0} if av <= 0.5 else {"young": (1 - av) * 2, "old": (av - 0.5) * 2}
     muscle = _pair(b["muscle"], "minmuscle", "averagemuscle", "maxmuscle")
     weight = _pair(b["weight"], "minweight", "averageweight", "maxweight")
     for race, rw in ETHNIC.items():
@@ -244,9 +247,10 @@ def placed(v: np.ndarray, body: np.ndarray, tall: float) -> np.ndarray:
 
 # ---------------------------------------------------------------------------------------------- regions
 
-SKIN, TOP, BOTTOM, SHOE, HAIR, EYE, WRAP = range(7)
-OFFSET = {SKIN: 0.0, TOP: 0.012, BOTTOM: 0.016, SHOE: 0.014, HAIR: 0.003, EYE: 0.0, WRAP: 0.012}
-SMOOTH = {TOP: 3, BOTTOM: 4, SHOE: 40, WRAP: 2}  # passes of smoothing: cloth hangs, shoes lose the toes
+SKIN, TOP, BOTTOM, SHOE, HAIR, EYE, WRAP, CAP, BEARD = range(9)
+REGIONS = 9
+OFFSET = {SKIN: 0.0, TOP: 0.012, BOTTOM: 0.016, SHOE: 0.014, HAIR: 0.003, EYE: 0.0, WRAP: 0.012, CAP: 0.016, BEARD: 0.0015}
+SMOOTH = {TOP: 3, BOTTOM: 4, SHOE: 40, WRAP: 2, CAP: 6}  # passes of smoothing: cloth hangs, shoes lose the toes
 TORSO = {"spine01", "spine02", "spine03", "spine04", "clavicle.L", "clavicle.R", "shoulder01.L", "shoulder01.R"}
 UPPERARM = {"upperarm01.L", "upperarm01.R", "upperarm02.L", "upperarm02.R"}
 HIPS = {"root", "spine05", "pelvis.L", "pelvis.R"}
@@ -272,7 +276,9 @@ def dominant_bones(n: int, remap: dict[str, str]) -> list[str]:
 def vertex_regions(name: str, pos: np.ndarray, dom: list[str], j: dict[str, np.ndarray]) -> np.ndarray:
     """Region of every MakeHuman vertex (Blender coordinates in ``pos``)."""
     female = BODIES[name]["gender"] < 0.5
+    elder = name == "elder"
     reg = np.full(len(pos), SKIN)
+    mouth = np.mean([v for k, v in j.items() if k.startswith("oris") and not k.endswith(":tail")], axis=0)
     belt = j["spine05"][2] + (0.02 if female else 0.0)
     ankle = j["foot.L"][2] + 0.035
     elbow = j["lowerarm01.L"][2]
@@ -295,7 +301,13 @@ def vertex_regions(name: str, pos: np.ndarray, dom: list[str], j: dict[str, np.n
             line = eye[2] + 0.062 - 0.095 * back
             ear = abs(p[0] - 0) > abs(j["eye.L"][0]) * 2.05 and z < eye[2] + 0.03 and y < eye[1] + 0.11
             if z > line and not ear and b == "head":
-                reg[i] = HAIR
+                reg[i] = CAP if elder and z > eye[2] + 0.045 else HAIR
+            elif elder and b in ("head", "jaw") and y < eye[1] + 0.055 and abs(p[0]) < abs(j["eye.L"][0]) * 1.9:
+                # a short grey beard round the chin and jaw, and a moustache over the lip
+                chin = z < mouth[2] - 0.009 and z > mouth[2] - 0.06
+                tache = mouth[2] + 0.004 < z < mouth[2] + 0.017 and abs(p[0]) < 0.026
+                if chin or tache:
+                    reg[i] = BEARD
     _ = elbow
     return reg
 
@@ -394,10 +406,10 @@ def character_mesh(name: str, body: str, verts: np.ndarray, base: dict, rig: bpy
     col = me.color_attributes.new("tint", "BYTE_COLOR", "POINT")
     tint = np.zeros((len(used), 4))
     tint[:, 3] = 1
-    chan = {SKIN: 0, TOP: 1, BOTTOM: 2, WRAP: 2}
+    chan = {SKIN: 0, TOP: 1, BOTTOM: 2, WRAP: 2, CAP: 1}
     for a, rs in vr_of(faces, freg, local).items():
         mine = vreg[used[a]]
-        own = [mine] if mine in chan and not (rs & {WRAP}) else [r for r in (TOP, BOTTOM, WRAP, SKIN) if r in rs]
+        own = [mine] if mine in chan and not (rs & {WRAP}) else [r for r in (TOP, CAP, BOTTOM, WRAP, SKIN) if r in rs]
         if EYE in rs:
             continue
         if HAIR in rs and not own:
@@ -430,10 +442,12 @@ def character_mesh(name: str, body: str, verts: np.ndarray, base: dict, rig: bpy
     skin(o, np.array(used), rig, remap)
     # helpers (wrapper) may have no weights of their own: take the nearest body vertex's
     fill_missing_weights(o)
-    for r in range(7):
+    for r in range(REGIONS):
         o.data.materials.append(bpy.data.materials.new(f"r{r}"))
     if female:
         add_bun(o, q, freg, faces, local)
+    if body == "elder":
+        add_brim(o, freg, faces, local)
     return o
 
 
@@ -478,6 +492,69 @@ def add_bun(o: bpy.types.Object, q: np.ndarray, freg: list[int], faces: list, lo
     g.add(list(range(len(me.vertices))), 1.0, "REPLACE")
     bpy.ops.object.select_all(action="DESELECT")
     bun.select_set(True)
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.join()
+
+
+def _uv_from_nearest(o: bpy.types.Object, me: bpy.types.Mesh, verts: list[int]) -> None:
+    """UVs for an add-on piece: copy the nearest of ``verts`` (vertices of ``o``)."""
+    from mathutils.kdtree import KDTree
+
+    src = o.data
+    kd = KDTree(len(verts))
+    for i, a in enumerate(verts):
+        kd.insert(src.vertices[a].co, i)
+    kd.balance()
+    uvs = {}
+    for poly in src.polygons:
+        for li in poly.loop_indices:
+            uvs[src.loops[li].vertex_index] = tuple(src.uv_layers["UVMap"].data[li].uv)
+    uv = me.uv_layers.new(name="UVMap")
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            _, i, _ = kd.find(me.vertices[me.loops[li].vertex_index].co)
+            uv.data[li].uv = uvs[verts[i]]
+
+
+def add_brim(o: bpy.types.Object, freg: list[int], faces: list, local: dict[int, int]) -> None:
+    """The face cap's brim: a curved peak over the forehead, in the cap's ankara, on the head bone."""
+    cap = sorted({local[v] for (_, vi, _), r in zip(faces, freg, strict=True) if r == CAP for v in vi})
+    cp = np.array([o.data.vertices[a].co[:] for a in cap])
+    front = cp[cp[:, 1] < np.percentile(cp[:, 1], 6)]
+    c = np.array([cp[:, 0].mean(), front[:, 1].mean() + 0.012, front[:, 2].min() + 0.004])
+    w = (cp[:, 0].max() - cp[:, 0].min()) * 0.5
+    depth, n, t = 0.075, 16, 0.006
+    pts, quads = [], []
+    for k in range(n + 1):
+        a = math.pi * k / n
+        x = -w * math.cos(a)
+        inner = (c[0] + x, c[1] + 0.02 * (1 - math.sin(a)), c[2])
+        outer = (c[0] + x * 1.02, c[1] - depth * math.sin(a), c[2] - 0.022 * math.sin(a))  # peak bends down
+        pts += [inner, outer]
+    top = len(pts)
+    pts += [(x, y, z - t) for x, y, z in pts]
+    for k in range(n):
+        i0, o0, i1, o1 = 2 * k, 2 * k + 1, 2 * k + 2, 2 * k + 3
+        quads.append([i0, i1, o1, o0])  # upper side faces up
+        quads.append([top + i0, top + o0, top + o1, top + i1])  # under side faces down
+        quads.append([o0, o1, top + o1, top + o0])  # the rim
+    me = bpy.data.meshes.new("brim")
+    me.from_pydata(pts, [], quads)
+    me.update()
+    for poly in me.polygons:
+        poly.use_smooth = True
+        poly.material_index = CAP
+    _uv_from_nearest(o, me, cap)
+    col = me.color_attributes.new("tint", "BYTE_COLOR", "POINT")
+    col.data.foreach_set("color", [0, 1, 0, 1] * len(me.vertices))  # tinted like the cap (the top colour)
+    brim = bpy.data.objects.new("brim", me)
+    bpy.context.scene.collection.objects.link(brim)
+    for m in o.data.materials:
+        brim.data.materials.append(m)
+    brim.vertex_groups.new(name="head").add(list(range(len(me.vertices))), 1.0, "REPLACE")
+    bpy.ops.object.select_all(action="DESELECT")
+    brim.select_set(True)
     o.select_set(True)
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.join()
@@ -550,7 +627,7 @@ def _n(nt: bpy.types.NodeTree, kind: str, **kw: object) -> bpy.types.Node:
     return node
 
 
-def detail_material(region: int) -> bpy.types.Material:
+def detail_material(region: int, body: str = "male") -> bpy.types.Material:
     """The look of one region, for baking: colour (as emission), roughness and fine bump. Colours are neutral where
     the game tints them (skin tone, top, bottom from the look picker)."""
     m = bpy.data.materials.new(f"detail{region}")
@@ -600,7 +677,7 @@ def detail_material(region: int) -> bpy.types.Material:
         pores = noise(1400, 2)
         bump(pores.outputs[0], 0.12, 0.0006)
         rough = 0.5
-    elif region == TOP:
+    elif region in (TOP, CAP):
         # ankara-style print: bold repeating motifs (light) on the fabric colour (tinted in game)
         mapping = _n(nt, "ShaderNodeMapping")
         L(tex.outputs["UV"], mapping.inputs[0])
@@ -641,10 +718,13 @@ def detail_material(region: int) -> bpy.types.Material:
         sole.inputs[7].default_value = (0.8, 0.78, 0.74, 1)
         color = sole.outputs[2]
         rough = 0.4
-    elif region == HAIR:
-        coils = noise(420, 6)
-        color = ramp(coils.outputs[0], (0.025, 0.02, 0.018), (0.09, 0.07, 0.06), 0.35, 0.65).outputs[0]
-        bump(coils.outputs[0], 0.9, 0.002)
+    elif region in (HAIR, BEARD):
+        coils = noise(420 if region == HAIR else 700, 6)
+        if body == "elder":  # grey: white coils over darker scalp/skin showing through
+            color = ramp(coils.outputs[0], (0.12, 0.11, 0.1), (0.72, 0.71, 0.69), 0.4, 0.62).outputs[0]
+        else:
+            color = ramp(coils.outputs[0], (0.025, 0.02, 0.018), (0.09, 0.07, 0.06), 0.35, 0.65).outputs[0]
+        bump(coils.outputs[0], 0.9 if region == HAIR else 0.5, 0.002)
         rough = 0.9
     else:  # eyes: sclera, brown iris, pupil, looking straight ahead (-y)
         attr = _n(nt, "ShaderNodeAttribute", attribute_name="eyedir")
@@ -700,8 +780,8 @@ def bake(hi: bpy.types.Object, name: str) -> dict[str, bpy.types.Image]:
     for k in ("normal", "rough", "ao"):
         imgs[k].colorspace_settings.name = "Non-Color"
     nodes = []
-    for r in range(7):
-        m = detail_material(r)
+    for r in range(REGIONS):
+        m = detail_material(r, name)
         hi.material_slots[r].material = m
         n = m.node_tree.nodes.new("ShaderNodeTexImage")
         m.node_tree.nodes.active = n
@@ -816,12 +896,13 @@ def build(name: str, render_dir: Path | None) -> Path:
             im.save()
         idle_pose(rig)
         lod.hide_render = True
-        render(render_dir / f"{name}.png", lo)
+        render(render_dir / f"{name}.png", lo, tints=PREVIEW_TINT_ELDER if name == "elder" else PREVIEW_TINT)
         render(render_dir / f"{name}_face.png", lo, face=True)
     return path
 
 
 PREVIEW_TINT = {"skin": "#5a3825", "top": "#d94f3d", "bottom": "#2c3e50"}  # from the game's palette
+PREVIEW_TINT_ELDER = {"skin": "#a8714a", "top": "#3d7fd9", "bottom": "#2c3e50"}  # Baba Boju's look
 
 
 def _linear(hex_color: str) -> tuple[float, float, float]:
@@ -829,7 +910,7 @@ def _linear(hex_color: str) -> tuple[float, float, float]:
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)  # type: ignore[return-value]
 
 
-def preview_tint(o: bpy.types.Object) -> None:
+def preview_tint(o: bpy.types.Object, tints: dict[str, str]) -> None:
     """Colour the render like the game does: base colour x (skin tone, top, bottom) through the tint mask."""
     m = o.data.materials[0].copy()
     o.data.materials[0] = m
@@ -864,7 +945,7 @@ def preview_tint(o: bpy.types.Object) -> None:
     acc = None
     total = None
     for ch, key in (("Red", "skin"), ("Green", "top"), ("Blue", "bottom")):
-        term = vec("SCALE", tuple(c * 1.25 for c in _linear(PREVIEW_TINT[key])), None)
+        term = vec("SCALE", tuple(c * 1.25 for c in _linear(tints[key])), None)
         nt.links.new(sep.outputs[ch], term.node.inputs["Scale"])
         acc = term if acc is None else vec("ADD", acc, term)
         total = sep.outputs[ch] if total is None else val("ADD", total, sep.outputs[ch])
@@ -881,10 +962,10 @@ def preview_tint(o: bpy.types.Object) -> None:
     nt.links.new(cur, bsdf.inputs["Base Color"])
 
 
-def render(path: Path, target: bpy.types.Object, face: bool = False) -> None:
+def render(path: Path, target: bpy.types.Object, face: bool = False, tints: dict[str, str] = PREVIEW_TINT) -> None:
     """A quick studio render (Cycles, CPU) to look at the result; ``face`` for a close-up."""
     if not face:
-        preview_tint(target)
+        preview_tint(target, tints)
     scn = bpy.context.scene
     scn.render.engine = "CYCLES"
     scn.cycles.device = "CPU"

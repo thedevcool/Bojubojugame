@@ -37,7 +37,8 @@ export function AvatarPreview({ av, className, real }: { av: number[]; className
         <hemisphereLight args={["#eaf2ff", "#3a4a6a", 1.2]} />
         <directionalLight position={[2, 4, 3]} intensity={2} />
         <Turntable speed={0.6}>
-          <Avatar av={av} motion={motion} />
+          {/* the realistic preview shows Baba Boju realistic too (he is the elder in this look) */}
+          {real ? <Suspense fallback={<Avatar av={av} motion={motion} />}><RealAvatar av={av} elder /></Suspense> : <Avatar av={av} motion={motion} />}
         </Turntable>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
           <circleGeometry args={[0.9, 40]} />

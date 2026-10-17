@@ -78,6 +78,7 @@ export function useTip(): Tip | null {
   switch (g.phase) {
     case "lobby": {
       const n = g.members.filter((m) => !m.left).length;
+      if (g.matchmade) return { key: "lobby-match", icon: "⚡", text: `Finding players… ${n}/4`, sub: "It starts by itself as players join (NPCs fill in if nobody comes)" };
       return g.creator === me
         ? { key: "lobby-host", icon: "👥", text: n < 2 ? "Invite friends or add NPCs" : "Ready? Tap Start game", sub: n < 2 ? "You need at least 2 players. Your code is in 🙈 Boju Boju." : `${n} players in — tap 🙈 ${g.code} → Start game` }
         : { key: "lobby-guest", icon: "⏳", text: `Waiting for ${nick(g.creator)} to start`, sub: "The game takes everyone to the Motor Park" };

@@ -27,6 +27,8 @@ export interface Zone { id: string; kind: string; name: string; rect: Rect }
 export interface Area { id: string; name: string; rect: Rect }
 
 export interface GameMap {
+  /** false: only a summary (no props yet) — fetched in full when someone goes there (lib/maps.ts) */
+  full?: boolean;
   id: string;
   name: string;
   kind: "hub" | "arena";
@@ -100,7 +102,7 @@ export interface GameConfig {
 
 export interface PhoneModel { id: string; name: string; price: number; color: string; tagline: string }
 
-export interface City { id: string; name: string; lat: number; lng: number; blurb: string; arenas: string[]; fares: Fare[] | null }
+export interface City { id: string; name: string; lat: number; lng: number; blurb: string; arenas: string[]; event_arenas?: string[]; fares: Fare[] | null }
 
 export interface Content { config: GameConfig; maps: Record<string, GameMap> }
 
@@ -147,6 +149,8 @@ export interface Standing { id: string; nick: string; earned: number; finds: num
 export type Phase = "lobby" | "travel" | "gather" | "dice" | "reveal" | "hide" | "seek" | "result" | "over";
 
 export interface GroupState {
+  /** made by "Match me": starts itself when enough players are in */
+  matchmade?: boolean;
   id: string;
   code: string;
   creator: string;

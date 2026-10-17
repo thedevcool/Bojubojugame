@@ -1,5 +1,6 @@
 "use client";
 
+import { GAME_ONLY } from "@/lib/scope";
 import { useEffect, useRef, useState } from "react";
 import { cam, local } from "@/game/state";
 import { accountKey, serverFlags, setFlag } from "@/lib/api";
@@ -22,7 +23,7 @@ export const TOUR: TourStep[] = ["welcome", "move", "look", "phone", "house", "h
  * game). The phone comes free, and houses, shops and travel aren't part of it.
  */
 const MINI_SKIP: TourStep[] = ["phone", "house", "home", "map"];
-const steps = (): TourStep[] => (useGame.getState().mini ? TOUR.filter((s) => !MINI_SKIP.includes(s)) : TOUR);
+const steps = (): TourStep[] => (useGame.getState().mini || GAME_ONLY ? TOUR.filter((s) => !MINI_SKIP.includes(s)) : TOUR);
 
 export function onboardingDone(): boolean {
   if (serverFlags.tour === "done") return true;
@@ -77,6 +78,7 @@ export default function Onboarding() {
   const cityBuilt = useGame((s) => s.cityBuilt && !s.building);
   const guide = useGame((s) => s.gameGuide);
   const mini = useGame((s) => !!s.mini);
+  const front = useGame((s) => s.front);
   useTicker(300);
   const mark = useRef<{ step: TourStep | null; x: number; z: number; yaw: number; turned: number; seenOn: boolean }>({ step: null, x: 0, z: 0, yaw: 0, turned: 0, seenOn: false });
 
@@ -116,13 +118,13 @@ export default function Onboarding() {
     if (step === "map" || step === "roles") set({ guide: null });
   }, [step, set]);
 
-  if (!step || guide) return null; // the first-game guide takes over from here
+  if (!step || guide || front) return null; // the first-game guide takes over from here; Baba Boju speaks first
   const skip = () => finishTour("Tour skipped — 📱 ⚙️ Settings → How to play has the rules any time");
   const n = steps().indexOf(step), total = steps().length - 1;
 
   // ---- the invitation (small, at the bottom, nothing blocked)
   if (step === "welcome") {
-    if (!cityBuilt) return null; // say hello once the city is standing, not over an empty field
+    if (!cityBuilt || group) return null; // say hello once the city is standing (and never in the middle of a game)
     return (
       <div className="pointer-events-auto absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] z-[56] flex justify-center px-3" data-testid="tour" data-keep-phone>
         <div className="panel anim-sheet guide-attn w-full max-w-md p-4">
@@ -130,14 +132,14 @@ export default function Onboarding() {
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-3xl leading-none"><span className="logo-peek">🙈</span></span>
             <div className="min-w-0">
               <div className="text-lg font-black leading-tight">Ẹ káàbọ̀, {username}!</div>
-              <div className="text-[13px] leading-snug opacity-85">{mini
+              <div className="text-[13px] leading-snug opacity-85">{mini || GAME_ONLY
                 ? "Welcome to Boju Boju — hide & seek, Lagos style. Want a quick guide to playing?"
                 : "Welcome to Boju Boju. Before you start to dey Boju — we get more than that here. Want me to show you around?"}</div>
             </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button className="btn btn-ghost flex-1" onClick={skip}>Not now</button>
-            <button className="btn btn-primary flex-[2]" onClick={() => next("welcome")}>{mini ? "Show me how ▶" : "Show me around ▶"}</button>
+            <button className="btn btn-primary flex-[2]" onClick={() => next("welcome")}>{mini || GAME_ONLY ? "Show me how ▶" : "Show me around ▶"}</button>
           </div>
         </div>
       </div>
@@ -209,7 +211,7 @@ export default function Onboarding() {
  * tapping-finger hint once (per account) until they move.
  */
 export function MoveHint() {
-  const ready = useGame((s) => s.cityBuilt && s.onboard === null && !s.group && !s.phoneOpen && !s.mapOpen && !s.mini);
+  const ready = useGame((s) => s.cityBuilt && s.onboard === null && !s.group && !s.phoneOpen && !s.mapOpen && !s.mini && !s.front);
   const [show, setShow] = useState(false);
   useEffect(() => {
     if (!ready) return;

@@ -15,6 +15,87 @@ register in the release that ships them.
 
 ---
 
+## 2.17.0 — 2026-10-17
+Owner requests:
+- Don't unpack everything at once. Unpack only where the player is; the ride is the loader; pack away the place
+  they left.
+- "Agodi garden… where they are spawned to when they choose Ibadan".
+- "Akobo will be the hardest place, so it will be for the event, we won't match people to play there yet".
+
+Changes:
+- Changes `P41`: **places load one at a time.**
+  - The start-up download carries only a summary of each place: names, zones, safe houses, bounds. Its props were
+    the bulk; the download is now about 20 KB in total.
+  - A place's full plan is fetched from `GET /api/maps/{id}` (cached, with an ETag) when you go there.
+  - The ride screen is the loader: it ends when its time is up *and* the place is downloaded and built. A slow
+    phone stays on the bus a little longer rather than arriving in a half-built place (25 s at most).
+  - Only where you are and where you just were stay on the phone; anything older is packed away. The 3D of the
+    place you left is freed, its ground texture included.
+  - Watching a game fetches that place's plan only for the watch screen.
+  - Low-end check: on start only Lagos was downloaded; the arena was fetched during an 8 s ride; the ride screen
+    lifted at 9.7 s with the place built; no main-thread task over 1 s; no errors.
+  - Test: `test_places_load_one_at_a_time`.
+- Changes `P26`: **Ibadan players live at Agodi Gardens** (they spawn there). **Akobo is for events only**: it
+  moved to the city's `event_arenas`, so Match me and quick games never send anyone there; it still exists for
+  events.
+
+## 2.16.0 — 2026-10-17
+Owner request: "let's pack the buy house, etc and just make it about the game only". Users come in to a storefront
+where a Yoruba man introduces the game. With anyone else online they get "Play with online players" (Match me, or
+Join a group); with nobody online, "Play with NPCs". Location is optional: if it says Lagos or Ibadan they live
+there, otherwise they choose, and they always spawn there. "Instead of belle and energy… money and win streak broken
+into hide streak and win streak".
+
+Changes:
+- **Storefront.** Everyone arrives at Baba Boju's stall: an elder in a face cap (3D) and a typed welcome in pidgin
+  ("Welcome <name>, na you we dey wait for! You remember that time we dey play Boju Boju?…"). Tap the bubble to
+  skip the typing. Then:
+  - **City.** The first time, "📍 Use my location" checks the phone's location: within about 70 km of Lagos or about
+    45 km of Ibadan makes that your city. Otherwise, or if location is refused, you choose 🌆 Lagos or 🌳 Ibadan.
+    The choice is saved on your account (and can be changed there), and you always spawn in your city: Lagos at
+    the hub, Ibadan at Akobo. Games you start are played in your city.
+  - **Someone else online** (`/api/online`): "🎮 Play with online players" → **⚡ Match me** or **🔑 Join a group**.
+    Join a group is unchanged (code, invite, Live games).
+  - **Nobody else online:** "🤖 Play with NPCs".
+  - "Walk around first" closes the storefront. The guided tour and move hints wait until it's closed.
+- **Match me (new).** It puts you in the best waiting match: same city first, then the fullest (it starts soonest),
+  then the one waiting longest. No match waiting: a new one opens with you as host, and the next "Match me" lands
+  there. Matches start themselves:
+  - with 4 real players;
+  - or 12 s after a second real player joins;
+  - alone for 40 s: NPCs fill in to 3 and it starts ("Nobody else free right now — you're playing NPCs").
+  - The coach shows "Finding players… n/4".
+  - Tests: `test_match_me_pairs_players_and_starts_itself`, `test_match_me_alone_plays_npcs`.
+- **Money and streaks replace belle and energy.**
+  - The top bar shows money and 🥷 hide streak and 🏆 win streak; the breath bar stays on the Run ring.
+  - Hide streak: rounds in a row you weren't found (being found resets it). Win streak: games in a row you finished
+    first (losing or leaving resets it). Bests are kept, for events later.
+  - Stored on the account, sent with the wallet, and shown on the phone's home screen and in Wallet.
+  - Hunger no longer stops anyone playing, and rounds no longer use it up.
+  - Test: `test_streaks_count_wins_and_hides`.
+- Changes `P21`, Changes `P22`, Changes `P23`: **the extras are packed away, not deleted** (`frontend/src/lib/scope.ts`,
+  `GAME_ONLY = true`). Shops (phones, furniture, cars, food), the Houses app, decorating, sleeping and driving are
+  hidden. Everyone gets a phone for free.
+- Changes `P04`: the tour is game-only for everyone (walk, look, Aerial, hiding vs seeking, first game).
+- Changes `P20`: no Houses app; the phone's Home card is now Streaks.
+- Changes `P25`: the map is the area you're in (no Naija trips); the bus stop only rides you home (your city).
+- Games can now start from Ibadan: everyone is taken to their own bus stop to board.
+- Housekeeping: `.opencode/server.lock.json` (a local editor lock file with a password) is no longer tracked and is
+  ignored.
+
+## 2.15.1 — 2026-10-17
+Owner reports:
+- LagosLife review rule 4: "Handle onPause and onResume so sound and timers stop."
+
+Changes:
+- **Solo games pause (Changes `P33`).** In a game with only you and NPCs, the whole game stops while you're away:
+  LagosLife's pause, minimising or closing the app. The countdown, the bus ride, the circle and the NPCs all
+  freeze, and everything carries on from the same second when you're back.
+  - LagosLife: `onPause` sends `g_pause`, `onResume` sends `g_resume`. A fresh connection un-pauses too, in case
+    the resume was sent while offline.
+  - A game with other people never pauses, because they're still playing; your stand-in holds your place as before.
+  - Tests: `test_solo_game_pauses_and_resumes`, `test_multiplayer_game_never_pauses`.
+
 ## 2.15.0 — 2026-10-15
 - **Player directory.** Admins can search and page through all player accounts, then open a live detail view with profile, account state, visit time, gameplay, social/property counts and ad payment history. Credentials and device secrets are never returned.
 - **Paystack ad revenue.** Admin totals include only charges confirmed by Paystack's verify API or signed webhook, with refunds subtracted from net collected. Fake checkout and LagosLife ad purchases are excluded; net collected is not the Paystack settlement amount after fees.
@@ -170,7 +251,7 @@ keep saying I can follow the arrows but none is indicative".
 - `P01` **Username + password accounts** — sign up with username, password (twice), optional email; log in by username or email; forgot password by email.
 - `P02` **Welcome back screen** — returning phones see Enter Lagos, Log in as someone else, and Create new account (which opens the sign-up form).
 - `P03` **Look picker** — male/female body, 4 hairstyles each, skin, ankara top, trousers/wrapper, live 3D preview at sign-up; change any time in Settings → My look (others see it at once).
-- `P04` **Guided tour for new players** — "Show me around" (or Not now): walk, look (animated tap/swipe hints; a one-time "Tap here to walk" if you haven't moved), follow the glowing ground arrows or tap the edge-of-screen pointer to walk there, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
+- `P04` **Guided tour for new players** (after the storefront; game-only) — "Show me around" (or Not now): walk, look (animated tap/swipe hints; a one-time "Tap here to walk" if you haven't moved), follow the glowing ground arrows or tap the edge-of-screen pointer to walk there, buy a phone, rent a house, walk home, map, Aerial, hiding vs seeking, start a game; skippable; progress kept per account; short version in LagosLife.
 - `P05` **First-game guide** — a small "Want a quick guide?" card; Yes starts the shortest practice game (you + 1 NPC) and the guide card walks through code/invite, Start, bus, circle, dice, hide or seek (Run, Bend, safe house, Aerial to watch Boju) and the result; the button to press glows; new info pulses; Exit any time.
 - `P06` **What's New** — shows once per release for returning players only (never for new players), plus Settings → What's new.
 
@@ -184,24 +265,25 @@ keep saying I can follow the arrows but none is indicative".
 - `P16` **Aerial view** — look from the sky (and during games).
 
 ### Life in Lagos
-- `P20` **Phone** — opens/closes (✕ Close at the top; tap outside closes it; dialogs over it don't); apps: Boju Boju, Houses, Messages, Map, Wallet, Settings, etc.; swipeable shop lists.
-- `P21` **Shops** — Tini Tech phones, furniture, Tokunbo Autos cars, food (belle).
-- `P22` **Houses** — rent, walk in through your door, room & parlour, decorate, sleep and sit; neighbours knock.
-- `P23` **Cars & driving** — pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
+- `P20` **Phone** — opens/closes (✕ Close at the top; tap outside closes it; dialogs over it don't); apps: Boju Boju, Messages, Map, Wallet, Settings, etc.; swipeable shop lists.
+- `P21` **Shops** — (packed away by GAME_ONLY; phones are free) Tini Tech phones, furniture, Tokunbo Autos cars, food.
+- `P22` **Houses** — (packed away by GAME_ONLY) rent, walk in through your door, room & parlour, decorate, sleep and sit; neighbours knock.
+- `P23` **Cars & driving** — (packed away by GAME_ONLY) pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
-- `P25` **Map & travel** — minimap, full map with pins and always-visible place names, real map of Naija, rides between cities and venues.
-- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja.
+- `P25` **Map & travel** — minimap, full map with pins and always-visible place names; your city (Lagos or Ibadan, from location or chosen) is where you spawn; buses to games and home (Naija trips packed away).
+- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja. Ibadan home is Agodi Gardens; Akobo is for events only.
 - `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass buttons on arcs round Run, foldable; Aerial glows while you hide.
 
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back.
+- `P34` **Storefront & Match me** — Baba Boju's welcome, city from location or chosen, Play with online players (Match me / Join a group) or with NPCs; matches start themselves; money + hide/win streaks in the top bar.
+- `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back. In a solo game (you + NPCs) the whole game pauses instead, and carries on when you're back.
 - `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
-- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar.
+- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar. Places load one at a time (the ride is the loader; the place you left is packed away).
 - `P42` **iPhone layout** — safe areas respected when installed; Install app.
 
 ---
@@ -210,6 +292,11 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.17.0 | 2026-10-17 | Places load one at a time; Agodi is Ibadan's home; Akobo for events |
+| 2.16.0 | 2026-10-17 | Just the game: storefront, Match me, your city, streaks |
+| 2.15.1 | 2026-10-17 | Solo games pause while you're away |
+| 2.15.0 | 2026-10-15 | Admin player directory and Paystack ad revenue |
+| 2.14.0 | 2026-10-15 | Admin analytics |
 | 2.13.0 | 2026-10-13 | Real dice, smarter NPCs, no more snap-backs |
 | 2.12.0 | 2026-10-13 | Stand-ins, a cleaner screen, round controls |
 | 2.11.4 | 2026-10-12 | Arrows you can follow, moving freely at home, LagosLife = just the game, games end when others leave |

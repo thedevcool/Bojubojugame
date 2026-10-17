@@ -68,6 +68,10 @@ class RematchAsk:
     code: str | None = None  # the rematch game, once someone said yes
 
 
+IBADAN_HOME = "arena_ibadan"  # Ibadan players live (and always spawn) at Agodi Gardens
+MATCH_SIZE = 4  # "Match me" fills a game to this many real players…
+MATCH_WAIT_S = 12.0  # …or starts this long after a second player joins
+MATCH_ALONE_S = 40.0  # nobody else came: NPCs fill in and it starts
 STANDIN_KEEP_S = 30 * 60.0  # someone who closed the app keeps standing in the world this long, then goes offline
 
 
@@ -118,6 +122,7 @@ class World:
         avatar: list[int] | None = None,
         home_id: str | None = None,
         car: str | None = None,
+        city: str | None = None,
     ) -> Session:
         now = self.now()
         s = self.sessions.get(pid)
@@ -139,6 +144,8 @@ class World:
             s.stamina = self.cfg.movement.stamina_max_s
             self.sessions[pid] = s
         s.car = car
+        if city in ("lagos", "ibadan"):
+            s.city = city
         s.send(
             {
                 "t": "hello",
@@ -152,7 +159,10 @@ class World:
         s.send({"t": "furn_all", "homes": self.furniture})
         if s.room is None:
             spot = self.last_spots.pop(pid, None)
-            self.join_hub(s, at=self.free_spot((spot[0], spot[1]), exclude=pid) if spot else self.home_spawn(s))
+            if spot and s.city == "lagos":
+                self.join_hub(s, at=self.free_spot((spot[0], spot[1]), exclude=pid))
+            else:
+                self.send_home(s, arriving=True)
         else:  # reconnect: resend where you are
             s.room.add(s, s.x, s.z, now)
         if (code := self.timed_out.pop(pid, None)) is not None:
@@ -339,13 +349,39 @@ class World:
         arena = g.settings["arena"] if g else None
         if g is not None:
             self.leave_group(s, quiet=True)
-        hub = self.maps[HUB_MAP_ID]
-        at = self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point()
-        self.join_hub(s, at=at)
+        self.send_home(s)
         s.crouch = s.sit = s.lie = False
         if arena:
             fare = min(self.cfg.fares_for(arena), key=lambda f: f.price)
             s.send({"t": "ride", "seconds": fare.ride_s, "mode": fare.id, "arena": arena, "dir": "home"})
+
+    def send_home(self, s: Session, arriving: bool = False) -> None:
+        """Your city: Lagos players to the hub (their house or the motor park), Ibadan players to Akobo."""
+        if s.city == "ibadan":
+            m = self.maps[IBADAN_HOME]
+            stop = m.zones.get("bus_stop")
+            base = (
+                ((stop["rect"][0] + stop["rect"][2]) / 2, (stop["rect"][1] + stop["rect"][3]) / 2) if stop else m.spawn
+            )
+            self.explore_room(IBADAN_HOME).add(
+                s, base[0] + self.rng.uniform(-1.5, 1.5), base[1] + self.rng.uniform(-1, 1), self.now()
+            )
+            return
+        hub = self.maps[HUB_MAP_ID]
+        # coming online: your house, or beside the shops for newcomers; back from a game: house or motor park
+        at = self.home_spawn(s) if arriving or hub.home_by_id(s.home_id) else self.arrival_point()
+        self.join_hub(s, at=at)
+
+    def set_city(self, pid: str, city: str) -> None:
+        """Chose (or detected) your city: you live there from now on — move there now if you're not in a game."""
+        s = self.sessions.get(pid)
+        if s is None or s.city == city:
+            if s is not None:
+                s.city = city
+            return
+        s.city = city
+        if s.group is None:
+            self.send_home(s)
 
     def join_hub(self, s: Session, prefer: HubShard | None = None, at: tuple[float, float] | None = None) -> None:
         shard = prefer if prefer is not None and not prefer.full else None
@@ -556,8 +592,7 @@ class World:
             self.leave_group(s, quiet=True)
         s.crouch = s.sit = s.lie = s.driving = False
         if m.to == "hub":
-            hub = self.maps[HUB_MAP_ID]
-            self.join_hub(s, at=self.home_spawn(s) if hub.home_by_id(s.home_id) else self.arrival_point())
+            self.send_home(s)
             s.send({"t": "ride", "seconds": seconds, "mode": mode, "arena": here, "dir": "home"})
         else:
             dest = self.explore_room(m.to)
@@ -661,8 +696,9 @@ class World:
             s.send({"t": "corr", "x": round(s.x, 2), "z": round(s.z, 2), "s": seq})
 
     async def on_group(self, s: Session, msg: Any) -> None:
-        if isinstance(msg, (P.GroupCreate, P.GroupJoin)) and isinstance(s.room, ExploreRoom):
-            raise GroupError("Games start from Lagos — ride home from the 🚏 bus stop first")
+        if isinstance(msg, P.Bare) and msg.t == "g_match":
+            await self.match_me(s)
+            return
         if isinstance(msg, P.GroupCreate):
             if s.group is not None and s.group.phase != "over":
                 raise GroupError("Leave your current group first")
@@ -707,6 +743,8 @@ class World:
                 self.leave_group(s)
             elif msg.t == "g_cancel":
                 self.cancel_group(s)
+            elif msg.t in ("g_pause", "g_resume"):
+                g.pause_requested = msg.t == "g_pause"  # only acted on in a solo game (see GroupRoom.update_pause)
             elif msg.t == "g_return":
                 if g.phase != "over":
                     raise GroupError("Finish the game first")
@@ -747,13 +785,73 @@ class World:
         log.info("group_created game=%s code=%s by=%s", game_id, code, s.pid)
         return g
 
+    # ------------------------------------------------------------ "Match me"
+    async def match_me(self, s: Session) -> GroupRoom:
+        """Put a player into the best waiting match: same city first, then the fullest lobby (it starts soonest),
+        then the oldest (whoever waited longest). No match waiting: open one — the next "Match me" lands there."""
+        if s.group is not None and s.group.phase != "over":
+            if s.group.matchmade and s.group.phase == "lobby":
+                return s.group  # already waiting
+            raise GroupError("Leave your current game first")
+        best: tuple[tuple[int, int, float], GroupRoom] | None = None
+        for g in self.groups.values():
+            if not g.matchmade or g.phase != "lobby" or len(g.active) >= MATCH_SIZE or s.pid in g.left:
+                continue
+            host = self.sessions.get(g.creator)
+            if host is None or not host.connected:
+                continue
+            rank = (0 if host.city == s.city else 1, -len(g.humans), g.created_at)
+            if best is None or rank < best[0]:
+                best = (rank, g)
+        if best is not None:
+            g = best[1]
+            if s.group is not None:
+                self.leave_group(s, quiet=True)
+            g.add_member(s)
+            if len(g.humans) >= 2 and g.match_ready_at is None:
+                g.match_ready_at = self.now()
+            await self.send_chat_history(s, g)
+            return g
+        arena = next((c.arenas[0] for c in self.cfg.cities if c.id == s.city), "arena_park")
+        safe = next(iter(self.maps[arena].safe_houses))
+        g = await self.create_group(
+            s, P.GroupCreate(t="g_create", arena=arena, hide=30, search=180, safe=safe, public=True)
+        )
+        g.matchmade = True
+        g.broadcast_state("matching")
+        return g
+
+    async def tick_matchmaking(self, now: float) -> None:
+        """Matches start themselves: full, or soon after a second real player joins; alone too long, NPCs fill in."""
+        for g in list(self.groups.values()):
+            if not g.matchmade or g.phase != "lobby":
+                continue
+            online = [p for p in g.humans if (x := self.sessions.get(p)) and x.connected]
+            host = self.sessions.get(g.creator)
+            if host is None or not host.connected or not online:
+                continue
+            go = len(online) >= MATCH_SIZE or (
+                len(online) >= 2 and g.match_ready_at is not None and now - g.match_ready_at >= MATCH_WAIT_S
+            )
+            if not go and len(online) == 1 and now - g.created_at >= MATCH_ALONE_S:
+                while len(g.active) < 3:
+                    g.add_bot(host)
+                g.broadcast({"t": "toast", "msg": "Nobody else free right now — you're playing NPCs. Train well! 💪🏾"})
+                go = True
+            if go:
+                try:
+                    async with g.lock:
+                        await g.start(host)
+                except GroupError as e:
+                    log.info("match start held game=%s: %s", g.id, e)
+
     def leave_group(self, s: Session, quiet: bool = False) -> None:
         g = s.group
         if g is None:
             return
         g.leave(s)
         if not quiet and not isinstance(s.room, HubShard):
-            self.join_hub(s, at=self.arrival_point())
+            self.send_home(s)
         s.send({"t": "g_left"})
         if g.phase == "lobby" and not g.humans:  # only NPCs left waiting: nobody will ever start it
             self._drop_group(g.code, g)
@@ -867,8 +965,37 @@ class World:
 
     async def push_wallet(self, s: Session) -> None:
         bal = await self.economy.balance(s.pid)
-        hunger = await self.economy.get_hunger(s.pid)
-        s.send({"t": "wallet", "balance": bal, "hunger": round(hunger, 1)})
+        st = await self.get_streaks(s.pid)
+        s.send({"t": "wallet", "balance": bal, **st})
+
+    # ------------------------------------------------------------ streaks (for events later)
+    STREAKS = ("hide_streak", "win_streak", "best_hide_streak", "best_win_streak")
+
+    async def get_streaks(self, pid: str) -> dict[str, int]:
+        async with self.db() as db:
+            p = await db.get(Player, pid)
+            f = (p.flags if p else None) or {}
+        return {k: int(f.get(k, 0) or 0) for k in self.STREAKS}
+
+    async def bump_streaks(self, changes: dict[str, dict[str, bool]]) -> None:
+        """changes: pid -> {"hide": won?, "win": won?}. A win adds one; a loss resets to zero; the best is kept."""
+        if not changes:
+            return
+        async with self.db() as db, db.begin():
+            for pid, ch in changes.items():
+                p = await db.get(Player, pid, with_for_update=True)
+                if p is None:
+                    continue
+                f = dict(p.flags or {})
+                for kind, won in ch.items():
+                    cur = int(f.get(f"{kind}_streak", 0) or 0)
+                    cur = cur + 1 if won else 0
+                    f[f"{kind}_streak"] = str(cur)
+                    f[f"best_{kind}_streak"] = str(max(cur, int(f.get(f"best_{kind}_streak", 0) or 0)))
+                p.flags = f
+        for pid in changes:
+            if (s := self.sessions.get(pid)) is not None and s.connected:
+                await self.push_wallet(s)
 
     async def apply_round(
         self, game_id: str, round_no: int, deltas: dict[str, int], outcome: rules.RoundOutcome, participants: list[str]
@@ -885,9 +1012,11 @@ class World:
             )
             applied[pid] = got
         if not outcome.skipped:
-            for pid in participants:
-                if pid not in outcome.idle:
-                    await self.economy.change_hunger(pid, -self.cfg.game.hunger_per_round)
+            # hide streak: rounds in a row you weren't found (being found breaks it)
+            await self.bump_streaks({
+                h: {"hide": h not in outcome.found_order}
+                for h in outcome.hiders if h not in bots and h not in outcome.idle
+            })  # fmt: skip
             async with self.db() as db, db.begin():
                 if outcome.seeker not in bots:
                     db.add(
@@ -930,6 +1059,7 @@ class World:
         now = self.now()
         if self.rematches:
             await self.settle_rematches()
+        await self.tick_matchmaking(now)
         for code, g in list(self.groups.items()):
             try:
                 async with g.lock:

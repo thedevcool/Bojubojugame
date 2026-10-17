@@ -30,6 +30,7 @@ GAME_PHASES = {"gather", "dice", "reveal", "hide", "seek", "result"}
 GATHER_RADIUS = 4.5  # the circle everyone stands in before the dice
 SEEN_GRACE_S = 1.2  # Boju keeps seeing a hider this long after losing sight (no popping out of view)
 LIVE_PHASES = {"hide", "seek"}  # chat locked, positions culled
+PAUSABLE_PHASES = GAME_PHASES | {"travel"}  # a solo game (one human + NPCs) freezes in these while its player is away
 AWAY_LIMIT_S = 30 * 60.0  # offline this long mid-game: taken out of the game (until then their stand-in stays)
 
 
@@ -92,6 +93,13 @@ class GroupRoom:
         self.gathered: list[str] = []
         self.seen_until: dict[tuple[str, str], float] = {}
         self.public = True
+        self.matchmade = (
+            False  # made by "Match me": starts itself once enough players are in (see World.tick_matchmaking)
+        )
+        self.match_ready_at: float | None = None  # when a second real player joined
+        self.created_at = world.now()
+        self.pause_requested = False  # the only human's app sent "paused" (LagosLife onPause)
+        self.paused_at: float | None = None
         self.arena = ArenaRoom(f"arena:{game_id}", self.map, self)
 
     # ------------------------------------------------------------ helpers
@@ -185,6 +193,38 @@ class GroupRoom:
         self.phase_end = self.world.now() + duration
         self.broadcast_state(event)
 
+    # ------------------------------------------------------------ solo pause
+    @property
+    def solo(self) -> bool:
+        """One human with only NPCs: the whole game can stop while that player is away."""
+        return len(self.humans) == 1 and self.phase in PAUSABLE_PHASES
+
+    def update_pause(self, now: float) -> bool:
+        """Freeze a solo game while its player's app is paused or their socket is gone; returns True while frozen.
+
+        Multiplayer games never pause (other people are playing): there the stand-in holds your place."""
+        human = self.session(self.humans[0]) if self.humans else None
+        want = self.solo and human is not None and (self.pause_requested or not human.connected)
+        if want and self.paused_at is None:
+            self.paused_at = now
+            self.broadcast_state("paused")
+        elif not want and self.paused_at is not None:
+            self.resume(now)
+        return self.paused_at is not None
+
+    def resume(self, now: float) -> None:
+        assert self.paused_at is not None
+        shift = now - self.paused_at
+        self.paused_at = None
+        self.phase_end += shift
+        self.arrive_at = {p: t + shift for p, t in self.arrive_at.items()}
+        self.seen_until = {k: t + shift for k, t in self.seen_until.items()}
+        for b in self.bots.values():
+            b.next_think += shift
+            if b.react_at is not None:
+                b.react_at += shift
+        self.broadcast_state("resumed")
+
     def broadcast(self, msg: dict[str, Any]) -> None:
         for pid in self.members:
             if pid not in self.left and (s := self.session(pid)):
@@ -199,6 +239,7 @@ class GroupRoom:
             "code": self.code,
             "creator": self.creator,
             "settings": self.settings,
+            "matchmade": self.matchmade,
             "phase": self.phase,
             "phase_end": int(self.phase_end * 1000),
             "members": [
@@ -279,21 +320,13 @@ class GroupRoom:
             raise GroupError(f"Waiting for {', '.join(offline)} to come online")
         if not self.humans:
             raise GroupError("At least one real player is needed")
-        hungry = []
-        for p in self.humans:
-            if p in self.world.mini:
-                continue
-            if await self.world.economy.get_hunger(p) < self.cfg.game.min_hunger_to_play:
-                hungry.append(self.nicks[p])
-        if hungry:
-            raise GroupError(f"Too hungry to play: {', '.join(hungry)}. Go and chop first!")
         if self.phase != "lobby":
             return
         self.broadcast({"t": "g_event", "e": "group_started"})
         self.set_phase("travel", self.cfg.game.travel_window_s, "travel_started")
-        # everybody in Lagos is taken straight to the motor park to board
+        # everybody is taken straight to their bus stop to board (Lagos motor park, or Ibadan's)
         for p in self.humans:
-            if (h := self.session(p)) is not None and h.room is not None and h.room.map.kind == "hub":
+            if (h := self.session(p)) is not None and h.room is not None and h.room is not self.arena:
                 stop = h.room.map.zones.get("bus_stop")
                 if stop is not None:
                     x0, z0, x1, z1 = stop["rect"]
@@ -312,7 +345,7 @@ class GroupRoom:
         fare = next((f for f in self.cfg.fares_for(self.settings["arena"]) if f.id == fare_id), None)
         if fare is None:
             raise GroupError("Unknown ride")
-        zone = s.room.map.zones.get("bus_stop") if s.room and s.room.map.kind == "hub" else None
+        zone = s.room.map.zones.get("bus_stop") if s.room and s.room is not self.arena else None
         if zone is None or not in_rect(zone["rect"], s.x, s.z):
             raise GroupError("Walk to the bus stop first")
         self.boarded.add(s.pid)  # reserve before awaiting to block double-boarding
@@ -525,6 +558,8 @@ class GroupRoom:
         dt = min(1.0, max(0.0, now - self.last_tick))
         self.last_tick = now
         self.drop_long_gone(now)
+        if self.update_pause(now):
+            return
         if self.bots and self.phase != "lobby":
             drive_bots(self, now, dt)
         if self.phase in GAME_PHASES and (len(self.active) < 2 or not self.humans) and not self.game_over_pending:
@@ -741,6 +776,11 @@ class GroupRoom:
                     s.place(*self.arena_spot(s.x, s.z, i), self.world.now())
         self.broadcast_state("game_over")
         self.broadcast({"t": "g_over", "game_id": self.id, "results": self.final_results})
+        # win streak: games in a row you finished first (anyone who left loses theirs)
+        winner = self.final_results[0]["id"] if self.final_results else None
+        await self.world.bump_streaks(
+            {p: {"win": p == winner and p not in self.left} for p in self.members if p not in self.bots}
+        )
         await self.world.save_game_results(self.id, self.final_results)
         for hook in self.world.game_over_hooks:
             try:

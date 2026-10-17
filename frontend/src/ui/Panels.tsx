@@ -141,7 +141,6 @@ export function GroupPanel() {
               + Add NPC player
             </button>
             <button data-guide="start" className="btn btn-leaf mt-2 w-full text-lg" disabled={active.length < cfg.game.min_players} onClick={() => net.send({ t: "g_start" })}>Start game</button>
-            <p className="mt-2 text-xs opacity-70">Everyone needs belle at least {cfg.game.min_hunger_to_play}% — chop before you start!</p>
           </>
         ) : (
           <p className="text-sm opacity-80">Waiting for the creator to start… Hide {g.settings.hide}s · Search {g.settings.search}s</p>
@@ -541,7 +540,7 @@ const LEDGER_ICON: Record<string, [string, string]> = {
 };
 
 export function WalletPanel() {
-  const hunger = useGame((s) => s.hunger);
+  const streaks = useGame((s) => s.streaks);
   const username = useGame((s) => s.life.username);
   const [data, setData] = useState<{ balance: number; disclaimer: string; entries: WalletEntry[] } | null>(null);
   useEffect(() => {
@@ -562,15 +561,17 @@ export function WalletPanel() {
         </div>
       </div>
       <p className="mt-2 px-1 text-[11px] opacity-60">It cannot be bought, sold or cashed out.</p>
-      <div className="ios-section-title">Belle</div>
+      <div className="ios-section-title">Streaks</div>
       <div className="ios-group">
         <div className="ios-row">
-          <span className="ios-glyph bg-[#ff7a1a]">🍲</span>
-          <div className="flex-1">
-            <div className="text-[15px]">Hunger</div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#ff7a1a]" style={{ width: `${hunger}%` }} /></div>
-          </div>
-          <span className="text-sm tabular-nums opacity-80">{Math.round(hunger)}%</span>
+          <span className="ios-glyph bg-[#5e5ce6]">🥷</span>
+          <div className="flex-1 text-[15px]">Hide streak <span className="block text-xs opacity-60">rounds in a row nobody found you · best {streaks.bestHide}</span></div>
+          <span className="text-lg font-bold tabular-nums">{streaks.hide}</span>
+        </div>
+        <div className="ios-row">
+          <span className="ios-glyph bg-[#ff9f0a]">🏆</span>
+          <div className="flex-1 text-[15px]">Win streak <span className="block text-xs opacity-60">games in a row you won · best {streaks.bestWin}</span></div>
+          <span className="text-lg font-bold tabular-nums">{streaks.win}</span>
         </div>
       </div>
       <div className="ios-section-title">Recent activity</div>

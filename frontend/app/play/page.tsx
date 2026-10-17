@@ -25,6 +25,8 @@ import Phone from "@/ui/Phone";
 import { InviteBanner, PlayerCard, RematchBanner } from "@/ui/PlayerCard";
 import { DoorPanel, KnockPrompt } from "@/ui/Doors";
 import { GameGuide } from "@/ui/GameGuide";
+import Storefront from "@/ui/Storefront";
+import { ensureMap, useFullMap } from "@/lib/maps";
 import Onboarding, { MoveHint, onboardingDone, savedTourStep } from "@/ui/Onboarding";
 
 const Scene = dynamic(() => import("@/game/Scene"), { ssr: false });
@@ -37,6 +39,9 @@ export default function PlayPage() {
   const set = useGame((s) => s.set);
   const me = useGame((s) => s.me);
   const map = useMap();
+  const fullMap = useFullMap(); // the 3D world waits for this place's full plan (it arrives during the ride)
+  const placeId = useGame((s) => (s.content ? s.mapId : null));
+  useEffect(() => { if (placeId) void ensureMap(placeId); }, [placeId]); // also if we arrived before the content
   const decor = useGame((s) => !!s.decor);
   const onboarding = useGame((s) => s.onboard === "welcome");
   const mini = useGame((s) => !!s.mini);
@@ -158,7 +163,7 @@ export default function PlayPage() {
     <main className="game-root overflow-hidden">
       {map ? (
         <>
-          <div className="absolute inset-0"><Scene map={map} /></div>
+          <div className="absolute inset-0">{fullMap && <Scene map={fullMap} />}</div>
           <Controls disabled={decor} />
           <div className="pointer-events-none absolute safe-inset">
             <TopBar />
@@ -179,6 +184,7 @@ export default function PlayPage() {
             <RoundResultPanel />
             <GameOverPanel />
             <Toasts />
+            <Storefront />
             <Onboarding />
             <MoveHint />
             <Phone />

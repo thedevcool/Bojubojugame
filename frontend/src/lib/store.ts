@@ -29,6 +29,10 @@ interface GameStore {
   roster: Record<number, RosterEntry>;
   balance: number;
   hunger: number;
+  /** rounds in a row not found / games in a row won (and the bests) — for events */
+  streaks: { hide: number; win: number; bestHide: number; bestWin: number };
+  /** the storefront (Baba Boju's welcome + how to play now) is up */
+  front: boolean;
   group: GroupState | null;
   chat: ChatMsg[];
   unread: number;
@@ -128,6 +132,8 @@ export const useGame = create<GameStore>((set, get) => ({
   roster: {},
   balance: 0,
   hunger: 0,
+  streaks: { hide: 0, win: 0, bestHide: 0, bestWin: 0 },
+  front: true,
   group: null,
   chat: [],
   unread: 0,

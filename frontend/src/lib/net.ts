@@ -1,5 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { WS_URL, refreshToken, type Account } from "./api";
+import { ensureMap } from "./maps";
 import { useGame } from "./store";
 import type { ChatMsg, GroupState, Home, PlacedItem, RosterEntry, Standing } from "./types";
 import { setAllFurniture, setHomeFurniture } from "@/game/furniture";
@@ -118,6 +119,8 @@ class Net {
         g.set({ me: m.me as { id: string; nick: string; n: number }, home: (m.home as Home | null) ?? null });
         // the server says we're not in a game (it ended while we were away): drop any stale game screens
         if (m.in_group === false && g.group) { g.set({ group: null, over: null, dice: null, stayed: false, rematch: null }); local.frozen = false; }
+        // back on a fresh socket while looking at the game: un-pause a solo game (a "resume" sent while offline was lost)
+        if (m.in_group === true && document.visibilityState === "visible") this.send({ t: "g_resume" });
         break;
       }
       case "pong":
@@ -136,6 +139,7 @@ class Net {
         local.x = m.x as number;
         local.z = m.z as number;
         g.set({ mapId: m.map as string });
+        void ensureMap(m.map as string); // fetch this place now (the ride screen covers it)
         break;
       case "tp":
         local.x = m.x as number;
@@ -216,7 +220,10 @@ class Net {
       }
       case "wallet":
         if ((m.balance as number) > g.balance && g.balance > 0) sound.play("coin");
-        g.set({ balance: m.balance as number, hunger: m.hunger as number });
+        g.set({
+          balance: m.balance as number,
+          streaks: { hide: (m.hide_streak as number) ?? 0, win: (m.win_streak as number) ?? 0, bestHide: (m.best_hide_streak as number) ?? 0, bestWin: (m.best_win_streak as number) ?? 0 },
+        });
         break;
       case "g_state": {
         const gs = m as unknown as GroupState;

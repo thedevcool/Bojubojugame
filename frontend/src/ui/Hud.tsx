@@ -1,5 +1,6 @@
 "use client";
 
+import { GAME_ONLY } from "@/lib/scope";
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/game/sound";
 import { cam, input, local, remotes, sample } from "@/game/state";
@@ -17,7 +18,7 @@ import { fmtTime, useMap, useRole, useSecondsLeft, useTicker, useWhere } from ".
 
 export function TopBar() {
   const balance = useGame((s) => s.balance);
-  const hunger = useGame((s) => s.hunger);
+  const streaks = useGame((s) => s.streaks);
   const connected = useGame((s) => s.connected);
   const openApp = useGame((s) => s.openApp);
   const badge = useGame((s) => s.unread + s.dmUnread + s.friendReqs);
@@ -43,10 +44,10 @@ export function TopBar() {
             <div className="text-[10px] opacity-70 max-sm:hidden">in-game naira · not real money</div>
           </button>
         )}
-        <div className="w-14 shrink-0 sm:w-20">
-          {!mini && <div className="text-[10px] opacity-80">Belle {Math.round(hunger)}%</div>}
-          {!mini && <div className="h-1.5 rounded bg-white/15"><div className="h-1.5 rounded bg-[var(--clay)]" style={{ width: `${hunger}%` }} /></div>}
-          <div className="mt-1 h-1 rounded bg-white/15"><div className="h-1 rounded bg-sky-300" style={{ width: `${stamina * 100}%` }} /></div>
+        {/* money (above) and streaks: hide streak (rounds in a row not found) and win streak (games in a row won) */}
+        <div className="flex shrink-0 items-center gap-1 text-[11px] font-bold tabular-nums" title="Hide streak · win streak">
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5">🥷 {streaks.hide}</span>
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5">🏆 {streaks.win}</span>
         </div>
         <span title={connected ? "Online" : "Reconnecting"} className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-green-400" : "animate-pulse bg-red-500"}`} />
       </div>
@@ -241,17 +242,17 @@ export function ActionButtons() {
     ) });
   }
   if (canTaunt) extras.push({ key: "emote", node: <button aria-label="Emotes" className="ctl" data-on={wheel} onClick={() => setWheel(!wheel)}><span className="ic">😜</span></button> });
-  if (!aerial && !inGame && hasCar && !local.insideHome && !sleeping) {
+  if (!GAME_ONLY && !aerial && !inGame && hasCar && !local.insideHome && !sleeping) {
     extras.push({ key: "drive", node: (
       <button aria-label="Drive" className="ctl" data-on={driving}
         onClick={() => { local.drive = !driving; local.sit = false; set({ driving: !driving, sitting: false }); setBend(false); sound.play(driving ? "door" : "horn"); }}
       ><span className="ic">{driving ? "🚶🏾" : "🚗"}</span><span className="lb">{driving ? "Walk" : "Drive"}</span></button>
     ) });
   }
-  if (!aerial && !inGame && insideMine && !sleeping) {
+  if (!GAME_ONLY && !aerial && !inGame && insideMine && !sleeping) {
     extras.push({ key: "decor", node: <button aria-label="Decorate" className="ctl" onClick={() => void startDecorating()}><span className="ic">🛋️</span><span className="lb">Decor</span></button> });
   }
-  if (!aerial && !inGame && (sleeping || nearBed)) {
+  if (!GAME_ONLY && !aerial && !inGame && (sleeping || nearBed)) {
     extras.push({ key: "sleep", node: (
       <button aria-label="Sleep" className="ctl" data-on={sleeping} onClick={() => (sleeping ? wake() : sleep())}>
         <span className="ic">{sleeping ? "🌅" : "😴"}</span><span className="lb">{sleeping ? "Wake" : "Sleep"}</span>
@@ -307,7 +308,7 @@ export function ZonePanel() {
   const driving = useGame((s) => s.driving);
   if (!zone || !cfg) return null;
   // LagosLife players shop, eat and live in LagosLife: only the bus stops work here (rides are free)
-  if (mini && zone.kind !== "bus_stop") return null;
+  if ((mini || GAME_ONLY) && zone.kind !== "bus_stop") return null; // just the game: no shops (see lib/scope)
   // in the car: the pedals own the bottom of the screen; shops and buses are for people on foot
   if (driving) {
     return (
@@ -626,14 +627,14 @@ function TravelOptions() {
   const [to, setTo] = useState<string | null>(null);
   if (!cfg || !maps) return null;
   const here = mapId === "hub_plaza" ? "hub" : mapId;
-  if (mini) {
-    // LagosLife is just the game: no sightseeing trips. Buses run to games, and back to the Motor Park after.
+  if (mini || GAME_ONLY) {
+    // just the game: no sightseeing trips. Buses run to games, and back to the Motor Park after.
     if (here === "hub") return <div className="text-xs opacity-80">Buses leave from here when your game starts. Open 🙈 on your phone to play.</div>;
     const city = cfg.cities.find((c) => c.arenas.includes(mapId ?? ""));
     const back = (city?.fares ?? cfg.fares)[0];
     return (
       <button className="btn btn-primary w-full py-1.5 text-sm" onClick={() => back && net.send({ t: "trip", to: "hub", mode: back.id, key: crypto.randomUUID() })}>
-        🚌 Ride back to the Motor Park
+        🚌 Ride home
       </button>
     );
   }

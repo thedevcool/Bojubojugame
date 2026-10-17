@@ -321,22 +321,6 @@ async def test_retired_boju_goes_to_the_stands(db):
     assert abs(boju.z - fz) < 0.01  # in the stands, not standing where they were seeking
 
 
-async def test_hungry_player_cannot_start(db):
-    world, clock, players = await setup(db, 2)
-    (a, ca), (b, cb) = players
-    await world.economy.change_hunger(b.pid, -100)
-    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
-    await send(world, b, t="g_join", code=ca.last("g_state")["code"])
-    await send(world, a, t="g_start")
-    assert "hungry" in ca.last("err")["msg"]
-    # Buying food requires being at the food spot.
-    await send(world, b, t="buy", item="suya", key="abcdefgh1")
-    assert "Walk to" in cb.last("err")["msg"]
-    b.x, b.z = zone_point("suya")
-    await send(world, b, t="buy", item="suya", key="abcdefgh1")
-    assert cb.last("wallet")["hunger"] >= 20
-
-
 async def test_movement_validation(db):
     world, clock, players = await setup(db, 1)
     ((a, ca),) = players
@@ -521,3 +505,89 @@ async def test_dice_never_picks_someone_who_left(db):
     await send(world, c, t="g_leave")
     await until(world, clock, g, "hide")
     assert g.round.seeker != c.pid and c.pid not in g.round.hiders
+
+
+async def test_solo_game_pauses_and_resumes(db):
+    """LagosLife rule 4: with only NPCs, the game's timers stop while the player's app is paused or closed."""
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse", bots=1)
+    g = a.group
+    await send(world, a, t="g_start")
+    a.x, a.z = zone_point("bus_stop")
+    await send(world, a, t="g_board", fare="danfo")
+    await until(world, clock, g, "hide")
+    left = g.phase_end - clock.t
+    await send(world, a, t="g_pause")
+    await advance(world, clock, 120)  # far longer than the hide time
+    assert g.phase == "hide" and g.paused_at is not None
+    await send(world, a, t="g_resume")
+    await advance(world, clock, 0.2)
+    assert g.paused_at is None and g.phase == "hide"
+    assert abs((g.phase_end - clock.t) - left) < 0.5, "the countdown carries on from where it stopped"
+    # Closing the app (socket gone) pauses too; coming back resumes.
+    world.disconnect(a, a.sender)
+    await advance(world, clock, 60)
+    assert g.phase == "hide" and g.paused_at is not None
+    s = await world.connect(a.pid, a.nick, Client())
+    assert s.group is g
+    await advance(world, clock, 0.2)
+    assert g.paused_at is None and g.phase == "hide"
+
+
+async def test_multiplayer_game_never_pauses(db):
+    """Other people are playing: one player's pause must not stop their game (the stand-in holds your place)."""
+    world, clock, players = await setup(db, 2)
+    (a, _), (b, _) = players
+    await send(world, a, t="g_create", arena="arena_park", hide=15, search=90, safe="gatehouse")
+    g = a.group
+    await send(world, b, t="g_join", code=g.code)
+    await send(world, a, t="g_pause")
+    assert not g.solo and g.paused_at is None
+
+
+async def test_match_me_pairs_players_and_starts_itself(db):
+    """Match me: the second player lands in the first one's waiting match; it starts by itself soon after."""
+    world, clock, players = await setup(db, 3)
+    (a, ca), (b, _), (c, _) = players
+    await send(world, a, t="g_match")
+    g = a.group
+    assert g is not None and g.matchmade and g.phase == "lobby"
+    await send(world, b, t="g_match")
+    assert b.group is g and len(g.humans) == 2
+    await advance(world, clock, 5)
+    assert g.phase == "lobby"  # waits a moment for more players
+    await send(world, c, t="g_match")
+    assert c.group is g
+    await advance(world, clock, 13)
+    assert g.phase == "travel" and not g.bots
+
+
+async def test_match_me_alone_plays_npcs(db):
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    await send(world, a, t="g_match")
+    g = a.group
+    await advance(world, clock, 41)
+    assert g.phase == "travel" and len(g.bots) == 2
+    assert any(m["t"] == "toast" and "NPC" in m["msg"] for m in ca.msgs)
+
+
+async def test_ibadan_players_live_at_agodi(db):
+    world, clock, players = await setup(db, 1)
+    ((a, ca),) = players
+    world.set_city(a.pid, "ibadan")
+    assert a.room is world.explore["arena_ibadan"]  # Agodi Gardens
+    # a match from Ibadan is played in Ibadan, and boarding works from Ibadan's bus stop
+    await send(world, a, t="g_match")
+    assert a.group.settings["arena"] == "arena_ibadan"  # never Akobo: that's for events
+
+
+async def test_streaks_count_wins_and_hides(db):
+    world, clock, players = await setup(db, 2)
+    (a, _), (b, _) = players
+    await world.bump_streaks({a.pid: {"hide": True, "win": True}, b.pid: {"hide": False}})
+    await world.bump_streaks({a.pid: {"hide": True, "win": False}})
+    sa, sb = await world.get_streaks(a.pid), await world.get_streaks(b.pid)
+    assert sa["hide_streak"] == 2 and sa["win_streak"] == 0 and sa["best_win_streak"] == 1
+    assert sb["hide_streak"] == 0

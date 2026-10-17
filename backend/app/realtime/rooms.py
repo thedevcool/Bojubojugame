@@ -31,6 +31,7 @@ class Session:
     avatar: list[int] = field(default_factory=lambda: [0, 0, 0])
     bot: bool = False
     home_id: str | None = None
+    city: str = "lagos"  # where you live and always spawn: "lagos" (the hub) or "ibadan" (Akobo)
     sit: bool = False
     lie: bool = False
     car: str | None = None  # car model the player owns

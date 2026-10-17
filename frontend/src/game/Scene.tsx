@@ -929,6 +929,7 @@ function World({ map }: { map: GameMap }) {
   const shadows = quality !== "low";
   const fogFar = quality === "low" ? 60 : quality === "medium" ? 90 : 140;
   const groundTex = useMemo(() => (map.kind === "hub" ? laterite(Math.round(w / 6)) : grass(Math.round(w / 6))), [map.kind, w]);
+  useEffect(() => () => groundTex.dispose(), [groundTex]); // leaving this place: free its ground from the GPU too
   const groundTint = map.kind === "hub" ? "#ffffff" : map.ground === "#79a85a" ? "#d8f0c8" : map.ground;
   return (
     <>

@@ -109,7 +109,9 @@ class City(BaseModel):
     lat: float
     lng: float
     blurb: str = ""
-    arenas: list[str]
+    arenas: list[str]  # venues where matches and quick games are played
+    # venues kept for events only: never offered for Match me or quick games (e.g. Akobo, the hardest place)
+    event_arenas: list[str] = Field(default_factory=list)
     fares: list[Fare] | None = None  # None = local fares (danfo/keke)
 
 
@@ -184,7 +186,7 @@ class GameConfig(BaseModel):
     home_coords: dict[str, tuple[float, float]]
 
     def city_of(self, arena_id: str) -> City | None:
-        return next((c for c in self.cities if arena_id in c.arenas), None)
+        return next((c for c in self.cities if arena_id in c.arenas or arena_id in c.event_arenas), None)
 
     def fares_for(self, arena_id: str) -> list[Fare]:
         city = self.city_of(arena_id)

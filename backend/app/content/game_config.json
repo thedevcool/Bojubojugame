@@ -189,9 +189,14 @@
       "name": "Ibadan",
       "lat": 7.3775,
       "lng": 3.947,
-      "blurb": "Ancient city of hills — home is Agodi Gardens. (Akobo is for events.)",
+      "blurb": "Ancient city of hills — home is Agodi Gardens. Play at Iwo Road, Gate, Bashorun, Oke Mapo and Airport Road. (Akobo is for events.)",
       "arenas": [
-        "arena_ibadan"
+        "arena_ibadan",
+        "arena_iwo_road",
+        "arena_gate",
+        "arena_bashorun",
+        "arena_oke_mapo",
+        "arena_airport_road"
       ],
       "event_arenas": ["arena_akobo"],
       "fares": [

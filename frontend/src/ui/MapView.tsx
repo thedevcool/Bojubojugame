@@ -8,7 +8,7 @@ import { sound } from "@/game/sound";
 import { naira } from "@/lib/api";
 import { net } from "@/lib/net";
 import { useGame } from "@/lib/store";
-import type { GameMap } from "@/lib/types";
+import type { GameMap, Prop } from "@/lib/types";
 import { useMap, useRole, useTicker } from "./hooks";
 import { HUB_LNGLAT } from "@/lib/geo";
 
@@ -25,7 +25,14 @@ export interface Dot { x: number; z: number; color: string; label?: string }
 export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: number, h: number, myHome: string | null, pin: { x: number; z: number } | null, people?: Dot[], labels = false) {
   const X = (x: number) => (x - v.cx) * v.s + w / 2, Z = (z: number) => (z - v.cz) * v.s + h / 2;
   const R = (x0: number, z0: number, x1: number, z1: number) => ctx.fillRect(X(x0), Z(z0), (x1 - x0) * v.s, (z1 - z0) * v.s);
-  ctx.fillStyle = map.kind === "hub" || map.id === "arena_akobo" ? "#e9dcc4" : "#cfe3b8"; // towns on paper, parks green
+  // a ground piece (grown by ``pad``), turned when it follows a real street at an angle
+  const RP = (p: Prop, pad = 0) => {
+    if (!p.ry) { R(p.x - p.w / 2 - pad, p.z - p.d / 2 - pad, p.x + p.w / 2 + pad, p.z + p.d / 2 + pad); return; }
+    ctx.save(); ctx.translate(X(p.x), Z(p.z)); ctx.rotate(-p.ry);
+    ctx.fillRect((-p.w / 2 - pad) * v.s, (-p.d / 2 - pad) * v.s, (p.w + 2 * pad) * v.s, (p.d + 2 * pad) * v.s);
+    ctx.restore();
+  };
+  ctx.fillStyle = map.kind === "hub" || map.town || map.id === "arena_akobo" ? "#e9dcc4" : "#cfe3b8"; // towns on paper, parks green
   ctx.fillRect(0, 0, w, h);
   for (const p of map.props) {
     const x0 = p.x - p.w / 2, z0 = p.z - p.d / 2, x1 = p.x + p.w / 2, z1 = p.z + p.d / 2;
@@ -40,15 +47,18 @@ export function draw(ctx: CanvasRenderingContext2D, map: GameMap, v: View, w: nu
   for (const p of map.props) {
     if (p.kind !== "laterite") continue; // untarred red-earth streets (Ibadan)
     ctx.fillStyle = "#c98a63";
-    R(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2);
+    RP(p);
   }
   for (const p of map.props) {
     if (p.kind !== "road" && p.kind !== "flyover") continue;
     ctx.fillStyle = "#ffffff";
-    R(p.x - p.w / 2 - 0.4, p.z - p.d / 2 - 0.4, p.x + p.w / 2 + 0.4, p.z + p.d / 2 + 0.4);
+    RP(p, 0.4);
+  }
+  for (const p of map.props) { // all the kerbs first, then the tarmac, so turned streets join cleanly
+    if (p.kind !== "road" && p.kind !== "flyover") continue;
     ctx.fillStyle = "#8d969f";
-    R(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2);
-    if (labels && v.s > 2 && Math.min(p.w, p.d) > 4) {
+    RP(p);
+    if (labels && v.s > 2 && Math.min(p.w, p.d) > 4 && !p.ry) {
       // a dashed centre line, like a real street map
       ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.beginPath();
       if (p.w > p.d) { ctx.moveTo(X(p.x - p.w / 2), Z(p.z)); ctx.lineTo(X(p.x + p.w / 2), Z(p.z)); }
@@ -209,7 +219,11 @@ export function MapScreen() {
         )}
         <button className="btn btn-ghost px-3 py-1.5" onClick={() => set({ mapOpen: false })}>✕</button>
       </div>
-      <div className="relative min-h-0 flex-1">{tab === "here" || mini ? <AreaMap map={map} /> : <TravelMap />}</div>
+      <div className="relative min-h-0 flex-1">
+        {tab === "here" || mini ? <AreaMap map={map} /> : <TravelMap />}
+        {/* places built from OpenStreetMap credit it (ODbL) */}
+        {map.town && (tab === "here" || mini) && <div className="pointer-events-none absolute bottom-1 right-2 text-[10px] text-black/60">Map data © OpenStreetMap contributors</div>}
+      </div>
     </div>
   );
 }

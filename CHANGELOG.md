@@ -15,6 +15,50 @@ register in the release that ships them.
 
 ---
 
+## 2.18.0 — 2026-10-17
+Owner request: "Build the Ibadan places Iwo Road, Gate, Bashorun, Oke Mapo and Airport Road from OpenStreetMap
+(Overpass) and terrain tiles. Make each one a playable arena with hide spots, a safe house, a bus stop and a gather
+circle, using the existing per-place map loading. Agodi Gardens is where Ibadan players spawn. Akobo is events-only and
+never matched."
+
+Changes:
+- Changes `P26`: **five real Ibadan places**: Iwo Road, Gate, Bashorun, Oke Mapo and Airport Road
+  (`arena_iwo_road`, `arena_gate`, `arena_bashorun`, `arena_oke_mapo`, `arena_airport_road`), each 120 × 120 m.
+  - Built by `backend/tools/build_ibadan_osm.py` from OpenStreetMap: real building footprints (snapped into the
+    kit as houses, duplexes, flats, shops, churches and mosques), real streets at their real angles (tarred or red
+    earth from the OSM surface tag), and points of interest as generic labels (PHARMACY, CLINIC, MARKET… never a
+    business's real name). Mapo Hall keeps its name.
+  - The tool asks Overpass first. From this build machine overpass-api.de reset every connection, so these maps came
+    from the same OSM data in HOT's Nigeria export (GeoParquet, refreshed 2026-10). Rerunning the tool uses Overpass
+    whenever it answers.
+  - Each place is an arena: hiding props in yards and by the road (tanks, generators, containers, walls, trees,
+    parked cars, danfos, kiosks, stalls), three safe houses, a bus stop by the busiest road, the gather circle in the
+    most open spot, the found area and a perimeter fence. A check with the game's own nav grid opens an alley through
+    the smallest building wherever a row of buildings sealed part of the area off.
+  - Real hills beyond the fence from Terrarium terrain tiles (AWS open data). The play area stays level, so moving,
+    catching and sight lines work exactly as everywhere else.
+  - Ibadan players still spawn at Agodi Gardens. Akobo stays in `event_arenas` and is never matched.
+  - Credited: "Map data © OpenStreetMap contributors" on the map screen and the place picker; CREDITS.md rows.
+  - Tests: `test_osm_place_is_a_playable_arena` (×5: reachable everywhere, gather circle clear, 3 enterable safe
+    houses, reachable bus stop, found area clear, ≥ 80 hide spots), `test_agodi_is_home_and_akobo_is_never_matched`,
+    `test_ibadan_matches_use_every_ibadan_place`; `test_places_load_one_at_a_time` also checks terrain comes only with
+    the full plan and the start-up download stays under 40 KB.
+- Changes `P34`: **Match me from Ibadan plays at any of Ibadan's places** (Agodi and the five new ones, picked at
+  random), never Akobo. Lagos is unchanged (it has one arena).
+- **Create game** shows a place picker when a city has more than one place.
+- Changes `P41`: low-end fixes found while testing the new places (they help every place):
+  - the 3D view now stays between places and only the world inside it changes. Before, every bus ride destroyed and
+    remade the graphics context (~0.9 s of freezes on the low-end profile);
+  - shaders are prepared one at a time while the place is still building (the ride is still up), not all at once on
+    the first frame (one 1.2 s freeze seen);
+  - the city mounts in steps sized to the phone (aiming at ~120 ms each, starting small) instead of 40 props a step
+    (300–550 ms each on the low-end profile).
+  - The 2D map draws all kerbs before the tarmac, so streets meeting at an angle join cleanly.
+- Low-end check (360×740 @2x touch, 2 cores/2 GB, CPU ×6, software WebGL): each new place downloaded during the ride,
+  arrived with the 60 s travel window plus 2–6 s, only Agodi and the place itself kept, no errors. Side by side with
+  `main` on the same profile: Akobo 11–12 fps vs 5, Lagos hub 4 fps vs 2, longest tasks similar (~0.5–1.0 s, an
+  occasional ~1.2 s on both, at arrival while the ride screen is up). Also run in a cross-origin sandboxed iframe.
+
 ## 2.17.0 — 2026-10-17
 Owner requests:
 - Don't unpack everything at once. Unpack only where the player is; the ride is the loader; pack away the place
@@ -271,19 +315,19 @@ keep saying I can follow the arrows but none is indicative".
 - `P23` **Cars & driving** — (packed away by GAME_ONLY) pedals/steering, tap-to-drive on roads; the whole car collides with stalls, parked cars and lamp posts; shop menus become a hint while driving.
 - `P24` **Streets** — traffic that waits and honks, crowds (incl. market women), nobody walks or drives through anybody.
 - `P25` **Map & travel** — minimap, full map with pins and always-visible place names; your city (Lagos or Ibadan, from location or chosen) is where you spawn; buses to games and home (Naija trips packed away).
-- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo); Abuja. Ibadan home is Agodi Gardens; Akobo is for events only.
+- `P26` **Places** — Lagos hub (Adeniji Street, Church Street, Palm View Estate, Market & Motor Park, Events Ground, Football Pitch); Ibadan (Agodi Gardens, Akobo, and Iwo Road, Gate, Bashorun, Oke Mapo, Airport Road built from OpenStreetMap with real hills round them); Abuja. Ibadan home is Agodi Gardens; Akobo is for events only.
 - `P27` **Controls** — tap to go by default, joystick option, drag to look, pinch to zoom, Bend, Run (tap to keep running or hold; breath ring), Sit, emotes; round glass buttons on arcs round Run, foldable; Aerial glows while you hide.
 
 ### Money, ads & LagosLife
 - `P30` **Virtual naira** — in-game naira only, never real money; daily bonus.
 - `P31` **Wall ads** — place on kiosks/shops/billboards/arena walls, admin approves, Paystack on our site.
-- `P34` **Storefront & Match me** — Baba Boju's welcome, city from location or chosen, Play with online players (Match me / Join a group) or with NPCs; matches start themselves; money + hide/win streaks in the top bar.
+- `P34` **Storefront & Match me** — Baba Boju's welcome, city from location or chosen, Play with online players (Match me / Join a group) or with NPCs; matches start themselves (Ibadan matches at any Ibadan place except Akobo); money + hide/win streaks in the top bar.
 - `P33` **Stand-ins** — minimise or close the app and you stay where you were (Lagos, LagosLife, games), standing still under the same rules (a hider can be found) until you're back; no NPC/offline label; away 30 min = offline, taken out of a game (2 players: the other wins), told when back. In a solo game (you + NPCs) the whole game pauses instead, and carries on when you're back.
 - `P32` **LagosLife mini version** (`/lagoslife`) — only the Boju Boju game (no crowd, traffic or house interiors, tuned for slow phones; game-only tour; no trips round Naija, buses only to and from games; area-only map); signed in by LagosLife; never shows Paystack, payment links, our naira, a login or an email field; play-with-friends matches; LagosLife leaderboard; ads paid with LagosLife's pay sheet (My ads refreshes itself).
 
 ### Look & performance
 - `P40` **Neon-glass look** — deep-space background, glass panels with a gradient edge, gradient glowing buttons, glass fields, Space Grotesk titles; redesigned sign-in screen.
-- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar. Places load one at a time (the ride is the loader; the place you left is packed away).
+- `P41` **Low-end phones first** — city builds in a few seconds on the low-end profile, no main-thread task over ~1 s, pauses drawing while building; UI never sits under the browser toolbar. Places load one at a time (the ride is the loader; the place you left is packed away); the 3D view stays between places; shaders are prepared before the first frame.
 - `P42` **iPhone layout** — safe areas respected when installed; Install app.
 
 ---
@@ -292,6 +336,7 @@ keep saying I can follow the arrows but none is indicative".
 
 | Version | Date | Title |
 |---|---|---|
+| 2.18.0 | 2026-10-17 | Five real Ibadan places from OpenStreetMap |
 | 2.17.0 | 2026-10-17 | Places load one at a time; Agodi is Ibadan's home; Akobo for events |
 | 2.16.0 | 2026-10-17 | Just the game: storefront, Match me, your city, streaks |
 | 2.15.1 | 2026-10-17 | Solo games pause while you're away |

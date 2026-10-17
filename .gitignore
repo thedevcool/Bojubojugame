@@ -19,3 +19,4 @@ next-env.d.ts
 !.env.example
 .DS_Store
 /pullrequest.md.opencode/
+backend/tools/.osm_cache/

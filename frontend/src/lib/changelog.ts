@@ -9,6 +9,17 @@ export interface Release { version: string; date: string; title: string; items: 
 
 export const CHANGELOG: Release[] = [
   {
+    version: "2.18.0",
+    date: "2026-10-17",
+    title: "Ibadan, for real 🗺️",
+    items: [
+      { emoji: "🏙️", title: "Five real places", text: "Iwo Road, Gate, Bashorun, Oke Mapo and Airport Road — built from the real streets and buildings, with Ibadan's hills all around.", tryIt: "Create a game, choose Ibadan, then pick a place" },
+      { emoji: "🙈", title: "Plenty to hide behind", text: "Tanks, generators, parked danfos, kiosks and market stalls — and three safe houses in each place." },
+      { emoji: "⚡", title: "Match me in Ibadan", text: "Ibadan matches now happen all over town. You still start at Agodi Gardens." },
+      { emoji: "🚌", title: "Smoother trips", text: "Less freezing when the bus leaves and when you arrive, even on small phones." },
+    ],
+  },
+  {
     version: "2.17.0",
     date: "2026-10-17",
     title: "Lighter and faster 🪶",

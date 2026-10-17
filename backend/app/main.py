@@ -141,8 +141,15 @@ def create_app(database_url: str | None = None, *, run_tick: bool = True) -> Fas
     # Each place's heavy part (its props: buildings, walls, trees…) is only sent when a player goes there
     # (GET /api/maps/{id}); the start-up download carries just a summary of every place.
     heavy = {"props", "npc_paths", "vendors", "vehicles", "walkers"}
+    only_full = {"terrain", "source"}  # the hills round a place and where its map came from: only with the full plan
     summaries = {  # heavy lists left empty (not missing) so code reading them never breaks
-        k: {**m.raw, **{f: [] for f in heavy if f in m.raw}, "props": [], "full": False} for k, m in maps.items()
+        k: {
+            **{f: v for f, v in m.raw.items() if f not in only_full},
+            **{f: [] for f in heavy if f in m.raw},
+            "props": [],
+            "full": False,
+        }
+        for k, m in maps.items()
     }
     map_etag = {k: hashlib.sha1(json.dumps(m.raw, sort_keys=True).encode()).hexdigest()[:16] for k, m in maps.items()}
 

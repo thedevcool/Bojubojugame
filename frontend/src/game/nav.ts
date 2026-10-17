@@ -37,9 +37,17 @@ function build(map: GameMap): Grid {
   const road = new Uint8Array(w * h);
   for (const p of map.props) {
     if (p.kind !== "road" && p.kind !== "lot") continue;
-    const i0 = Math.max(0, Math.floor((p.x - p.w / 2 - bx0) / CELL)), i1 = Math.min(w - 1, Math.floor((p.x + p.w / 2 - bx0) / CELL));
-    const j0 = Math.max(0, Math.floor((p.z - p.d / 2 - bz0) / CELL)), j1 = Math.min(h - 1, Math.floor((p.z + p.d / 2 - bz0) / CELL));
-    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) road[i * h + j] = 1;
+    const c = Math.cos(p.ry ?? 0), s = Math.sin(p.ry ?? 0);
+    const ex = (Math.abs(c) * p.w + Math.abs(s) * p.d) / 2, ez = (Math.abs(s) * p.w + Math.abs(c) * p.d) / 2; // turned roads: their bounding box
+    const i0 = Math.max(0, Math.floor((p.x - ex - bx0) / CELL)), i1 = Math.min(w - 1, Math.floor((p.x + ex - bx0) / CELL));
+    const j0 = Math.max(0, Math.floor((p.z - ez - bz0) / CELL)), j1 = Math.min(h - 1, Math.floor((p.z + ez - bz0) / CELL));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      if (p.ry) { // …then only the cells really on the road
+        const dx = bx0 + (i + 0.5) * CELL - p.x, dz = bz0 + (j + 0.5) * CELL - p.z;
+        if (Math.abs(dx * c - dz * s) > p.w / 2 || Math.abs(dx * s + dz * c) > p.d / 2) continue;
+      }
+      road[i * h + j] = 1;
+    }
   }
   return { x0: bx0, z0: bz0, w, h, walk, road, boxes };
 }

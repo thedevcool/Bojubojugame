@@ -1,6 +1,6 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -262,19 +262,20 @@ function Road({ p }: { p: Prop }) {
   const dashes = [];
   for (let s = -L / 2 + 2; s < L / 2 - 2; s += 6) dashes.push(s);
   const rot: V3 = alongX ? [0, 0, 0] : [0, Math.PI / 2, 0];
+  const top = p.h || 0.02, line = top + 0.005; // the surface's top (0.02 for hand-made roads), markings just above
   return (
     <group rotation={rot}>
-      <B p={[0, 0.01, 0]} s={[L, 0.02, W]} c={mat("#ffffff", { map: asphalt(), tile: 7 })} shadow={false} />
+      <B p={[0, top / 2, 0]} s={[L, top, W]} c={mat("#ffffff", { map: asphalt(), tile: 7 })} shadow={false} />
       {W >= 9 ? (
         <>
-          <B p={[0, 0.025, -0.12]} s={[L, 0.01, 0.12]} c="#e2b007" shadow={false} />
-          <B p={[0, 0.025, 0.12]} s={[L, 0.01, 0.12]} c="#e2b007" shadow={false} />
+          <B p={[0, line, -0.12]} s={[L, 0.01, 0.12]} c="#e2b007" shadow={false} />
+          <B p={[0, line, 0.12]} s={[L, 0.01, 0.12]} c="#e2b007" shadow={false} />
         </>
       ) : (
-        dashes.map((s) => <B key={s} p={[s, 0.025, 0]} s={[2.4, 0.01, 0.14]} c="#eeeeee" shadow={false} />)
+        dashes.map((s) => <B key={s} p={[s, line, 0]} s={[2.4, 0.01, 0.14]} c="#eeeeee" shadow={false} />)
       )}
-      <B p={[0, 0.025, W / 2 - 0.35]} s={[L, 0.01, 0.12]} c="#eeeeee" shadow={false} />
-      <B p={[0, 0.025, -W / 2 + 0.35]} s={[L, 0.01, 0.12]} c="#eeeeee" shadow={false} />
+      <B p={[0, line, W / 2 - 0.35]} s={[L, 0.01, 0.12]} c="#eeeeee" shadow={false} />
+      <B p={[0, line, -W / 2 + 0.35]} s={[L, 0.01, 0.12]} c="#eeeeee" shadow={false} />
       {/* open gutters along the edges */}
       <B p={[0, 0.005, W / 2 + 0.2]} s={[L, 0.02, 0.4]} c="#2a2722" shadow={false} />
       <B p={[0, 0.005, -W / 2 - 0.2]} s={[L, 0.02, 0.4]} c="#2a2722" shadow={false} />
@@ -619,10 +620,11 @@ function PropMesh({ p, low }: { p: Prop; low?: boolean }) {
       // untarred red-earth side street, with open concrete gutters on both edges
       const alongX = (p.dir ?? (p.w >= p.d ? "x" : "z")) === "x";
       const W = alongX ? p.d : p.w;
+      const top = Math.max(p.h || 0.02, 0.02); // 0.02 for hand-made streets; OSM ones stack by size
       return (
         <group rotation={[0, alongX ? 0 : Math.PI / 2, 0]}>
-          <B p={[0, 0.012, 0]} s={[alongX ? p.w : p.d, 0.02, W]} c={mat("#c4744a", { map: sand(), tile: 4 })} shadow={false} />
-          {[-1, 1].map((k) => <B key={k} p={[0, 0.02, k * (W / 2 - 0.2)]} s={[alongX ? p.w : p.d, 0.03, 0.35]} c="#6f6a62" shadow={false} />)}
+          <B p={[0, top - 0.008, 0]} s={[alongX ? p.w : p.d, 0.02, W]} c={mat("#c4744a", { map: sand(), tile: 4 })} shadow={false} />
+          {[-1, 1].map((k) => <B key={k} p={[0, top, k * (W / 2 - 0.2)]} s={[alongX ? p.w : p.d, 0.03, 0.35]} c="#6f6a62" shadow={false} />)}
         </group>
       );
     }
@@ -735,10 +737,17 @@ const DECORATIVE = new Set(["bench", "tyres", "grill", "fan", "rug", "table"]);
  * Shapes stay indexed (no toNonIndexed), which halves the work and the memory.
  */
 const SLICE_MS = 30; // under the 50 ms "long task" line, so taps still get through
-const MOUNT_CHUNK = 40; // props mounted per step: mounting all of them at once was a ~2 s freeze
+const MOUNT_CHUNK = 40; // most props mounted per step: mounting all of them at once was a ~2 s freeze
+// Each mount step aims at this long. On the low-end profile a 40-prop step took 300-550 ms, and two in a row kept
+// the page from answering for over a second on arrival; steps now start small and grow only on a fast phone.
+const MOUNT_MS = 120;
+const FIRST_CHUNK = 10;
 function StaticBatch({ items, city }: { items: React.ReactNode[]; city?: boolean }) {
+  const { gl, camera, scene } = useThree();
   const src = useRef<THREE.Group>(null);
-  const [shown, setShown] = useState(MOUNT_CHUNK);
+  const [shown, setShown] = useState(FIRST_CHUNK);
+  const chunk = useRef(FIRST_CHUNK);
+  const asked = useRef(0);
   const [merged, setMerged] = useState<THREE.Mesh[] | null>(null);
   const all = shown >= items.length;
   const built = useRef(false);
@@ -752,10 +761,17 @@ function StaticBatch({ items, city }: { items: React.ReactNode[]; city?: boolean
     if (city) useGame.getState().set({ building: true });
     return doneBuilding;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // mount the props a few at a time
+  // mount the props a few at a time, as many per step as this phone manages in about MOUNT_MS
   useEffect(() => {
+    if (asked.current) {
+      const took = Math.max(1, performance.now() - asked.current);
+      chunk.current = Math.max(4, Math.min(MOUNT_CHUNK, Math.round(chunk.current * Math.min(2, MOUNT_MS / took))));
+    }
     if (all) return;
-    const t = window.setTimeout(() => setShown((n) => n + MOUNT_CHUNK), 0);
+    const t = window.setTimeout(() => {
+      asked.current = performance.now();
+      setShown((n) => n + chunk.current);
+    }, 0);
     return () => window.clearTimeout(t);
   }, [shown, all]);
   useLayoutEffect(() => {
@@ -804,6 +820,22 @@ function StaticBatch({ items, city }: { items: React.ReactNode[]; city?: boolean
         out.push(mesh);
       }
       if (k < entries.length) { timer = window.setTimeout(step, 0); return; }
+      warm();
+    };
+    // Get the shaders ready one at a time, while the city is still "building" (the ride is still up): drawing the
+    // first frame with them all new linked every program in one go, a 1.2 s freeze on the low-end profile.
+    let w = 0;
+    const known = new Set(gl.info.programs ?? []);
+    const warm = () => {
+      if (cancelled) return;
+      const t0 = performance.now();
+      while (w < out.length && performance.now() - t0 < SLICE_MS) {
+        gl.compile(out[w++], camera, scene);
+        const fresh = (gl.info.programs ?? []).filter((pr) => !known.has(pr));
+        fresh.forEach((pr) => { known.add(pr); pr.getUniforms(); }); // waits for the link here, not in a frame
+        if (fresh.length) break; // one new shader per step
+      }
+      if (w < out.length) { timer = window.setTimeout(warm, 0); return; }
       doneBuilding();
       setMerged(out);
     };
@@ -885,7 +917,7 @@ export const MapProps = memo(function MapProps({ props, lowDetail, city }: { pro
       <StaticBatch
         city={city}
         items={statics.map((p, i) => (
-          <group key={i} position={[p.x, 0, p.z]}>
+          <group key={i} position={[p.x, 0, p.z]} rotation={p.ry ? [0, p.ry, 0] : undefined}>
             <PropMesh p={p} low={lowDetail} />
           </group>
         ))}

@@ -580,7 +580,23 @@ async def test_ibadan_players_live_at_agodi(db):
     assert a.room is world.explore["arena_ibadan"]  # Agodi Gardens
     # a match from Ibadan is played in Ibadan, and boarding works from Ibadan's bus stop
     await send(world, a, t="g_match")
-    assert a.group.settings["arena"] == "arena_ibadan"  # never Akobo: that's for events
+    ibadan = next(c for c in world.cfg.cities if c.id == "ibadan")
+    assert a.group.settings["arena"] in ibadan.arenas  # never Akobo: that's for events
+    assert a.group.settings["arena"] != "arena_akobo"
+
+
+async def test_ibadan_matches_use_every_ibadan_place(db):
+    """Match me from Ibadan plays at any of Ibadan's places (Agodi and the five OSM places), never Akobo."""
+    world, clock, players = await setup(db, 1)
+    ((a, _),) = players
+    world.set_city(a.pid, "ibadan")
+    seen = set()
+    for _ in range(60):
+        g = await world.match_me(a)
+        seen.add(g.settings["arena"])
+        world.leave_group(a, quiet=True)
+    ibadan = next(c for c in world.cfg.cities if c.id == "ibadan")
+    assert seen == set(ibadan.arenas) and "arena_akobo" not in seen
 
 
 async def test_streaks_count_wins_and_hides(db):

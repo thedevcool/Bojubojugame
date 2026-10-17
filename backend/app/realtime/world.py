@@ -812,7 +812,10 @@ class World:
                 g.match_ready_at = self.now()
             await self.send_chat_history(s, g)
             return g
-        arena = next((c.arenas[0] for c in self.cfg.cities if c.id == s.city), "arena_park")
+        # any of the city's arenas (Ibadan: Agodi, Iwo Road, Gate, Bashorun, Oke Mapo, Airport Road); never an
+        # events-only place like Akobo
+        city = next((c for c in self.cfg.cities if c.id == s.city), None)
+        arena = self.rng.choice(city.arenas) if city and city.arenas else "arena_park"
         safe = next(iter(self.maps[arena].safe_houses))
         g = await self.create_group(
             s, P.GroupCreate(t="g_create", arena=arena, hide=30, search=180, safe=safe, public=True)

@@ -85,3 +85,8 @@ def test_places_load_one_at_a_time(tmp_path):
         assert full["full"] is True and len(full["props"]) > 10
         assert client.get("/api/maps/arena_park", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
         assert client.get("/api/maps/nowhere").status_code == 404
+        # the OSM places' terrain (the hills round them) comes only with the full plan
+        assert "terrain" not in maps["arena_oke_mapo"] and maps["arena_oke_mapo"]["safe_houses"]
+        assert client.get("/api/maps/arena_oke_mapo").json()["terrain"]["h"]
+        r = client.get("/api/content")
+        assert len(r.content) < 40_000  # still a small start-up download with five more places

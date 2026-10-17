@@ -917,6 +917,37 @@ function Sun({ shadows }: { shadows: boolean }) {
   );
 }
 
+/**
+ * The real hills round a place built from OpenStreetMap (heights from terrain tiles), out beyond the fence.
+ * The play area stays level (moving, catching and seeing work as everywhere else); the ground rises or falls
+ * smoothly from a few metres past the fence. One mesh, ~2k triangles.
+ */
+function Hills({ map }: { map: GameMap }) {
+  const t = map.terrain!;
+  const geo = useMemo(() => {
+    const b = map.bounds;
+    const g = new THREE.PlaneGeometry(2 * t.r, 2 * t.r, t.n - 1, t.n - 1);
+    g.rotateX(-Math.PI / 2); // rows run from -r to +r in z, like the height grid
+    const pos = g.attributes.position, uv = g.attributes.uv;
+    for (let k = 0; k < pos.count; k++) {
+      const x = pos.getX(k), z = pos.getZ(k);
+      const out = Math.max(b[0] - x, x - b[2], b[1] - z, z - b[3]); // metres beyond the fence
+      const f = Math.min(Math.max((out - 4) / 40, 0), 1);
+      pos.setY(k, (t.h[k] ?? 0) * f * f * (3 - 2 * f) - 0.04); // just under the level ground plane
+      uv.setXY(k, x / 6, z / 6);
+    }
+    g.computeVertexNormals();
+    return g;
+  }, [map, t]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  const tex = useMemo(() => grass(1), []);
+  return (
+    <mesh geometry={geo} receiveShadow>
+      <meshStandardMaterial map={tex} color="#d8e8c0" roughness={1} />
+    </mesh>
+  );
+}
+
 function World({ map }: { map: GameMap }) {
   const quality = useGame((s) => s.quality);
   const mini = useGame((s) => !!s.mini);
@@ -925,12 +956,14 @@ function World({ map }: { map: GameMap }) {
   const aerial = useGame((s) => s.aerial);
   const b = map.bounds;
   const cx = (b[0] + b[2]) / 2, cz = (b[1] + b[3]) / 2;
-  const w = b[2] - b[0] + 60, d = b[3] - b[1] + 60;
+  const pad = map.terrain ? 8 : 60; // with real hills round it, the level ground ends just past the fence
+  const w = b[2] - b[0] + pad, d = b[3] - b[1] + pad;
   const shadows = quality !== "low";
   const fogFar = quality === "low" ? 60 : quality === "medium" ? 90 : 140;
-  const groundTex = useMemo(() => (map.kind === "hub" ? laterite(Math.round(w / 6)) : grass(Math.round(w / 6))), [map.kind, w]);
+  const town = map.kind === "hub" || !!map.town;
+  const groundTex = useMemo(() => (town ? laterite(Math.round(w / 6)) : grass(Math.round(w / 6))), [town, w]);
   useEffect(() => () => groundTex.dispose(), [groundTex]); // leaving this place: free its ground from the GPU too
-  const groundTint = map.kind === "hub" ? "#ffffff" : map.ground === "#79a85a" ? "#d8f0c8" : map.ground;
+  const groundTint = town ? "#ffffff" : map.ground === "#79a85a" ? "#d8f0c8" : map.ground;
   return (
     <>
       <Sky sunPosition={[SUN.x, SUN.y, SUN.z]} turbidity={7} rayleigh={1.2} mieCoefficient={0.006} mieDirectionalG={0.85} />
@@ -942,6 +975,7 @@ function World({ map }: { map: GameMap }) {
         <planeGeometry args={[w, d]} />
         <meshStandardMaterial map={groundTex} color={groundTint} roughness={1} />
       </mesh>
+      {map.terrain && <Hills map={map} />}
       <MapProps props={map.props} lowDetail={quality === "low"} city />
       <Markers map={map} />
       <GatherCircle />
@@ -988,7 +1022,8 @@ function AutoQuality() {
   return <PerformanceMonitor flipflops={2} bounds={() => [24, 50]} onDecline={decline} />;
 }
 
-export default function Scene({ map }: { map: GameMap }) {
+/** ``map`` is null while the next place is still on its way: the canvas stays, only the world inside goes. */
+export default function Scene({ map }: { map: GameMap | null }) {
   const quality = useGame((s) => s.quality);
   const mini = useGame((s) => !!s.mini);
   const building = useGame((s) => s.building);
@@ -1000,13 +1035,13 @@ export default function Scene({ map }: { map: GameMap }) {
       dpr={dpr}
       // while the city is being built, draw only when asked: on a slow phone every frame costs
       // hundreds of ms, and the build took ~45 s instead of a few seconds
-      frameloop={building ? "demand" : "always"}
+      frameloop={building || !map ? "demand" : "always"}
       camera={{ fov: 60, near: 0.1, far: 320, position: [0, 5, 10] }}
       // keeping every frame (for 📸 screenshots) costs speed; LagosLife has no screenshot button
       gl={{ antialias: quality !== "low", powerPreference: "high-performance", preserveDrawingBuffer: !mini }}
     >
       <AutoQuality />
-      <World key={map.id} map={map} />
+      {map && <World key={map.id} map={map} />}
     </Canvas>
   );
 }

@@ -101,6 +101,17 @@ export default function CreateGame({ isPublic = true }: { isPublic?: boolean }) 
                 <div className="opacity-75">{cities.find((c) => c.id === city)?.blurb}</div>
               </div>
             </div>
+            {/* cities with several places (Ibadan): pick where to play */}
+            {(cities.find((c) => c.id === city)?.arenas.length ?? 0) > 1 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {cities.find((c) => c.id === city)!.arenas.filter((a) => maps?.[a]).map((a) => (
+                  <button key={a} data-on={a === arena} onClick={() => setArena(a)} className="choice px-2.5 py-1 text-xs font-bold">
+                    📍 {maps![a].name}
+                  </button>
+                ))}
+                {maps?.[arena]?.town && <span className="w-full text-[10px] opacity-50">Real streets · map data © OpenStreetMap contributors</span>}
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {SOON.map((c) => (
                 <span key={c.name} className="rounded-full bg-white/5 px-2 py-1 text-[11px] opacity-50">{c.emoji} {c.name} · soon</span>
